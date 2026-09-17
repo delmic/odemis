@@ -23,8 +23,8 @@ import wx.adv
 import wx.html
 
 from odemis.gui.comp.slider import UnitFloatSlider
-from odemis.gui.layout import PnlTabSecomAlign
-from odemis.gui.layout.constants.themes import DARK
+from odemis.gui.layout.components.panel_tab_secom_align import PnlTabSecomAlign
+from odemis.gui.layout import theme
 
 
 class PnlTabSecomAlignTest(unittest.TestCase):
@@ -123,11 +123,11 @@ class PnlTabSecomAlignTest(unittest.TestCase):
         self.assertEqual(self.panel.lbl_fine_align.GetLabel(), "~ 30 seconds")
         self.assertEqual(
             self.panel.lens_align_btn_m_aligner_x.GetForegroundColour(),
-            wx.Colour(DARK.button_text),
+            wx.Colour(theme.button_text),
         )
         self.assertEqual(
             self.panel.lens_align_btn_sem.GetForegroundColour(),
-            wx.Colour(DARK.button_text),
+            wx.Colour(theme.button_text),
         )
 
 

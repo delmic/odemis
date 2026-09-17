@@ -32,7 +32,8 @@ from odemis.gui.layout.constants.strings import (
     LABEL_CLOSE,
     LABEL_STREAMS,
 )
-from odemis.gui.layout.constants.themes import DARK, Theme
+import odemis.gui.layout as layout
+from odemis.gui.layout.constants.themes import Theme
 from odemis.gui.layout.util.fonts import set_font
 from odemis.gui.layout.util.sizers import hbox, vbox
 
@@ -43,7 +44,7 @@ class TDCorrelationDialogBase(wx.Dialog):
     def __init__(
         self,
         parent: Optional[wx.Window],
-        theme: Theme = DARK,
+        theme: Optional[Theme] = None,
     ) -> None:
         """Create the correlation dialog controls and viewports.
 
@@ -55,6 +56,7 @@ class TDCorrelationDialogBase(wx.Dialog):
             title="Multipoint Correlation",
             style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER,
         )
+        theme = layout.theme if theme is None else theme
         self._theme = theme
         self.SetBackgroundColour(self._theme.viewport_background)
         set_font(self, 9)

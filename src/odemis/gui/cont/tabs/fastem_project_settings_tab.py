@@ -25,7 +25,7 @@ import logging
 import wx
 
 import odemis.gui.model as guimod
-from odemis.gui import BG_COLOUR_LEGEND, BG_COLOUR_MAIN, BG_COLOUR_SEPARATOR, img
+from odemis.gui import img
 from odemis.gui.comp.fastem_user_settings_panel import (
     CONTROL_CONFIG,
     DWELL_TIME_MULTI_BEAM,
@@ -39,6 +39,7 @@ from odemis.gui.comp.fastem_user_settings_panel import (
 )
 from odemis.gui.comp.foldpanelbar import CaptionBar
 from odemis.gui.comp.settings import SettingsPanel
+from odemis.gui.layout import theme
 from odemis.gui.conf.data import HW_SETTINGS_CONFIG
 from odemis.gui.conf.util import format_choices, hfw_choices, str_to_value, value_to_str
 from odemis.gui.cont.tabs.tab import Tab
@@ -87,15 +88,15 @@ class FastEMProjectSettingsTab(Tab):
             style=wx.VSCROLL,
         )
         left_panel.SetScrollRate(5, 5)
-        left_panel.SetBackgroundColour("#4D4D4D")
+        left_panel.SetBackgroundColour(theme.field_background)
         left_sizer = wx.BoxSizer(wx.VERTICAL)
         single_beam_caption = CaptionBar(left_panel, "SINGLE-BEAM", False)
         single_beam_caption.set_logo(img.getBitmap("icon/ico_single_beam.png"))
-        single_beam_caption.SetForegroundColour(BG_COLOUR_LEGEND)
+        single_beam_caption.SetForegroundColour(theme.legend_background)
         single_beam_panel = wx.Panel(
             left_panel, name="pnl_single_beam_settings", size=left_panel.Size
         )
-        single_beam_panel.SetBackgroundColour(BG_COLOUR_MAIN)
+        single_beam_panel.SetBackgroundColour(theme.background)
         left_sizer.Add(single_beam_caption, 0, wx.EXPAND)
         left_sizer.Add(single_beam_panel, 1, wx.EXPAND | wx.TOP, 5)
         left_panel.SetSizer(left_sizer)
@@ -104,21 +105,21 @@ class FastEMProjectSettingsTab(Tab):
         right_panel = wx.Panel(
             panel, size=(int(panel.Parent.Size[0] / 2.5), panel.Size[1])
         )
-        right_panel.SetBackgroundColour("#4D4D4D")
+        right_panel.SetBackgroundColour(theme.field_background)
         right_sizer = wx.BoxSizer(wx.VERTICAL)
         multi_beam_caption = CaptionBar(right_panel, "MULTI-BEAM", False)
         multi_beam_caption.set_logo(img.getBitmap("icon/ico_multi_beam.png"))
-        multi_beam_caption.SetForegroundColour(BG_COLOUR_LEGEND)
+        multi_beam_caption.SetForegroundColour(theme.legend_background)
         multi_beam_panel = wx.Panel(
             right_panel, name="pnl_multi_beam_settings", size=right_panel.Size
         )
-        multi_beam_panel.SetBackgroundColour(BG_COLOUR_MAIN)
+        multi_beam_panel.SetBackgroundColour(theme.background)
         right_sizer.Add(multi_beam_caption, 0, wx.EXPAND)
         right_sizer.Add(multi_beam_panel, 1, wx.EXPAND | wx.TOP, 5)
         right_panel.SetSizer(right_sizer)
 
         divider_line = wx.StaticLine(panel, style=wx.LI_VERTICAL, size=(1, -1))
-        divider_line.SetBackgroundColour(BG_COLOUR_SEPARATOR)
+        divider_line.SetBackgroundColour(theme.section_header)
 
         # Add components to the horizontal sizer
         h_sizer.Add(left_panel, 1, wx.EXPAND | wx.ALL)

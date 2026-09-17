@@ -21,22 +21,18 @@ from typing import Optional
 import wx
 
 from odemis.gui import img
-from odemis.gui.comp.buttons import TabButton
+from odemis.gui.comp.buttons import ImageButton, TabButton
 from odemis.gui.layout.constants.strings import (
     LABEL_ACQUISITION,
     LABEL_CHAMBER,
     LABEL_STREAMS,
     TOOLTIP_CLOSE_LOG_PANEL,
 )
-from odemis.gui.layout.constants.themes import DARK, Theme
+import odemis.gui.layout as layout
+from odemis.gui.layout.constants.themes import Theme
 from odemis.gui.layout.util.fonts import set_font
 from odemis.gui.layout.util.sizers import hbox, vbox
 from odemis.gui.layout.util.widgets import create_chevron_button
-
-# Foreground colour of the hidden temperature readout, distinct from the
-# theme's text roles (dark grey against the light tab bar).
-_TEMPERATURE_TEXT = "#353535"
-
 
 class MainFrame(wx.Frame):
     """Provide the application's top-level frame layout.
@@ -47,8 +43,9 @@ class MainFrame(wx.Frame):
     panel by the tab-bar controller at runtime.
     """
 
-    def __init__(self, parent: Optional[wx.Window], theme: Theme = DARK):
+    def __init__(self, parent: Optional[wx.Window], theme: Optional[Theme] = None):
         super().__init__(parent, title="Odemis")
+        theme = layout.theme if theme is None else theme
         self._theme = theme
         self.SetBackgroundColour(self._theme.viewport_background)
         set_font(self, self._theme.font_size_default)
@@ -292,7 +289,9 @@ class MainFrame(wx.Frame):
                 size=(160, 30),
                 style=wx.ALIGN_CENTRE,
             )
-            self.temperature_display.SetForegroundColour(_TEMPERATURE_TEXT)
+            self.temperature_display.SetForegroundColour(
+                self._theme.background
+            )
             set_font(
                 self.temperature_display, self._theme.font_size_button
             )

@@ -38,8 +38,8 @@ from wx.grid import (
     GridCellFloatEditor,
     GridCellTextEditor,
 )
+from odemis.gui.layout import theme
 
-from odemis.gui import FG_COLOUR_DIS, FG_COLOUR_EDIT
 
 wxEVT_GRID_ROW_CHANGED = wx.NewEventType()
 EVT_GRID_ROW_CHANGED = wx.PyEventBinder(wxEVT_GRID_ROW_CHANGED, 1)
@@ -480,9 +480,9 @@ class GridBase(Grid):
             attr = GridCellAttr()
             if col.is_read_only:
                 attr.SetReadOnly(True)
-                attr.SetTextColour(FG_COLOUR_DIS)
+                attr.SetTextColour(theme.text_disabled)
             else:
-                attr.SetTextColour(FG_COLOUR_EDIT)
+                attr.SetTextColour(theme.text_edit)
             self.SetColAttr(col.index, attr)
 
         self.AutoSizeColumns()

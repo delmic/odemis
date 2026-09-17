@@ -28,6 +28,7 @@ import wx
 import odemis.gui as gui
 import odemis.util.conversion as conversion
 import odemis.util.units as units
+from odemis.gui.layout import theme
 
 
 class PixelValueOverlay(ViewOverlay):
@@ -41,8 +42,8 @@ class PixelValueOverlay(ViewOverlay):
         self.view = view
         self._raw_value = None
 
-        self.colour = conversion.hex_to_frgba(gui.FG_COLOUR_LEGEND)
-        self.background_colour = conversion.hex_to_frgba(gui.BG_COLOUR_MAIN)
+        self.colour = conversion.hex_to_frgba(theme.text_secondary)
+        self.background_colour = conversion.hex_to_frgba(theme.background)
         self._label = Label(
             "",
             pos=(0, 0),

@@ -16,6 +16,8 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
+from typing import Optional
+
 import wx
 
 from odemis.gui import img
@@ -43,7 +45,8 @@ from odemis.gui.layout.constants.strings import (
     LABEL_STREAMS,
     TOOLTIP_OPEN_LOG_PANEL,
 )
-from odemis.gui.layout.constants.themes import DARK, Theme
+import odemis.gui.layout as layout
+from odemis.gui.layout.constants.themes import Theme
 from odemis.gui.layout.util.fonts import set_font
 from odemis.gui.layout.util.sizers import hbox, vbox
 from odemis.gui.layout.util.widgets import (
@@ -58,13 +61,14 @@ from odemis.gui.layout.util.widgets import (
 class PnlTabFibsem(wx.Panel):
     """Provide the FIBSEM imaging, acquisition, and milling tab layout."""
 
-    def __init__(self, parent: wx.Window, theme: Theme = DARK) -> None:
+    def __init__(self, parent: wx.Window, theme: Optional[Theme] = None) -> None:
         """Create the FIBSEM controls and viewports.
 
         :param parent: Parent window.
         :param theme: Semantic layout theme.
         """
         super().__init__(parent)
+        theme = layout.theme if theme is None else theme
         self._theme = theme
         self.SetBackgroundColour(theme.background)
 

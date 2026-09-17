@@ -39,7 +39,8 @@ from odemis.gui.comp.overlay.base import (
     WorldOverlay,
 )
 from odemis.gui.comp.overlay.shapes import EditableShape
-from odemis.util.conversion import frgba_to_hex, hex_to_frgba
+from odemis.util.conversion import frgba_to_hex, hex_to_frgba, hex_to_frgb
+from odemis.gui.layout import theme
 
 
 class RectangleState:
@@ -86,7 +87,7 @@ class RectangleOverlay(EditableShape, RectangleEditingMixin, WorldOverlay):
     The selected rectangle can be manipulated by dragging its edges or rotating it.
 
     """
-    def __init__(self, cnvs, colour=gui.SELECTION_COLOUR, show_selection_points: bool = True):
+    def __init__(self, cnvs, colour=theme.selection, show_selection_points: bool = True):
         EditableShape.__init__(self, cnvs)
         RectangleEditingMixin.__init__(self, colour)
         # RectangleOverlay has attributes and methods of the "WorldOverlay" interface.
@@ -111,10 +112,10 @@ class RectangleOverlay(EditableShape, RectangleEditingMixin, WorldOverlay):
             font_size=12,
             flip=False,
             align=wx.ALIGN_RIGHT,
-            colour=(1.0, 1.0, 1.0),  # default to white
+            colour=hex_to_frgb(theme.button_text_contrast),
             opacity=1.0,
             deg=None,
-            background=(0, 0, 0),  # black
+            background=hex_to_frgba(theme.viewport_background),
         )
         self._side2_label = Label(
             text="",
@@ -122,10 +123,10 @@ class RectangleOverlay(EditableShape, RectangleEditingMixin, WorldOverlay):
             font_size=12,
             flip=False,
             align=wx.ALIGN_RIGHT,
-            colour=(1.0, 1.0, 1.0),  # default to white
+            colour=hex_to_frgb(theme.button_text_contrast),
             opacity=1.0,
             deg=None,
-            background=(0, 0, 0),  # black
+            background=hex_to_frgba(theme.viewport_background),
         )
         # Label for the rotation angle of the rectangle
         # Call draw_rotation_label to use it
@@ -135,10 +136,10 @@ class RectangleOverlay(EditableShape, RectangleEditingMixin, WorldOverlay):
             font_size=12,
             flip=True,
             align=wx.ALIGN_CENTRE_HORIZONTAL,
-            colour=(1.0, 1.0, 1.0),  # default to white
+            colour=hex_to_frgb(theme.button_text_contrast),
             opacity=1.0,
             deg=None,
-            background=(0, 0, 0),  # black
+            background=hex_to_frgba(theme.viewport_background),
         )
         self._name_label = Label(
             text=self.name.value,
@@ -146,7 +147,7 @@ class RectangleOverlay(EditableShape, RectangleEditingMixin, WorldOverlay):
             font_size=12,
             flip=True,
             align=wx.ALIGN_CENTRE_HORIZONTAL,
-            colour=(1.0, 1.0, 1.0),  # default to white
+            colour=hex_to_frgb(theme.button_text_contrast),
             opacity=1.0,
             deg=None,
             background=None
@@ -480,7 +481,7 @@ class RectangleOverlay(EditableShape, RectangleEditingMixin, WorldOverlay):
         b_rotation = Vec(self.cnvs.view_to_buffer(self.v_rotation))
         ctx.set_dash([])
         ctx.set_line_width(1)
-        ctx.set_source_rgba(0.1, 0.5, 0.8, 0.8)  # Dark blue-green
+        ctx.set_source_rgba(*hex_to_frgba(theme.text_edit, 0.8))
         ctx.arc(b_rotation.x, b_rotation.y, 4, 0, 2 * math.pi)
         ctx.fill()
         ctx.arc(mid_point12.x, mid_point12.y, 4, 0, 2 * math.pi)
@@ -504,7 +505,7 @@ class RectangleOverlay(EditableShape, RectangleEditingMixin, WorldOverlay):
     def draw_name_label(self, ctx):
         self._name_label.text = self.name.value
         self._name_label.pos = self.cnvs.view_to_buffer(self.v_center)
-        self._name_label.background = (0, 0, 0)  # black
+        self._name_label.background = hex_to_frgba(theme.viewport_background)
         self._name_label.draw(ctx)
 
     def draw(self, ctx, shift=(0, 0), scale=1.0, line_width=4):

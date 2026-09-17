@@ -21,10 +21,11 @@
 """
 import os
 
-from odemis.gui import img, BG_COLOUR_MAIN
+from odemis.gui import img
 from odemis.gui.util.conversion import change_brightness, wxcol_to_frgb, \
     frgb_to_wxcol
 import wx
+from odemis.gui.layout import theme
 
 
 CAPTION_BAR_SIZE = (-1, 40)
@@ -278,7 +279,7 @@ class CaptionBar(wx.Window):
         # FIXME: on wx4 with GTK2, the background is always redrawn anyway,
         # which causes flickering, especially as the default background colour is
         # white. As a workaround, we set a less white background.
-        self.SetBackgroundColour(BG_COLOUR_MAIN)
+        self.SetBackgroundColour(theme.background)
 
         self._collapsed = collapsed  # The current state of the CaptionBar
         self._caption = caption

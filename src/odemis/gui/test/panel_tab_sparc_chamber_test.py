@@ -20,8 +20,8 @@ import unittest
 
 import wx
 
-from odemis.gui.layout import PnlTabSparcChamber
-from odemis.gui.layout.constants.themes import DARK
+from odemis.gui.layout.components.panel_tab_sparc_chamber import PnlTabSparcChamber
+from odemis.gui.layout import theme
 
 
 class PnlTabSparcChamberTest(unittest.TestCase):
@@ -70,11 +70,11 @@ class PnlTabSparcChamberTest(unittest.TestCase):
         self.assertEqual(self.panel.gauge_move.GetValue(), 0)
         self.assertEqual(
             self.panel.btn_switch_mirror.GetForegroundColour(),
-            wx.Colour(DARK.button_text),
+            wx.Colour(theme.button_text),
         )
         self.assertEqual(
             self.panel.btn_cancel.GetForegroundColour(),
-            wx.Colour(DARK.button_text),
+            wx.Colour(theme.button_text),
         )
 
 

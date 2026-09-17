@@ -20,7 +20,7 @@ import unittest
 
 import wx
 
-from odemis.gui.layout import TDCorrelationDialogBase
+from odemis.gui.layout.components.dialog_correlation_tdct import TDCorrelationDialogBase
 
 
 class TDCorrelationDialogTest(unittest.TestCase):

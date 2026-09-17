@@ -17,9 +17,10 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
 
+from typing import Any, Optional
+
 import wx
 import wx.adv
-import wx.html
 
 from odemis.gui import img
 from odemis.gui.comp.buttons import (
@@ -39,7 +40,8 @@ from odemis.gui.layout.constants.strings import (
     LABEL_STEP_SIZE,
     TOOLTIP_OPEN_LOG_PANEL,
 )
-from odemis.gui.layout.constants.themes import DARK, Theme
+import odemis.gui.layout as layout
+from odemis.gui.layout.constants.themes import Theme
 from odemis.gui.layout.util.fonts import set_font
 from odemis.gui.layout.util.sizers import hbox, vbox
 from odemis.gui.layout.util.widgets import (
@@ -50,13 +52,14 @@ from odemis.gui.layout.util.widgets import (
 class PnlTabSecomAlign(wx.Panel):
     """Provide the SECOM alignment tab layout."""
 
-    def __init__(self, parent: wx.Window, theme: Theme = DARK) -> None:
+    def __init__(self, parent: wx.Window, theme: Optional[Theme] = None) -> None:
         """Create the alignment controls, settings, and viewports.
 
         :param parent: Parent window.
         :param theme: Semantic layout theme.
         """
         super().__init__(parent, style=wx.WANTS_CHARS)
+        theme = layout.theme if theme is None else theme
         self._theme = theme
         self.SetBackgroundColour(theme.background)
 
@@ -131,7 +134,9 @@ class PnlTabSecomAlign(wx.Panel):
                 panel,
                 style=wx.html.HW_SCROLLBAR_AUTO | wx.html.HW_NO_SELECTION,
             )
-            self.html_alignment_doc.SetForegroundColour("#BBBBBB")
+            self.html_alignment_doc.SetForegroundColour(
+                self._theme.text_secondary
+            )
             self.html_alignment_doc.SetBackgroundColour(self._theme.background)
             sizer.Add(
                 self.html_alignment_doc,
@@ -491,7 +496,9 @@ class PnlTabSecomAlign(wx.Panel):
             self.cmb_lens_align_presets.SetForegroundColour(
                 self._theme.text_edit
             )
-            self.cmb_lens_align_presets.SetBackgroundColour("#424242")
+            self.cmb_lens_align_presets.SetBackgroundColour(
+                self._theme.panel_background
+            )
             self.cmb_lens_align_presets.Hide()
             sizer.Add(self.cmb_lens_align_presets, flag=wx.EXPAND)
 
@@ -544,7 +551,7 @@ class PnlTabSecomAlign(wx.Panel):
         :returns: SEM toolbar panel.
         """
         panel = wx.Panel(parent)
-        panel.SetForegroundColour("#BBBBBB")
+        panel.SetForegroundColour(self._theme.text_secondary)
         panel.SetBackgroundColour(self._theme.background)
 
         with hbox() as sizer:

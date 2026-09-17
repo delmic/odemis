@@ -34,20 +34,24 @@ from odemis.gui.comp.overlay.base import (
     Vec,
     WorldOverlay,
 )
+from odemis.gui.layout import theme
+from odemis.util.conversion import hex_to_frgba, hex_to_frgb
 
 
 # TODO: merge SelectionMixin and WorldSelectOverlay and LineSelectOverlay into one class (with just EDIT_MODE_POINT)
 # Change FastEMROCOverlay to inherit from RepetitionSelectOverlay.
 class WorldSelectOverlay(WorldOverlay, SelectionMixin):
 
-    def __init__(self, cnvs, colour=gui.SELECTION_COLOUR, center=(0, 0)):
+    def __init__(self, cnvs, colour=theme.selection, center=(0, 0)):
         WorldOverlay.__init__(self, cnvs)
         SelectionMixin.__init__(self, colour, center, EDIT_MODE_BOX)
 
         self._p_start_pos = None
         self._p_end_pos = None
 
-        self.position_label = self.add_label("", colour=(0.8, 0.8, 0.8), align=wx.ALIGN_RIGHT)
+        self.position_label = self.add_label(
+            "", colour=hex_to_frgb(theme.text_secondary), align=wx.ALIGN_RIGHT
+        )
 
     @property
     def p_start_pos(self):
@@ -155,7 +159,7 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
 
             # draws a light black background for the rectangle
             ctx.set_line_width(line_width)
-            ctx.set_source_rgba(0, 0, 0, 0.5)
+            ctx.set_source_rgba(*hex_to_frgba(theme.viewport_background, 0.5))
             ctx.rectangle(*rect)
             ctx.stroke()
 

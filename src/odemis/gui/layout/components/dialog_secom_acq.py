@@ -34,7 +34,8 @@ from odemis.gui.layout.constants.strings import (
     LABEL_START,
     LABEL_STREAMS,
 )
-from odemis.gui.layout.constants.themes import DARK, Theme
+import odemis.gui.layout as layout
+from odemis.gui.layout.constants.themes import Theme
 from odemis.gui.layout.util.fonts import set_font
 from odemis.gui.layout.util.sizers import hbox, vbox
 from odemis.gui.layout.util.widgets import create_combo, create_text_button
@@ -46,7 +47,7 @@ class SecomAcqDialogBase(wx.Dialog):
     def __init__(
         self,
         parent: Optional[wx.Window],
-        theme: Theme = DARK,
+        theme: Optional[Theme] = None,
     ) -> None:
         """Create the acquisition dialog controls and viewport.
 
@@ -58,6 +59,7 @@ class SecomAcqDialogBase(wx.Dialog):
             title="Image Acquisition",
             style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER,
         )
+        theme = layout.theme if theme is None else theme
         self._theme = theme
         self.SetBackgroundColour(self._theme.viewport_background)
         set_font(self, 9)
@@ -231,7 +233,7 @@ class SecomAcqDialogBase(wx.Dialog):
         streams_item.add_item(self.pnl_secom_streams)
 
         fine_align_item = self._fold_item(fold_bar, nocaption=True)
-        fine_align_item.SetForegroundColour("#BBBBBB")
+        fine_align_item.SetForegroundColour(self._theme.text_secondary)
         fine_align_item.SetBackgroundColour(self._theme.background)
 
         self.chkbox_fine_align = wx.CheckBox(

@@ -16,12 +16,15 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
+from typing import Optional
+
 import wx
 
 from odemis.gui import img
 from odemis.gui.comp.buttons import ImageToggleButton
 from odemis.gui.comp.foldpanelbar import CaptionBar
-from odemis.gui.layout.constants.themes import DARK, Theme
+import odemis.gui.layout as layout
+from odemis.gui.layout.constants.themes import Theme
 from odemis.gui.layout.util.fonts import set_font
 from odemis.gui.layout.util.sizers import hbox, vbox
 
@@ -33,13 +36,14 @@ class PnlFastemUserSettings(wx.Panel):
     the user settings host panel for the FastEMUserSettingsPanel controller.
     """
 
-    def __init__(self, parent: wx.Window, theme: Theme = DARK) -> None:
+    def __init__(self, parent: wx.Window, theme: Optional[Theme] = None) -> None:
         """Create the user settings controls.
 
         :param parent: Parent window.
         :param theme: Semantic layout theme.
         """
         super().__init__(parent, size=(300, -1))
+        theme = layout.theme if theme is None else theme
         self._theme = theme
         self.SetBackgroundColour(theme.background)
 
@@ -155,7 +159,9 @@ class PnlFastemUserSettings(wx.Panel):
 
             self.user_settings_panel = wx.Panel(panel, size=(300, 600))
             self.user_settings_panel.SetBackgroundColour(self._theme.background)
-            self.user_settings_panel.SetForegroundColour("#999999")
+            self.user_settings_panel.SetForegroundColour(
+                self._theme.panel_foreground
+            )
             sizer.Add(self.user_settings_panel)
 
         panel.SetSizer(sizer)

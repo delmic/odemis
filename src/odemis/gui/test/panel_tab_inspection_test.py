@@ -30,8 +30,8 @@ from odemis.gui.comp.viewport import (
     TemporalSpectrumViewport,
     ThetaViewport,
 )
-from odemis.gui.layout import PnlTabInspection
-from odemis.gui.layout.constants.themes import DARK
+from odemis.gui.layout.components.panel_tab_inspection import PnlTabInspection
+from odemis.gui.layout import theme
 
 
 class PnlTabInspectionTest(unittest.TestCase):
@@ -134,11 +134,11 @@ class PnlTabInspectionTest(unittest.TestCase):
         self.assertEqual(self.panel.btn_export.GetLabel(), "EXPORT IMAGE")
         self.assertEqual(
             self.panel.btn_open_image.GetForegroundColour(),
-            wx.Colour(DARK.button_text),
+            wx.Colour(theme.button_text),
         )
         self.assertEqual(
             self.panel.btn_export.GetForegroundColour(),
-            wx.Colour(DARK.button_text_contrast),
+            wx.Colour(theme.button_text_contrast),
         )
 
 

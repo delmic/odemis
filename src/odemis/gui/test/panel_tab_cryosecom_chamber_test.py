@@ -20,7 +20,7 @@ import unittest
 
 import wx
 
-from odemis.gui.layout import PnlTabCryosecomChamber
+from odemis.gui.layout.components.panel_tab_cryosecom_chamber import PnlTabCryosecomChamber
 from odemis.gui.layout.constants.strings import DEFAULT_DESTINATION_FILE
 
 

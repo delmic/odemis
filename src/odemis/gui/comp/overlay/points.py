@@ -29,6 +29,7 @@ import odemis.gui as gui
 import odemis.util.conversion as conversion
 import wx
 from odemis.gui.comp.overlay.base import WorldOverlay
+from odemis.gui.layout import theme
 
 
 class PointsOverlay(WorldOverlay):
@@ -48,9 +49,9 @@ class PointsOverlay(WorldOverlay):
         self.min_dist = None
 
         # Appearance
-        self.point_colour = conversion.hex_to_frgb(gui.FG_COLOUR_HIGHLIGHT)
-        self.select_colour = conversion.hex_to_frgba(gui.FG_COLOUR_EDIT, 0.5)
-        self.dot_colour = (0, 0, 0, 0.1)
+        self.point_colour = conversion.hex_to_frgb(theme.text_highlight)
+        self.select_colour = conversion.hex_to_frgba(theme.text_edit, 0.5)
+        self.dot_colour = conversion.hex_to_frgba(theme.viewport_background, 0.1)
         # The float radius of the dots to draw
         self.dot_size = self.MIN_DOT_RADIUS
         # None or the point over which the mouse is hovering
@@ -189,7 +190,7 @@ class PointsOverlay(WorldOverlay):
             ctx.fill()
 
             ctx.arc(b_x, b_y, 2.0, 0, 2 * math.pi)
-            ctx.set_source_rgb(0.0, 0.0, 0.0)
+            ctx.set_source_rgb(*conversion.hex_to_frgb(theme.viewport_background))
             ctx.fill()
 
             ctx.arc(b_x, b_y, 1.5, 0, 2 * math.pi)

@@ -27,11 +27,11 @@ import logging
 from typing import Callable
 
 from odemis import acq
-from odemis.gui import FG_COLOUR_BUTTON
 from odemis.gui.comp import buttons
 from odemis.gui.comp.foldpanelbar import FoldPanelItem
 from odemis.gui.evt import EVT_STREAM_REMOVE
 import wx
+from odemis.gui.layout import theme
 
 
 class StreamBar(wx.Panel):
@@ -94,7 +94,7 @@ class StreamBar(wx.Panel):
             label="ADD STREAM",
             style=wx.ALIGN_CENTER
         )
-        self.btn_add_stream.SetForegroundColour(FG_COLOUR_BUTTON)
+        self.btn_add_stream.SetForegroundColour(theme.panel_foreground)
         self._sz.Add(self.btn_add_stream, flag=wx.ALL, border=10)
         self.btn_add_stream.Show(add_btn)
 
@@ -104,7 +104,7 @@ class StreamBar(wx.Panel):
             style=wx.ALIGN_CENTER,
         )
 
-        self.btn_add_overview.SetForegroundColour(FG_COLOUR_BUTTON)
+        self.btn_add_overview.SetForegroundColour(theme.panel_foreground)
         self._sz.Add(self.btn_add_overview, flag=wx.ALL, border=15)
         self.btn_add_overview.Show(False)
 

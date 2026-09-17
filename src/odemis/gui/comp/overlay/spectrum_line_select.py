@@ -33,6 +33,7 @@ from odemis.gui.comp.overlay.base import EDIT_MODE_POINT, PixelDataMixin, Vec, c
 from odemis.gui.comp.overlay.world_select import WorldSelectOverlay
 from odemis.util import clip_line
 from odemis.util.raster import rasterize_line
+from odemis.gui.layout import theme
 
 
 class LineSelectOverlay(WorldSelectOverlay):
@@ -86,7 +87,7 @@ class LineSelectOverlay(WorldSelectOverlay):
 
             # Draws a black background for the line
             ctx.set_line_width(3)
-            ctx.set_source_rgba(0, 0, 0, 0.5)
+            ctx.set_source_rgba(*conversion.hex_to_frgba(theme.viewport_background, 0.5))
             ctx.move_to(*b_circle_con)
             ctx.line_to(*b_arrow_con)
             ctx.stroke()
@@ -106,7 +107,7 @@ class LineSelectOverlay(WorldSelectOverlay):
             # Draw start circle
             ctx.set_dash([])
             ctx.set_line_width(3.5)
-            ctx.set_source_rgba(0, 0, 0, 0.5)
+            ctx.set_source_rgba(*conversion.hex_to_frgba(theme.viewport_background, 0.5))
             ctx.arc(b_start[0], b_start[1], start_radius, 0, 2 * math.pi)
             ctx.stroke_preserve()
 
@@ -128,7 +129,7 @@ class LineSelectOverlay(WorldSelectOverlay):
             ctx.close_path()
 
             # Dark border
-            ctx.set_source_rgba(0, 0, 0, 0.5)
+            ctx.set_source_rgba(*conversion.hex_to_frgba(theme.viewport_background, 0.5))
             ctx.stroke_preserve()
 
             # Colour fill
@@ -180,8 +181,8 @@ class SpectrumLineSelectOverlay(LineSelectOverlay, PixelDataMixin):
         self._selected_width_va = None
         self._selected_pixel_va = None
 
-        self._width_colour = conversion.hex_to_frgba(gui.FG_COLOUR_HIGHLIGHT, 0.5)
-        self._pixel_colour = conversion.hex_to_frgba(gui.FG_COLOUR_EDIT, 0.5)
+        self._width_colour = conversion.hex_to_frgba(theme.text_highlight, 0.5)
+        self._pixel_colour = conversion.hex_to_frgba(theme.text_edit, 0.5)
 
     def connect_selection(self, selection_va, width_va, pixel_va=None):
         """ Connect the overlay to an external selection VA so it can update itself on value changes

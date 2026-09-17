@@ -21,51 +21,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 import sys
 import wx.lib.newevent
 
-# Colour definitions
-# Background colours
-BG_COLOUR_MAIN = "#333333"      # Default dark background
-BG_COLOUR_STREAM = "#444444"    # Stream panel background
-BG_COLOUR_LEGEND = "#1A1A1A"    # Legend background
-BG_COLOUR_NOTIFY = "#FFF3A2"    # For the pop-up notification messages
-BG_COLOUR_ERROR = "#701818"
-BG_COLOUR_PANEL = "#444444"     # Background color of panels in alignment tab
-BG_COLOUR_SEPARATOR = "#555555" # Color of separator lines in panels
-
-# Foreground (i.e text) colours
-FG_COLOUR_MAIN = "#DDDDDD"       # Default foreground colour
-FG_COLOUR_DIS = "#777777"        # Disabled foreground colour
-FG_COLOUR_LEGEND = "#BBBBBB"     # Default foreground colour for the legend
-FG_COLOUR_EDIT = "#2FA7D4"       # Edit colour
-FG_COLOUR_CURVE = "#FFDAB9"      # Default single peak curve colour
-FG_COLOUR_PEAK = "#FF0000"       # Default peak wavelength text colour
-FG_COLOUR_2ND = "#53D8AD"        # Secondary edit colour
-FG_COLOUR_HIGHLIGHT = "#FFA300"  # Highlight colour
-FG_COLOUR_WARNING = "#FFA300"    # Warning text colour (TODO: "#C87000" is better?)
-FG_COLOUR_ERROR = "#DD3939"      # Error text colour
-FG_COLOUR_RADIO_INACTIVE = "#111111"      # Text colour on radio button when inactive
-FG_COLOUR_RADIO_ACTIVE = "#106090"        # Text colour on radio button when active (same as BORDER_COLOUR_FOCUS)
-FG_COLOUR_BUTTON = "#999999"
-FG_COLOUR_BLIND_BLUE = "#648FFF"    # Colour-blind-friendly blue; choosen from IBM Design Library
-FG_COLOUR_BLIND_ORANGE = "#FFB000"  # Colour-blind-friendly orange; choosen from IBM Design Library
-FG_COLOUR_BLIND_PINK = "#DC267F"    # Colour-blind-friendly pink; choosen from IBM Design Library
-
-# Border colours for the viewports
-BORDER_COLOUR_FOCUS = "#127BA6"
-BORDER_COLOUR_UNFOCUS = "#000000"
-
-# Colours for special warnings
-ALERT_COLOUR = "#DD3939"
-
-# Colours for overlay selection boxes
-SELECTION_COLOUR = FG_COLOUR_EDIT
-SELECTION_COLOUR_2ND = FG_COLOUR_2ND
-
-# Tint value for the Spectrograph line stream, to be used for adjusting the focus
-FOCUS_STREAM_COLOR = (0, 64, 255)  # colour it blue
-CL_STREAM_SNAPSHOT_COLOR = (255, 0, 0)  # colour it red
-
-# END Colour definitions
-
 # This is ugly, but there is no official "drag" cursor, and the best fitting
 # one depends on the OS. Ideally, we want a "closed hand".
 if sys.platform.startswith("linux"):
@@ -89,7 +44,6 @@ CONTROL_OPEN_FILE = 10  # Open an existing file
 
 # Overlay settings
 
-CROSSHAIR_COLOR = "#AAD200"
 CROSSHAIR_SIZE = 16
 CROSSHAIR_THICKNESS = 2
 CENTERED_LINE_THICKNESS = 1

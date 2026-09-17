@@ -50,6 +50,7 @@ from odemis.gui.comp.overlay.rectangle import RectangleOverlay
 from odemis.gui.comp.overlay.shapes import EditableShape, ShapesOverlay
 from odemis.gui.conf import get_acqui_conf
 from odemis.gui.cont.features import save_project
+from odemis.gui.layout import theme
 from odemis.gui.util import call_in_wx_main, wxlimit_invocation
 from odemis.gui.util.widgets import (
     ProgressiveFutureConnector,
@@ -58,14 +59,21 @@ from odemis.gui.util.widgets import (
 from odemis.util import is_point_in_rect, units
 
 # yellow, cyan, magenta, lime, orange, hotpink
-MILLING_COLOURS_CYCLE = ["#FFFF00", "#00FFFF", "#FF00FF", "#00FF00", "#FFA500", "#FF69B4"]
+MILLING_COLOURS_CYCLE = [
+    theme.categorical_yellow,
+    theme.categorical_cyan,
+    theme.categorical_magenta,
+    theme.categorical_green,
+    theme.categorical_orange,
+    theme.categorical_pink,
+]
 MILLING_COLOURS_CANONICAL = {
-    "Rough Milling 01": "#FFFF00",
-    "Rough Milling 02": "#00FFFF",
-    "Polishing 01": "#FF00FF",
-    "Polishing 02": "#00FF00",
-    "Microexpansion": "#FFA500",
-    "Fiducial": "#FF69B4",
+    "Rough Milling 01": theme.categorical_yellow,
+    "Rough Milling 02": theme.categorical_cyan,
+    "Polishing 01": theme.categorical_magenta,
+    "Polishing 02": theme.categorical_green,
+    "Microexpansion": theme.categorical_orange,
+    "Fiducial": theme.categorical_pink,
 }
 # Step sizes to move the milling patterns horizontally
 MOVE_DELTA_X_SHORT = 1  # px
@@ -103,7 +111,7 @@ def pos_to_absolute(pos: Tuple[float, float], ref_img: model.DataArray) -> Tuple
 def rectangle_pattern_to_shape(canvas,
                         ref_img: model.DataArray,
                         pattern: RectanglePatternParameters,
-                        colour: str = "#FFFF00",
+                        colour: str = theme.categorical_yellow,
                         name: str = None) -> EditableShape:
     """Convert a rectangle pattern to a shape"""
     rect = RectangleOverlay(cnvs=canvas, colour = colour, show_selection_points = False)

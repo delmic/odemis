@@ -45,7 +45,8 @@ from odemis.gui.layout.constants.strings import (
     LABEL_STEP_SIZE,
     TOOLTIP_OPEN_LOG_PANEL,
 )
-from odemis.gui.layout.constants.themes import DARK, Theme
+import odemis.gui.layout as layout
+from odemis.gui.layout.constants.themes import Theme
 from odemis.gui.layout.util.fonts import set_font
 from odemis.gui.layout.util.sizers import hbox, vbox
 from odemis.gui.layout.util.widgets import create_text_button
@@ -79,7 +80,7 @@ class PnlTabSparc2Align(wx.Panel):
     Sparc2AlignTab controller.
     """
 
-    def __init__(self, parent: wx.Window, theme: Theme = DARK) -> None:
+    def __init__(self, parent: wx.Window, theme: Optional[Theme] = None) -> None:
         """Create the alignment mode, actuator, viewport, and settings
         controls.
 
@@ -87,6 +88,7 @@ class PnlTabSparc2Align(wx.Panel):
         :param theme: Semantic layout theme.
         """
         super().__init__(parent, style=wx.WANTS_CHARS)
+        theme = layout.theme if theme is None else theme
         self._theme = theme
         self.SetBackgroundColour(theme.background)
 
@@ -287,7 +289,7 @@ class PnlTabSparc2Align(wx.Panel):
                 label="Manual focus",
                 height=24,
                 face_colour="def",
-                active_colour="#106090",
+                active_colour=self._theme.control_active,
                 style=wx.ALIGN_CENTRE,
             )
             manual_focus_btn.SetForegroundColour(self._theme.button_text)
@@ -1147,7 +1149,9 @@ class PnlTabSparc2Align(wx.Panel):
                 size=(-1, 400),
                 style=wx.html.HW_SCROLLBAR_AUTO | wx.html.HW_NO_SELECTION,
             )
-            self.html_moi_doc.SetForegroundColour("#BBBBBB")
+            self.html_moi_doc.SetForegroundColour(
+                self._theme.text_secondary
+            )
             self.html_moi_doc.SetBackgroundColour(self._theme.background)
             sizer.Add(
                 self.html_moi_doc,
@@ -1292,7 +1296,7 @@ class PnlTabSparc2Align(wx.Panel):
             ),
         )
         combo.SetForegroundColour(self._theme.text_edit)
-        combo.SetBackgroundColour("#424242")
+        combo.SetBackgroundColour(self._theme.panel_background)
         return combo
 
     def _mode_button(

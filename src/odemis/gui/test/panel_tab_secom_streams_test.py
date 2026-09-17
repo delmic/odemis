@@ -20,8 +20,8 @@ import unittest
 
 import wx
 
-from odemis.gui.layout import PnlTabSecomStreams
-from odemis.gui.layout.constants.themes import DARK
+from odemis.gui.layout.components.panel_tab_secom_streams import PnlTabSecomStreams
+from odemis.gui.layout import theme
 
 
 class PnlTabSecomStreamsTest(unittest.TestCase):
@@ -120,11 +120,11 @@ class PnlTabSecomStreamsTest(unittest.TestCase):
         self.assertFalse(self.panel.pnl_opt_streams.btn_add_stream.IsShown())
         self.assertEqual(
             self.panel.btn_press.GetForegroundColour(),
-            wx.Colour(DARK.button_text),
+            wx.Colour(theme.button_text),
         )
         self.assertEqual(
             self.panel.btn_secom_acquire.GetForegroundColour(),
-            wx.Colour(DARK.button_text_contrast),
+            wx.Colour(theme.button_text_contrast),
         )
 
 

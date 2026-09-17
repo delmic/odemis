@@ -24,7 +24,8 @@ from odemis.gui import img
 from odemis.gui.comp.buttons import ImageButton, TabButton
 from odemis.gui.comp.foldpanelbar import CaptionBar
 from odemis.gui.layout.constants.strings import LABEL_PROJECTS
-from odemis.gui.layout.constants.themes import DARK, Theme
+import odemis.gui.layout as layout
+from odemis.gui.layout.constants.themes import Theme
 from odemis.gui.layout.util.fonts import set_font
 from odemis.gui.layout.util.sizers import hbox, vbox
 
@@ -54,13 +55,14 @@ class PnlFastemProjectManager(wx.Panel):
     are exposed as attributes for the FastEMProjectManagerPanel controller.
     """
 
-    def __init__(self, parent: wx.Window, theme: Theme = DARK) -> None:
+    def __init__(self, parent: wx.Window, theme: Optional[Theme] = None) -> None:
         """Create the project manager controls.
 
         :param parent: Parent window.
         :param theme: Semantic layout theme.
         """
         super().__init__(parent)
+        theme = layout.theme if theme is None else theme
         self._theme = theme
         self.SetBackgroundColour(theme.background)
 
@@ -93,7 +95,9 @@ class PnlFastemProjectManager(wx.Panel):
                 self.pnl_active_project, size=(230, 160)
             )
             self.active_project_panel.SetBackgroundColour(self._theme.background)
-            self.active_project_panel.SetForegroundColour("#999999")
+            self.active_project_panel.SetForegroundColour(
+                self._theme.panel_foreground
+            )
             sizer.Add(self.active_project_panel)
 
         self.pnl_active_project.SetSizer(sizer)

@@ -26,7 +26,6 @@ from collections.abc import Iterable, Mapping
 import cairo
 import logging
 import numpy
-from odemis.gui import FG_COLOUR_DIS
 from odemis.gui import img
 from odemis.gui.comp.buttons import ImageToggleButton
 from odemis.gui.comp.combo import ComboBox
@@ -43,6 +42,7 @@ from odemis.model import (MD_AT_AR, MD_AT_CL, MD_AT_EK, MD_AT_EM, MD_AT_FLUO,
 import wx
 
 import odemis.util.units as units
+from odemis.gui.layout import theme
 
 
 class InfoLegend(wx.Panel):
@@ -97,7 +97,7 @@ class InfoLegend(wx.Panel):
         )
 
         self.merge_slider.SetBackgroundColour(parent.GetBackgroundColour())
-        self.merge_slider.SetForegroundColour(FG_COLOUR_DIS) # "#4d4d4d"
+        self.merge_slider.SetForegroundColour(theme.text_disabled)
         self.merge_slider.SetToolTip("Merge ratio")
 
         self.bmp_slider_left = wx.StaticBitmap(self,

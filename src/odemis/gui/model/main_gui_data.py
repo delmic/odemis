@@ -32,12 +32,7 @@ from odemis.acq import acqmng, path
 from odemis.acq.align.fastem import Calibrations
 from odemis.acq.fastem import FastEMCalibration, FastEMROC
 from odemis.acq.move import MicroscopePostureManager
-from odemis.gui import (
-    FG_COLOUR_BLIND_BLUE,
-    FG_COLOUR_BLIND_ORANGE,
-    FG_COLOUR_BLIND_PINK,
-    conf,
-)
+from odemis.gui import conf
 from odemis.gui.conf.data import get_hw_settings_config
 from odemis.gui.log import observe_comp_state
 from odemis.gui.model import (
@@ -55,6 +50,7 @@ from odemis.gui.model import (
     TabName,
 )
 from odemis.model import FloatContinuous, StringVA, hasVA
+from odemis.gui.layout import theme
 
 # The circumference of a CircleScintillator is divided into 72 arcs.
 # This will result in an angle increment of 5 degrees.
@@ -771,19 +767,19 @@ class FastEMMainGUIData(MainGUIData):
                     ymax = position[1] - 0.5 * sz[1]
                     if calibration_name == CALIBRATION_1:
                         number = 1
-                        colour = FG_COLOUR_BLIND_BLUE
+                        colour = theme.colour_blind_blue
                         calibration.sequence.value = calib_1_calibrations
                         # overlay location left on init
                         xmin -= 10 * sz[0]
                         xmax -= 10 * sz[0]
                     elif calibration_name == CALIBRATION_2:
                         number = 2
-                        colour = FG_COLOUR_BLIND_ORANGE
+                        colour = theme.colour_blind_orange
                         calibration.sequence.value = calib_2_calibrations
                         # overlay location middle on init
                     elif calibration_name == CALIBRATION_3:
                         number = 3
-                        colour = FG_COLOUR_BLIND_PINK
+                        colour = theme.colour_blind_pink
                         calibration.sequence.value = calib_3_calibrations
                         # overlay location right on init
                         xmin += 10 * sz[0]

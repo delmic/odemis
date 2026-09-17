@@ -25,6 +25,7 @@ import logging
 from odemis import gui
 from odemis.gui.comp.buttons import GraphicRadioButton
 import wx
+from odemis.gui.layout import theme
 
 
 class GraphicalRadioButtonControl(wx.Panel):
@@ -48,7 +49,7 @@ class GraphicalRadioButtonControl(wx.Panel):
             btn = GraphicRadioButton(self, value=choice, style=wx.ALIGN_CENTER, label=label,
                                       height=16)
 
-            btn.SetForegroundColour(gui.FG_COLOUR_RADIO_INACTIVE)
+            btn.SetForegroundColour(theme.button_text)
 
             self.buttons.append(btn)
 
@@ -58,7 +59,7 @@ class GraphicalRadioButtonControl(wx.Panel):
 
         if self.units:
             lbl = wx.StaticText(self, -1, self.units)
-            lbl.SetForegroundColour(gui.FG_COLOUR_MAIN)
+            lbl.SetForegroundColour(theme.field_foreground)
             sizer.Add(lbl, flag=wx.RIGHT, border=5)
 
         self.SetSizer(sizer)
@@ -77,9 +78,9 @@ class GraphicalRadioButtonControl(wx.Panel):
         Sets color of text of buttons"""
         btn.SetToggle(active)
         if active:
-            btn.SetForegroundColour(gui.FG_COLOUR_RADIO_ACTIVE)
+            btn.SetForegroundColour(theme.control_active)
         else:
-            btn.SetForegroundColour(gui.FG_COLOUR_RADIO_INACTIVE)
+            btn.SetForegroundColour(theme.button_text)
 
     def GetValue(self):
         for btn in self.buttons:

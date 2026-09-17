@@ -25,8 +25,8 @@ from odemis.gui.comp.foldpanelbar import FoldPanelItem
 from odemis.gui.comp.slider import UnitFloatSlider
 from odemis.gui.comp.stream_bar import StreamBar
 from odemis.gui.comp.viewport import ARLiveViewport
-from odemis.gui.layout import PnlTabSparcAlign
-from odemis.gui.layout.constants.themes import DARK
+from odemis.gui.layout.components.panel_tab_sparc_align import PnlTabSparcAlign
+from odemis.gui.layout import theme
 
 
 class PnlTabSparcAlignTest(unittest.TestCase):
@@ -116,11 +116,11 @@ class PnlTabSparcAlignTest(unittest.TestCase):
 
         self.assertEqual(
             self.panel.btn_align_chamber.GetForegroundColour(),
-            wx.Colour(DARK.button_text),
+            wx.Colour(theme.button_text),
         )
         self.assertEqual(
             self.panel.mirror_align_btn_p_mirror_x.GetForegroundColour(),
-            wx.Colour(DARK.button_text),
+            wx.Colour(theme.button_text),
         )
 
 

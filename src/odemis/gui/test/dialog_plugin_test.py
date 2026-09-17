@@ -24,8 +24,8 @@ from odemis.gui.comp.buttons import ImageTextButton
 from odemis.gui.comp.foldpanelbar import FoldPanelItem
 from odemis.gui.comp.stream_bar import StreamBar
 from odemis.gui.comp.viewport import LiveViewport, PointSpectrumViewport
-from odemis.gui.layout import PluginDialogBase
-from odemis.gui.layout.constants.themes import DARK
+from odemis.gui.layout.components.dialog_plugin import PluginDialogBase
+from odemis.gui.layout import theme
 
 
 class PluginDialogTest(unittest.TestCase):
@@ -91,7 +91,7 @@ class PluginDialogTest(unittest.TestCase):
         self.assertEqual(self.dialog.btn_cancel.GetLabel(), "cancel")
         self.assertEqual(
             self.dialog.btn_cancel.GetForegroundColour(),
-            wx.Colour(DARK.button_text),
+            wx.Colour(theme.button_text),
         )
 
     def test_description_and_buttons_panels_have_empty_sizers(self) -> None:

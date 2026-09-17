@@ -25,7 +25,8 @@ from odemis.gui.cont.tabs.fastem_multi_beam_tab import FastEMMultiBeamTab
 from odemis.gui.cont.tabs.fastem_single_beam_tab import FastEMSingleBeamTab
 from odemis.gui.cont.tabs.tab import Tab
 from odemis.gui.cont.tabs.tab_bar_controller import TabController
-from odemis.gui.layout import PnlTabFastemMultiBeam, PnlTabFastemSingleBeam
+from odemis.gui.layout.components.panel_tab_fastem_multi_beam import PnlTabFastemMultiBeam
+from odemis.gui.layout.components.panel_tab_fastem_single_beam import PnlTabFastemSingleBeam
 
 
 class FastEMAcquisitionTab(Tab):

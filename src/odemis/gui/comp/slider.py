@@ -34,6 +34,7 @@ import odemis.gui as gui
 import time
 import wx
 import wx.lib.wxcairo as wxcairo
+from odemis.gui.layout import theme
 
 
 class BaseSlider(wx.Control):
@@ -547,7 +548,7 @@ class NumberSlider(Slider):
                                     unit=unit,
                                     accuracy=accuracy)
 
-        self.linked_field.SetForegroundColour(gui.FG_COLOUR_EDIT)
+        self.linked_field.SetForegroundColour(theme.text_edit)
         self.linked_field.SetBackgroundColour(parent.GetBackgroundColour())
 
         self.linked_field.Bind(wx.EVT_COMMAND_ENTER, self._update_slider)
@@ -694,7 +695,7 @@ class VisualRangeSlider(BaseSlider):
         super(VisualRangeSlider, self).__init__(parent, wid, pos, size, style)
 
         self.content_color = wxcol_to_frgb(self.GetForegroundColour())
-        self.select_color = (1.0, 1.0, 1.0, self.sel_alpha)
+        self.select_color = hex_to_frgba(theme.button_text_contrast, self.sel_alpha)
 
         if size == (-1, -1): # wxPython follows this too much to always do it
             self.SetMinSize((-1, 40))
@@ -984,7 +985,7 @@ class VisualRangeSlider(BaseSlider):
         ctx.fill()
         if self.Enabled:
             # draw the "edit" bars on each side
-            ctx.set_source_rgba(*hex_to_frgba(gui.FG_COLOUR_EDIT, 0.8))
+            ctx.set_source_rgba(*hex_to_frgba(theme.text_edit, 0.8))
             self._draw_line(ctx, left, height, left, 0)
             self._draw_line(ctx, right, height, right, 0)
 

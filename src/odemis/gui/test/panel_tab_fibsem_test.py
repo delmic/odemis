@@ -17,12 +17,14 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
 import unittest
+from dataclasses import replace
 
 import wx
 
+import odemis.gui.layout as layout
 from odemis.gui.comp.viewport import FeatureOverviewViewport, LiveViewport
-from odemis.gui.layout import PnlTabFibsem
-from odemis.gui.layout.constants.themes import DARK
+from odemis.gui.layout.components.panel_tab_fibsem import PnlTabFibsem
+from odemis.gui.layout import theme
 
 
 class PnlTabFibsemTest(unittest.TestCase):
@@ -42,6 +44,12 @@ class PnlTabFibsemTest(unittest.TestCase):
         """Create a fresh FIBSEM panel."""
         self.frame = wx.Frame(None)
         self.panel = PnlTabFibsem(self.frame)
+        sizer = wx.BoxSizer(wx.VERTICAL)
+        sizer.Add(self.panel, proportion=1, flag=wx.EXPAND)
+        self.frame.SetSizer(sizer)
+        self.frame.Maximize(True)
+        self.frame.Show()
+        wx.Yield()
 
     def tearDown(self) -> None:
         """Destroy the FIBSEM panel host frame."""
@@ -144,6 +152,53 @@ class PnlTabFibsemTest(unittest.TestCase):
         self.assertEqual(self.panel.gauge_cryosecom_acq.GetRange(), 100)
         self.assertEqual(self.panel.gauge_automated_milling.GetRange(), 100)
         self.assertEqual(self.panel.gauge_milling_series.GetRange(), 100)
+
+
+    def test_button_foregrounds(self) -> None:
+        """Apply normal and contrasting foregrounds independently."""
+        normal_buttons = (
+            self.panel.btn_create_move_feature,
+            self.panel.btn_go_to_feature,
+            self.panel.btn_switch_sem_imaging,
+            self.panel.btn_switch_milling,
+            self.panel.btn_acquire_overview,
+        )
+        contrasting_buttons = (
+            self.panel.btn_feature_save_position,
+            self.panel.btn_cryosecom_acquire,
+            self.panel.btn_acquire_all,
+            self.panel.btn_run_automated_milling,
+            self.panel.btn_run_milling,
+        )
+
+        for button in normal_buttons:
+            with self.subTest(button=button):
+                self.assertEqual(
+                    button.GetForegroundColour(),
+                    wx.Colour(theme.button_text),
+                )
+        for button in contrasting_buttons:
+            with self.subTest(button=button):
+                self.assertEqual(
+                    button.GetForegroundColour(),
+                    wx.Colour(theme.button_text_contrast),
+                )
+
+    def test_uses_current_layout_theme_at_construction(self) -> None:
+        """Resolve the selected layout theme when a component is created."""
+        original_theme = layout.theme
+        selected_theme = replace(original_theme, background="#121212")
+        try:
+            layout.theme = selected_theme
+            panel = PnlTabFibsem(self.frame)
+            self.assertIs(panel._theme, selected_theme)
+            self.assertEqual(
+                panel.GetBackgroundColour(),
+                wx.Colour(selected_theme.background),
+            )
+            panel.Destroy()
+        finally:
+            layout.theme = original_theme
 
 
 if __name__ == "__main__":

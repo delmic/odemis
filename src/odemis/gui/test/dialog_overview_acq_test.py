@@ -20,8 +20,8 @@ import unittest
 
 import wx
 
-from odemis.gui.layout import OverviewAcqDialogBase
-from odemis.gui.layout.constants.themes import DARK
+from odemis.gui.layout.components.dialog_overview_acq import OverviewAcqDialogBase
+from odemis.gui.layout import theme
 
 
 class OverviewAcqDialogTest(unittest.TestCase):
@@ -88,11 +88,11 @@ class OverviewAcqDialogTest(unittest.TestCase):
 
         self.assertEqual(
             self.dlg.btn_cancel.GetForegroundColour(),
-            wx.Colour(DARK.button_text),
+            wx.Colour(theme.button_text),
         )
         self.assertEqual(
             self.dlg.btn_secom_acquire.GetForegroundColour(),
-            wx.Colour(DARK.button_text_contrast),
+            wx.Colour(theme.button_text_contrast),
         )
 
 

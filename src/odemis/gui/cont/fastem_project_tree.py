@@ -28,9 +28,10 @@ import wx
 import wx.lib.newevent
 from wx.lib.agw.customtreectrl import CustomTreeCtrl, GenericTreeItem
 
-from odemis.gui import BG_COLOUR_MAIN, FG_COLOUR_DIS, FG_COLOUR_MAIN, img
+from odemis.gui import img
 from odemis.gui.comp import buttons
 from odemis.gui.cont.fastem_project_grid_base import DEFAULT_PARENT
+from odemis.gui.layout import theme
 
 
 class NodeChangeType(IntEnum):
@@ -427,8 +428,8 @@ class NodeWindow(wx.Window):
         super().__init__(parent, style=wx.NO_BORDER, size=(300, 30), *args, **kwargs)
         self.node = node
 
-        self.SetBackgroundColour(BG_COLOUR_MAIN)
-        self.SetForegroundColour(FG_COLOUR_MAIN)
+        self.SetBackgroundColour(theme.background)
+        self.SetForegroundColour(theme.field_foreground)
         self.SetFont(parent.GetFont())
 
         # Create sizers
@@ -447,7 +448,7 @@ class NodeWindow(wx.Window):
         self.item_label = wx.StaticText(self, label=node.name)
         self.gauge = wx.Gauge(self, range=100, size=(100, 16))
         self.status_text = wx.StaticText(self, label="Open")
-        self.status_text.SetForegroundColour(FG_COLOUR_DIS)
+        self.status_text.SetForegroundColour(theme.text_disabled)
 
         # Bind the checkbox event
         self.checkbox.Bind(wx.EVT_CHECKBOX, self.on_checkbox)
@@ -509,8 +510,8 @@ class FastEMProjectTreeCtrl(CustomTreeCtrl):
             size=(300, 650),
         )
 
-        self.SetBackgroundColour(BG_COLOUR_MAIN)
-        self.SetForegroundColour(FG_COLOUR_MAIN)
+        self.SetBackgroundColour(theme.background)
+        self.SetForegroundColour(theme.field_foreground)
         self._initialized = False
 
         # Initialize to store node-window mappings

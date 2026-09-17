@@ -35,6 +35,7 @@ import wx
 
 from odemis.gui import img, model
 from odemis.gui.comp.buttons import ImageButton, ImageToggleButton, darken_image
+from odemis.gui.layout import theme
 from odemis.gui.model import (
     TOOL_ACT_ZOOM_FIT,
     TOOL_LABEL,
@@ -261,7 +262,7 @@ class ToolBar(wx.Panel):
 
         # Create a panel that will hold the actual buttons
         self.btn_panel = wx.Panel(self, -1)
-        self.btn_panel.SetBackgroundColour(wx.BLACK)
+        self.btn_panel.SetBackgroundColour(theme.viewport_background)
         self.btn_panel.SetSizer(self.btn_sizer)
 
         # Add the button panel to the toolbar

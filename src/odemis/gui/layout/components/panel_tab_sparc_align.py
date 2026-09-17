@@ -16,7 +16,7 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
-from typing import Any
+from typing import Any, Optional
 
 import wx
 
@@ -32,7 +32,8 @@ from odemis.gui.layout.constants.strings import (
     LABEL_STEP_SIZE,
     TOOLTIP_OPEN_LOG_PANEL,
 )
-from odemis.gui.layout.constants.themes import DARK, Theme
+import odemis.gui.layout as layout
+from odemis.gui.layout.constants.themes import Theme
 from odemis.gui.layout.util.fonts import set_font
 from odemis.gui.layout.util.sizers import hbox, vbox
 
@@ -40,13 +41,14 @@ from odemis.gui.layout.util.sizers import hbox, vbox
 class PnlTabSparcAlign(wx.Panel):
     """Provide the SPARC mirror/fiber alignment tab layout."""
 
-    def __init__(self, parent: wx.Window, theme: Theme = DARK) -> None:
+    def __init__(self, parent: wx.Window, theme: Optional[Theme] = None) -> None:
         """Create the alignment mode controls, viewport, and settings column.
 
         :param parent: Parent window.
         :param theme: Semantic layout theme.
         """
         super().__init__(parent, style=wx.WANTS_CHARS)
+        theme = layout.theme if theme is None else theme
         self._theme = theme
         self.SetBackgroundColour(theme.background)
 

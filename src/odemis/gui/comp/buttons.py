@@ -29,12 +29,8 @@ import numpy
 import wx
 import wx.lib.buttons as wxbuttons
 
-from odemis.gui import (
-    FG_COLOUR_HIGHLIGHT,
-    FG_COLOUR_RADIO_ACTIVE,
-    FG_COLOUR_RADIO_INACTIVE,
-    img,
-)
+from odemis.gui import img
+from odemis.gui.layout import theme
 from odemis.gui.util.img import wxImageScaleKeepRatio
 
 
@@ -90,20 +86,20 @@ class BtnMixin(object):
             48: 14,
         },
         'def': {
-            'text_colour': "#1A1A1A",
-            'text_col_dis': "#676767",
+            'text_colour': theme.button_text,
+            'text_col_dis': theme.text_disabled,
         },
         'blue': {
-            'text_colour': wx.WHITE,
-            'text_col_dis': "#AAAAAA",
+            'text_colour': theme.button_text_contrast,
+            'text_col_dis': theme.button_text_disabled_contrast,
         },
         'red': {
-            'text_colour': wx.WHITE,
-            'text_col_dis': "#AAAAAA",
+            'text_colour': theme.button_text_contrast,
+            'text_col_dis': theme.button_text_disabled_contrast,
         },
         'orange': {
-            'text_colour': wx.WHITE,
-            'text_col_dis': "#AAAAAA",
+            'text_colour': theme.button_text_contrast,
+            'text_col_dis': theme.button_text_disabled_contrast,
         },
     }
 
@@ -789,8 +785,8 @@ class TabButton(GraphicRadioButton):
         self.bmpSelected = img.getBitmap("tab_active.png")
         self.bmpDisabled = img.getBitmap("tab_disabled.png")
 
-        self.fg_color_normal = "#FFFFFF"
-        self.fg_color_dis = "#E0E0E0"
+        self.fg_color_normal = theme.button_text_contrast
+        self.fg_color_dis = theme.text_primary
         self.SetForegroundColour(self.fg_color_normal)
 
         self.highlighted = False
@@ -798,7 +794,7 @@ class TabButton(GraphicRadioButton):
     def Enable(self, enable=True):
         if enable:
             if self.highlighted:
-                self.SetForegroundColour(FG_COLOUR_HIGHLIGHT)
+                self.SetForegroundColour(theme.text_highlight)
             else:
                 self.SetForegroundColour(self.fg_color_normal)
         else:
@@ -987,7 +983,7 @@ class PlusImageButton(ImageTextButton):
 
         super(PlusImageButton, self).__init__(*args, **kwargs)
 
-        self.SetForegroundColour(wx.WHITE)
+        self.SetForegroundColour(theme.button_text_contrast)
 
         self.bmpSelected = img.getBitmap("overview_add_a.png")
         self.bmpHover = img.getBitmap("overview_add_h.png")
@@ -1007,7 +1003,7 @@ class PopupImageButton(ImageTextButton):
 
         super(PopupImageButton, self).__init__(*args, **kwargs)
 
-        self.SetForegroundColour(wx.WHITE)
+        self.SetForegroundColour(theme.button_text_contrast)
 
         self.bmpSelected = img.getBitmap("stream_add_a.png")
         self.bmpHover = img.getBitmap("stream_add_h.png")
@@ -1109,9 +1105,9 @@ class GridSelectionPanel(wx.Panel):
                 if elem is None:
                     continue
                 btn = ImageTextToggleButton(self, wx.ALIGN_CENTER, height=32, size=(-1, 32),
-                                                    active_colour=FG_COLOUR_RADIO_ACTIVE,
+                                                    active_colour=theme.control_active,
                                                     label=str(elem))
-                btn.SetForegroundColour(FG_COLOUR_RADIO_INACTIVE)
+                btn.SetForegroundColour(theme.button_text)
 
                 calgrid_sz.Add(btn, pos=(row_idx, col_idx), flag=wx.BOTTOM | wx.LEFT | wx.RIGHT , border=5)
 

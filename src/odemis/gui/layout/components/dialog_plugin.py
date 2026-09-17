@@ -16,6 +16,8 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
+from typing import Optional
+
 import wx
 
 from odemis.gui.comp.buttons import ImageTextButton
@@ -23,7 +25,8 @@ from odemis.gui.comp.foldpanelbar import FoldPanelBar, FoldPanelItem
 from odemis.gui.comp.stream_bar import StreamBar
 from odemis.gui.comp.viewport import LiveViewport, PointSpectrumViewport
 from odemis.gui.layout.constants.strings import LABEL_STREAMS
-from odemis.gui.layout.constants.themes import DARK, Theme
+import odemis.gui.layout as layout
+from odemis.gui.layout.constants.themes import Theme
 from odemis.gui.layout.util.fonts import set_font
 from odemis.gui.layout.util.sizers import hbox, vbox
 
@@ -36,7 +39,7 @@ class PluginDialogBase(wx.Dialog):
     panels, progress gauge, and button bar).
     """
 
-    def __init__(self, parent: wx.Window, theme: Theme = DARK) -> None:
+    def __init__(self, parent: wx.Window, theme: Optional[Theme] = None) -> None:
         """Create the description banner, viewports, and settings column.
 
         :param parent: Parent window.
@@ -47,6 +50,7 @@ class PluginDialogBase(wx.Dialog):
             title="Image Acquisition",
             style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER,
         )
+        theme = layout.theme if theme is None else theme
         self._theme = theme
         self.SetBackgroundColour(theme.viewport_background)
         set_font(self, 9)

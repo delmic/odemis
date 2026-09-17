@@ -20,8 +20,8 @@ import unittest
 
 import wx
 
-from odemis.gui.layout import PnlTabLocalization
-from odemis.gui.layout.constants.themes import DARK
+from odemis.gui.layout.components.panel_tab_localization import PnlTabLocalization
+from odemis.gui.layout import theme
 
 
 class PnlTabLocalizationTest(unittest.TestCase):
@@ -140,15 +140,15 @@ class PnlTabLocalizationTest(unittest.TestCase):
         self.assertEqual(self.panel.gauge_cryosecom_acq.GetRange(), 100)
         self.assertEqual(
             self.panel.btn_create_move_feature.GetForegroundColour(),
-            wx.Colour(DARK.button_text),
+            wx.Colour(theme.button_text),
         )
         self.assertEqual(
             self.panel.btn_go_to_feature.GetForegroundColour(),
-            wx.Colour(DARK.button_text),
+            wx.Colour(theme.button_text),
         )
         self.assertEqual(
             self.panel.btn_cryosecom_acquire.GetForegroundColour(),
-            wx.Colour(DARK.button_text_contrast),
+            wx.Colour(theme.button_text_contrast),
         )
 
 

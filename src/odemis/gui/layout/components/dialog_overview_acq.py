@@ -31,7 +31,8 @@ from odemis.gui.layout.constants.strings import (
     LABEL_OPTICAL_SETTINGS,
     LABEL_STREAMS,
 )
-from odemis.gui.layout.constants.themes import DARK, Theme
+import odemis.gui.layout as layout
+from odemis.gui.layout.constants.themes import Theme
 from odemis.gui.layout.util.fonts import set_font
 from odemis.gui.layout.util.sizers import hbox, vbox
 from odemis.gui.layout.util.widgets import create_label, create_text_button
@@ -40,7 +41,7 @@ from odemis.gui.layout.util.widgets import create_label, create_text_button
 class OverviewAcqDialogBase(wx.Dialog):
     """Provide the overview acquisition dialog layout."""
 
-    def __init__(self, parent: Optional[wx.Window], theme: Theme = DARK) -> None:
+    def __init__(self, parent: Optional[wx.Window], theme: Optional[Theme] = None) -> None:
         """Create the viewport, settings column, and action rows.
 
         :param parent: Parent window, or None to size against the display.
@@ -51,6 +52,7 @@ class OverviewAcqDialogBase(wx.Dialog):
             title="Overview Acquisition",
             style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER,
         )
+        theme = layout.theme if theme is None else theme
         self._theme = theme
         self.SetBackgroundColour(self._theme.viewport_background)
         set_font(self, 9)

@@ -34,6 +34,7 @@ import wx
 from odemis import util
 from odemis.gui.comp.overlay.base import (Label, Vec, WorldOverlay)
 from odemis.gui.model import TOOL_LABEL, TOOL_NONE, TOOL_RULER
+from odemis.gui.layout import theme
 
 LINE_MODE_NONE = 0
 LINE_MODE_MOVE = 1
@@ -129,8 +130,8 @@ class GenericGadgetLine(GadgetToolInterface, metaclass=ABCMeta):
         """
         super(GenericGadgetLine, self).__init__(cnvs)
 
-        self.colour = conversion.hex_to_frgba(gui.CROSSHAIR_COLOR)  # green colour
-        self.highlight = conversion.hex_to_frgba(gui.FG_COLOUR_HIGHLIGHT)  # orange colour for the selected line
+        self.colour = conversion.hex_to_frgba(theme.crosshair)  # green colour
+        self.highlight = conversion.hex_to_frgba(theme.text_highlight)  # orange colour for the selected line
 
         self.p_start_pos = p_start_pos  # physical coordinates in meters
         self.p_end_pos = p_end_pos
@@ -397,11 +398,11 @@ class GenericGadgetLine(GadgetToolInterface, metaclass=ABCMeta):
             ctx.set_line_width(0.5)
             ctx.set_dash([])
 
-            ctx.set_source_rgba(1, 0, 0, 1)
+            ctx.set_source_rgba(*conversion.hex_to_frgba(theme.categorical_red))
             ctx.rectangle(*inner_rect)
             ctx.stroke()
 
-            ctx.set_source_rgba(0, 0, 1, 1)
+            ctx.set_source_rgba(*conversion.hex_to_frgba(theme.categorical_blue))
             ctx.rectangle(*outer_rect)
             ctx.stroke()
 
@@ -410,11 +411,11 @@ class GenericGadgetLine(GadgetToolInterface, metaclass=ABCMeta):
             end_rect = self._edges_to_rect(self._edges['e_l'], self._edges['e_t'],
                                            self._edges['e_r'], self._edges['e_b'])
 
-            ctx.set_source_rgba(0.3, 1, 0.3, 1)
+            ctx.set_source_rgba(*conversion.hex_to_frgba(theme.categorical_green))
             ctx.rectangle(*start_rect)
             ctx.stroke()
 
-            ctx.set_source_rgba(0.6, 1, 0.6, 1)
+            ctx.set_source_rgba(*conversion.hex_to_frgba(theme.categorical_green))
             ctx.rectangle(*end_rect)
             ctx.stroke()
 
@@ -496,7 +497,7 @@ class RulerGadget(GenericGadgetLine):
 
         # Draws a black background for the ruler
         ctx.set_line_width(2)
-        ctx.set_source_rgba(0, 0, 0, 0.5)
+        ctx.set_source_rgba(*conversion.hex_to_frgba(theme.viewport_background, 0.5))
         ctx.move_to(*b_start)
         ctx.line_to(*b_end)
 
@@ -560,7 +561,7 @@ class LabelGadget(GenericGadgetLine):
             font_size=14,
             flip=True,
             align=wx.ALIGN_CENTRE_HORIZONTAL,
-            colour=(0, 0, 0, 0),  # RGBA
+            colour=conversion.hex_to_frgba(theme.viewport_background, 0),
             opacity=1.0,
             deg=None,  # always horizontal
             background=None
@@ -717,7 +718,7 @@ class LabelGadget(GenericGadgetLine):
             ctx.set_line_width(0.5)
             ctx.set_dash([])
 
-            ctx.set_source_rgba(0.6, 1, 0.6, 1)
+            ctx.set_source_rgba(*conversion.hex_to_frgba(theme.categorical_green))
             ctx.rectangle(*text_rect)
             ctx.stroke()
 
@@ -752,7 +753,7 @@ class LabelGadget(GenericGadgetLine):
 
         # Draws a black background for the ruler
         ctx.set_line_width(2)
-        ctx.set_source_rgba(0, 0, 0, 0.5)
+        ctx.set_source_rgba(*conversion.hex_to_frgba(theme.viewport_background, 0.5))
         ctx.move_to(*b_start)
         ctx.line_to(*b_end)
 
@@ -823,7 +824,7 @@ class EKLine(GenericGadgetLine):
         super().__init__(cnvs)
 
         self._line_va.subscribe(self._onLinePos, init=True)
-        self.colour = conversion.hex_to_frgb(gui.FG_COLOUR_EDIT)
+        self.colour = conversion.hex_to_frgb(theme.text_edit)
 
     def _onLinePos(self, line):
         # TODO: This is not called often enough: when the spectrograph wl is changed,
@@ -910,7 +911,7 @@ class EKLine(GenericGadgetLine):
 
         # Draws a black background for the line
         ctx.set_line_width(3)
-        ctx.set_source_rgba(0, 0, 0, 0.5)
+        ctx.set_source_rgba(*conversion.hex_to_frgba(theme.viewport_background, 0.5))
         ctx.move_to(*b_start)
         ctx.line_to(*b_end)
         ctx.stroke()

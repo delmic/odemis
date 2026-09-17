@@ -20,7 +20,7 @@ import unittest
 
 import wx
 
-from odemis.gui.layout import MainFrame
+from odemis.gui.layout.components.frame_main import MainFrame
 from odemis.gui.layout.constants.strings import TOOLTIP_CLOSE_LOG_PANEL
 
 

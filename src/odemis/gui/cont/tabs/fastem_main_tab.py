@@ -33,16 +33,14 @@ from odemis.gui import img
 from odemis.gui.comp.fastem_project_manager_panel import FastEMProjectManagerPanel
 from odemis.gui.comp.fastem_user_settings_panel import FastEMUserSettingsPanel
 from odemis.gui.comp.viewport import FastEMMainViewport
-from odemis.gui.layout.components import (
-    PnlFastemProjectManager,
-    PnlFastemUserSettings,
-    PnlTabFastemSetup,
-)
+from odemis.gui.layout.components.panel_fastem_project_manager import PnlFastemProjectManager
+from odemis.gui.layout.components.panel_fastem_user_settings import PnlFastemUserSettings
+from odemis.gui.layout.components.panel_tab_fastem_setup import PnlTabFastemSetup
 from odemis.gui.cont.tabs.fastem_acquisition_tab import FastEMAcquisitionTab
 from odemis.gui.cont.tabs.fastem_setup_tab import FastEMSetupTab
 from odemis.gui.cont.tabs.tab import Tab
 from odemis.gui.cont.tabs.tab_bar_controller import TabController
-from odemis.gui.layout import PnlTabFastemAcqui
+from odemis.gui.layout.components.panel_tab_fastem_acqui import PnlTabFastemAcqui
 from odemis.gui.model import (
     TOOL_ACT_ZOOM_FIT,
     TOOL_CURSOR,

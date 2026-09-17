@@ -27,6 +27,8 @@ import wx
 
 import odemis.gui.comp.overlay.base as base
 import odemis.util.units as units
+from odemis.gui.layout import theme
+from odemis.util.conversion import hex_to_frgba
 
 
 class FocusOverlay(base.ViewOverlay):
@@ -47,7 +49,7 @@ class FocusOverlay(base.ViewOverlay):
 
         ctx.set_line_width(10)
         ctx.set_line_join(cairo.LINE_JOIN_MITER)
-        ctx.set_source_rgba(1.0, 1.0, 1.0, 0.8)
+        ctx.set_source_rgba(*hex_to_frgba(theme.button_text_contrast, 0.8))
 
         x, y = self.cnvs.ClientSize
 

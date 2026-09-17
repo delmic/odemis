@@ -25,7 +25,20 @@ import argparse
 import logging
 from odemis import model, gui
 import odemis
-from odemis.gui import log, img, plugin, layout
+from odemis.gui import log, img, plugin
+from odemis.gui.layout.components.frame_main import MainFrame
+from odemis.gui.layout.components.panel_tab_correlation import PnlTabCorrelation
+from odemis.gui.layout.components.panel_tab_cryosecom_chamber import PnlTabCryosecomChamber
+from odemis.gui.layout.components.panel_tab_fastem_main import PnlTabFastemMain
+from odemis.gui.layout.components.panel_tab_fibsem import PnlTabFibsem
+from odemis.gui.layout.components.panel_tab_inspection import PnlTabInspection
+from odemis.gui.layout.components.panel_tab_localization import PnlTabLocalization
+from odemis.gui.layout.components.panel_tab_secom_align import PnlTabSecomAlign
+from odemis.gui.layout.components.panel_tab_secom_streams import PnlTabSecomStreams
+from odemis.gui.layout.components.panel_tab_sparc2_align import PnlTabSparc2Align
+from odemis.gui.layout.components.panel_tab_sparc_acqui import PnlTabSparcAcqui
+from odemis.gui.layout.components.panel_tab_sparc_align import PnlTabSparcAlign
+from odemis.gui.layout.components.panel_tab_sparc_chamber import PnlTabSparcChamber
 from odemis.gui.win.thoughts import show_important_thought_dialog
 from odemis.gui.cont import acquisition
 from odemis.gui.cont.menu import MenuController
@@ -141,7 +154,7 @@ class OdemisGUIApp(wx.App):
         else:
             self.main_data = guimodel.MainGUIData(microscope)
         # Load the main frame
-        self.main_frame = layout.MainFrame(None)
+        self.main_frame = MainFrame(None)
 
         self.init_gui()
 
@@ -197,7 +210,7 @@ class OdemisGUIApp(wx.App):
                     "name": TabName.ANALYSIS.value,
                     "controller": AnalysisTab,
                     "button": self.main_frame.btn_tab_inspection,
-                    "panel": layout.PnlTabInspection
+                    "panel": PnlTabInspection
                 }
             ]
             if self.main_data.role in ("secom", "delphi", "sem", "optical"):
@@ -213,13 +226,13 @@ class OdemisGUIApp(wx.App):
                         # Tab button for this tab
                         "button": self.main_frame.btn_tab_secom_streams,
                         # Constructor of the tab panel
-                        "panel": layout.PnlTabSecomStreams
+                        "panel": PnlTabSecomStreams
                     },
                     {
                         "name": TabName.SECOM_ALIGN.value,
                         "controller": SecomAlignTab,
                         "button": self.main_frame.btn_tab_align,
-                        "panel": layout.PnlTabSecomAlign
+                        "panel": PnlTabSecomAlign
                     },
                 ])
             elif self.main_data.role in ("sparc-simplex", "sparc", "sparc2"):
@@ -233,25 +246,25 @@ class OdemisGUIApp(wx.App):
                         "name": TabName.SPARC_ACQUI.value,
                         "controller": SparcAcquisitionTab,
                         "button": self.main_frame.btn_tab_sparc_acqui,
-                        "panel": layout.PnlTabSparcAcqui
+                        "panel": PnlTabSparcAcqui
                     },
                     {
                         "name": TabName.SPARC_CHAMBER.value,
                         "controller": ChamberTab,
                         "button": self.main_frame.btn_tab_sparc_chamber,
-                        "panel": layout.PnlTabSparcChamber
+                        "panel": PnlTabSparcChamber
                     },
                     {
                         "name": TabName.SPARC_ALIGN.value,
                         "controller": SparcAlignTab,
                         "button": self.main_frame.btn_tab_align,
-                        "panel": layout.PnlTabSparcAlign
+                        "panel": PnlTabSparcAlign
                     },
                     {
                         "name": TabName.SPARC2_ALIGN.value,
                         "controller": Sparc2AlignTab,
                         "button": self.main_frame.btn_tab_align,
-                        "panel": layout.PnlTabSparc2Align
+                        "panel": PnlTabSparc2Align
                     },
                 ])
 
@@ -268,25 +281,25 @@ class OdemisGUIApp(wx.App):
                         "name": TabName.METEOR_CORRELATION.value,
                         "controller": CorrelationTab,
                         "button": self.main_frame.btn_tab_correlation,
-                        "panel": layout.PnlTabCorrelation
+                        "panel": PnlTabCorrelation
                     },
                     {
                         "name": TabName.CRYOSECOM_CHAMBER.value,
                         "controller": CryoChamberTab,
                         "button": self.main_frame.btn_tab_cryosecom_chamber,
-                        "panel": layout.PnlTabCryosecomChamber
+                        "panel": PnlTabCryosecomChamber
                     },
                     {
                         "name": TabName.CRYOSECOM_LOCALIZATION.value,
                         "controller": LocalizationTab,
                         "button": self.main_frame.btn_tab_localization,
-                        "panel": layout.PnlTabLocalization
+                        "panel": PnlTabLocalization
                     },
                     {
                         "name": TabName.METEOR_FIBSEM.value,
                         "controller": FibsemTab,
                         "button": self.main_frame.btn_tab_fibsem,
-                        "panel": layout.PnlTabFibsem
+                        "panel": PnlTabFibsem
                     },
                 ])
 
@@ -298,7 +311,7 @@ class OdemisGUIApp(wx.App):
                         "name": TabName.FASTEM_MAIN.value,
                         "controller": FastEMMainTab,
                         "button": self.main_frame.btn_tab_fastem_main,
-                        "panel": layout.PnlTabFastemMain
+                        "panel": PnlTabFastemMain
                     },
                 ])
             elif self.main_data.role is None:  # viewer
@@ -310,7 +323,7 @@ class OdemisGUIApp(wx.App):
                         "name": TabName.METEOR_CORRELATION.value,
                         "controller": CorrelationTab,
                         "button": self.main_frame.btn_tab_correlation,
-                        "panel": layout.PnlTabCorrelation
+                        "panel": PnlTabCorrelation
                     },
                 ])
             else:

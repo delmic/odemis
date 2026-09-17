@@ -26,6 +26,7 @@ from odemis import gui, model
 from odemis.acq.milling.tasks import  MillingTaskSettings
 from odemis.gui.comp.text import UnitFloatCtrl
 from odemis.gui.comp.combo import ComboBox
+from odemis.gui.layout import theme
 
 class MillingTaskPanel(wx.Panel):
     """Panel for Milling Settings"""
@@ -33,15 +34,15 @@ class MillingTaskPanel(wx.Panel):
     def __init__(self, parent, task: MillingTaskSettings):
         super().__init__(parent=parent, name=task.name)
         self._parent = parent
-        self.SetForegroundColour(gui.FG_COLOUR_EDIT)
-        self.SetBackgroundColour(gui.BG_COLOUR_MAIN)
+        self.SetForegroundColour(theme.text_edit)
+        self.SetBackgroundColour(theme.background)
 
         self.main_sizer = wx.BoxSizer(wx.VERTICAL)
         self.SetSizer(self.main_sizer)
 
         self._panel = wx.Panel(self, style=wx.TAB_TRAVERSAL | wx.NO_BORDER)
-        self._panel.SetBackgroundColour(gui.BG_COLOUR_MAIN)
-        self._panel.SetForegroundColour(gui.FG_COLOUR_MAIN)
+        self._panel.SetBackgroundColour(theme.background)
+        self._panel.SetForegroundColour(theme.field_foreground)
         self._panel.SetFont(self.GetFont())
 
         self.gb_sizer = wx.GridBagSizer()
@@ -130,8 +131,8 @@ class MillingTaskPanel(wx.Panel):
         self.gb_sizer.SetItemMinSize(value_ctrl, min_col_width, row_height)
         self.gb_sizer.SetItemMinSize(lbl_ctrl, min_col_width, row_height)
 
-        value_ctrl.SetForegroundColour(gui.FG_COLOUR_EDIT)
-        value_ctrl.SetBackgroundColour(gui.BG_COLOUR_MAIN)
+        value_ctrl.SetForegroundColour(theme.text_edit)
+        value_ctrl.SetBackgroundColour(theme.background)
         self.num_rows += 1
 
     def _add_value_ctrl(self, val, conf):

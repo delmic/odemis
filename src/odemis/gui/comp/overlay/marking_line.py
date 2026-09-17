@@ -31,6 +31,7 @@ import odemis.gui.comp.overlay.base as base
 import odemis.model as model
 import odemis.util.conversion as conversion
 import odemis.util.units as units
+from odemis.gui.layout import theme
 
 
 class MarkingLineOverlay(base.ViewOverlay, base.DragMixin):
@@ -42,7 +43,7 @@ class MarkingLineOverlay(base.ViewOverlay, base.DragMixin):
     HORIZONTAL = 1
     VERTICAL = 2
 
-    def __init__(self, cnvs, colour=gui.SELECTION_COLOUR, orientation=None, map_y_from_x=False):
+    def __init__(self, cnvs, colour=theme.selection, orientation=None, map_y_from_x=False):
         """
         map_y_from_x (bool): If True, the Y coordinate of the value will be
           based on the data, obtained via cnvs.val_x_to_val(), and .val will

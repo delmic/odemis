@@ -24,6 +24,7 @@ This file is part of Odemis.
 import odemis.gui as gui
 import odemis.gui.comp.overlay.base as base
 import odemis.util.conversion as conversion
+from odemis.gui.layout import theme
 
 # Shape type of CenteredLineOverlay
 CROSSHAIR, HORIZONTAL_LINE, VERTICAL_LINE = 0, 1, 2
@@ -32,7 +33,7 @@ CROSSHAIR, HORIZONTAL_LINE, VERTICAL_LINE = 0, 1, 2
 class CenteredLineOverlay(base.ViewOverlay):
     """ Render a static line (horizontal, vertical, crosshair) around the center of the view """
 
-    def __init__(self, cnvs, colour=gui.CROSSHAIR_COLOR, size=gui.CROSSHAIR_SIZE, shape=CROSSHAIR,
+    def __init__(self, cnvs, colour=theme.crosshair, size=gui.CROSSHAIR_SIZE, shape=CROSSHAIR,
                  thickness=gui.CENTERED_LINE_THICKNESS):
         base.ViewOverlay.__init__(self, cnvs)
 
@@ -53,7 +54,7 @@ class CenteredLineOverlay(base.ViewOverlay):
         ctx.set_line_width(thickness)
 
         # Draw shadow
-        ctx.set_source_rgba(0, 0, 0, 0.9)
+        ctx.set_source_rgba(*conversion.hex_to_frgba(theme.viewport_background, 0.9))
         ctx.move_to(center[0] + 1.5, top + 1.5)
         ctx.line_to(center[0] + 1.5, bottom + 1.5)
         ctx.stroke()
@@ -74,7 +75,7 @@ class CenteredLineOverlay(base.ViewOverlay):
         ctx.set_line_width(thickness)
 
         # Draw shadow
-        ctx.set_source_rgba(0, 0, 0, 0.9)
+        ctx.set_source_rgba(*conversion.hex_to_frgba(theme.viewport_background, 0.9))
         ctx.move_to(left + 1.5, center[1] + 1.5)
         ctx.line_to(right + 1.5, center[1] + 1.5)
         ctx.stroke()

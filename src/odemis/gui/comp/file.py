@@ -36,6 +36,7 @@ from odemis.gui import img
 from odemis.util.dataio import splitext
 
 from .buttons import ImageButton, ImageTextButton
+from odemis.gui.layout import theme
 
 FileSelectEvent, EVT_FILE_SELECT = wx.lib.newevent.NewEvent()
 
@@ -104,8 +105,8 @@ class FileBrowser(wx.Panel):
 
         self.text_ctrl = wx.TextCtrl(self, style=wx.BORDER_NONE | wx.TE_READONLY)
         self.text_ctrl.MinSize = (-1, 20)
-        self.text_ctrl.SetForegroundColour(odemis.gui.FG_COLOUR_EDIT)
-        self.text_ctrl.SetBackgroundColour(odemis.gui.BG_COLOUR_MAIN)
+        self.text_ctrl.SetForegroundColour(theme.text_edit)
+        self.text_ctrl.SetBackgroundColour(theme.background)
         self.text_ctrl.Bind(wx.EVT_TEXT, self.on_changed)
         if self.file_path:
             self.SetValue(self.file_path)
@@ -144,9 +145,9 @@ class FileBrowser(wx.Panel):
             self.file_path = file_path
 
             if self.dialog_style & wx.FD_SAVE == 0 and not os.path.exists(self.file_path):
-                self.text_ctrl.SetForegroundColour(odemis.gui.FG_COLOUR_ERROR)
+                self.text_ctrl.SetForegroundColour(theme.text_error)
             else:
-                self.text_ctrl.SetForegroundColour(odemis.gui.FG_COLOUR_EDIT)
+                self.text_ctrl.SetForegroundColour(theme.text_edit)
 
             self.text_ctrl.SetValue(self.file_path)
 
@@ -159,7 +160,7 @@ class FileBrowser(wx.Panel):
             logging.debug("Clearing file control")
 
             self.file_path = None
-            self.text_ctrl.SetForegroundColour(odemis.gui.FG_COLOUR_DIS)
+            self.text_ctrl.SetForegroundColour(theme.text_disabled)
 
             self.text_ctrl.SetValue(self.label)
 

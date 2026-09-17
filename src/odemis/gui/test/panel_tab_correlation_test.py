@@ -20,8 +20,8 @@ import unittest
 
 import wx
 
-from odemis.gui.layout import PnlTabCorrelation
-from odemis.gui.layout.constants.themes import DARK
+from odemis.gui.layout.components.panel_tab_correlation import PnlTabCorrelation
+from odemis.gui.layout import theme
 
 
 class PnlTabCorrelationTest(unittest.TestCase):
@@ -99,15 +99,15 @@ class PnlTabCorrelationTest(unittest.TestCase):
         self.assertEqual(self.panel.dpx_step_cntrl.GetValue(), 1.0)
         self.assertEqual(
             self.panel.btn_reset_correlation.GetForegroundColour(),
-            wx.Colour(DARK.button_text),
+            wx.Colour(theme.button_text),
         )
         self.assertEqual(
             self.panel.btn_correlate.GetForegroundColour(),
-            wx.Colour(DARK.button_text_contrast),
+            wx.Colour(theme.button_text_contrast),
         )
         self.assertEqual(
             self.panel.btn_export.GetForegroundColour(),
-            wx.Colour(DARK.button_text_contrast),
+            wx.Colour(theme.button_text_contrast),
         )
 
 

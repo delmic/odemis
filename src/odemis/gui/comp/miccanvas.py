@@ -78,6 +78,7 @@ from odemis.gui.util import call_in_wx_main, ignore_dead, img, wxlimit_invocatio
 from odemis.gui.util.img import apply_flip, format_rgba_darray
 from odemis.util import limit_invocation, units
 from odemis.util.img import getBoundingBox
+from odemis.gui.layout import theme
 
 
 @decorator
@@ -254,7 +255,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             # Link drift correction region
             self._dc_region = tab_data.driftCorrector.roi
             self.driftcor_overlay = RepetitionSelectOverlay(self,
-                self._dc_region, tab_data.fovComp, colour=gui.SELECTION_COLOUR_2ND)
+                self._dc_region, tab_data.fovComp, colour=theme.selection_secondary)
             self.add_world_overlay(self.driftcor_overlay)
 
         if self.roa_overlay or self.driftcor_overlay:
@@ -1864,7 +1865,7 @@ class FastEMMainCanvas(DblMicroscopeCanvas):
         self.remove_world_overlay(shape)
         wx.CallAfter(self.request_drawing_update)
 
-    def add_calibration_shape(self, coordinates, label, sample_bbox, colour=gui.FG_COLOUR_WARNING):
+    def add_calibration_shape(self, coordinates, label, sample_bbox, colour=theme.text_warning):
         """
         coordinates (TupleContinuousVA): VA of 4 floats representing region of calibration coordinates
         label (str): label for the overlay (typically a number 1-9)

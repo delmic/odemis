@@ -33,12 +33,13 @@ import odemis.gui as gui
 import odemis.gui.comp.overlay.base as base
 import odemis.util.conversion as conversion
 import odemis.util.units as units
+from odemis.gui.layout import theme
 
 
 class CurveOverlay(base.ViewOverlay, base.DragMixin):
     """ Draw a curve at the given view position
     """
-    def __init__(self, cnvs, colour=gui.FG_COLOUR_CURVE, colour_peaks=gui.FG_COLOUR_PEAK, length=256):
+    def __init__(self, cnvs, colour=theme.curve, colour_peaks=theme.peak, length=256):
 
         base.ViewOverlay.__init__(self, cnvs)
         base.DragMixin.__init__(self)

@@ -20,8 +20,8 @@ import unittest
 
 import wx
 
-from odemis.gui.layout import PnlTabFastemAcqui
-from odemis.gui.layout.constants.themes import DARK
+from odemis.gui.layout.components.panel_tab_fastem_acqui import PnlTabFastemAcqui
+from odemis.gui.layout import theme
 
 
 class PnlTabFastemAcquiTest(unittest.TestCase):
@@ -61,11 +61,11 @@ class PnlTabFastemAcquiTest(unittest.TestCase):
 
         self.assertEqual(
             self.panel.btn_tab_single_beam.GetForegroundColour(),
-            wx.Colour(DARK.text_primary),
+            wx.Colour(theme.text_primary),
         )
         self.assertEqual(
             self.panel.btn_tab_multi_beam.GetForegroundColour(),
-            wx.Colour(DARK.text_primary),
+            wx.Colour(theme.text_primary),
         )
 
 

@@ -29,6 +29,7 @@ from typing import Dict, Sequence
 import wx
 
 from odemis.gui.comp.viewport import ViewPort
+from odemis.gui.layout import theme
 
 GridLayout = namedtuple("GridLayout", ["pos", "size"])
 
@@ -44,7 +45,7 @@ class ViewportGrid(wx.Panel):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.SetBackgroundColour(wx.BLACK)
+        self.SetBackgroundColour(theme.viewport_background)
 
         self.viewports = None  # Tuple[ViewPort]
         self.visible_viewports = []  # The ViewPorts to be shown, the order matters

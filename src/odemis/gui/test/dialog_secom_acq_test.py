@@ -20,7 +20,7 @@ import unittest
 
 import wx
 
-from odemis.gui.layout import SecomAcqDialogBase
+from odemis.gui.layout.components.dialog_secom_acq import SecomAcqDialogBase
 from odemis.gui.layout.constants.strings import DEFAULT_DESTINATION_FILE
 
 

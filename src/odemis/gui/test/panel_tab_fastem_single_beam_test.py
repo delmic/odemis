@@ -20,8 +20,8 @@ import unittest
 
 import wx
 
-from odemis.gui.layout import PnlTabFastemSingleBeam
-from odemis.gui.layout.constants.themes import DARK
+from odemis.gui.layout.components.panel_tab_fastem_single_beam import PnlTabFastemSingleBeam
+from odemis.gui.layout import theme
 
 
 class PnlTabFastemSingleBeamTest(unittest.TestCase):
@@ -72,11 +72,11 @@ class PnlTabFastemSingleBeamTest(unittest.TestCase):
         self.assertEqual(self.panel.gauge_acq.GetValue(), 0)
         self.assertEqual(
             self.panel.btn_cancel.GetForegroundColour(),
-            wx.Colour(DARK.button_text),
+            wx.Colour(theme.button_text),
         )
         self.assertEqual(
             self.panel.btn_acquire.GetForegroundColour(),
-            wx.Colour(DARK.button_text_contrast),
+            wx.Colour(theme.button_text_contrast),
         )
 
 

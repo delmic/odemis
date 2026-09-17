@@ -42,7 +42,8 @@ from odemis.gui.layout.constants.strings import (
     LABEL_STREAMS,
     TOOLTIP_OPEN_LOG_PANEL,
 )
-from odemis.gui.layout.constants.themes import DARK, Theme
+import odemis.gui.layout as layout
+from odemis.gui.layout.constants.themes import Theme
 from odemis.gui.layout.util.fonts import set_font
 from odemis.gui.layout.util.sizers import hbox, vbox
 from odemis.gui.layout.util.widgets import create_text_button
@@ -51,13 +52,14 @@ from odemis.gui.layout.util.widgets import create_text_button
 class PnlTabSecomStreams(wx.Panel):
     """Provide the SECOM streams tab layout."""
 
-    def __init__(self, parent: wx.Window, theme: Theme = DARK) -> None:
+    def __init__(self, parent: wx.Window, theme: Optional[Theme] = None) -> None:
         """Create the SECOM streams controls and viewports.
 
         :param parent: Parent window.
         :param theme: Semantic layout theme.
         """
         super().__init__(parent)
+        theme = layout.theme if theme is None else theme
         self._theme = theme
         self.SetBackgroundColour(theme.background)
 
@@ -382,7 +384,7 @@ class PnlTabSecomStreams(wx.Panel):
                 size=(100, -1),
                 style=wx.ALIGN_RIGHT | wx.ST_NO_AUTORESIZE,
             )
-            self.lbl_load_time.SetForegroundColour("#EEEEEE")
+            self.lbl_load_time.SetForegroundColour(self._theme.text_primary)
             sizer.Add(
                 self.lbl_load_time,
                 flag=wx.BOTTOM,
