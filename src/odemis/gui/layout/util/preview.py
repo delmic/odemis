@@ -227,6 +227,7 @@ def run_preview(cls: type, **kwargs) -> None:
                     display = wx.Display(0)
                     container.SetPosition(display.Geometry.GetTopLeft())
                     container.SetSize(*display.Geometry.Size)
+                container.Bind(wx.EVT_CLOSE, self._on_close)
                 container.Show()
                 self._container = container
                 logging.info("Showing %s — watching %s", cls_name, pkg_root)
