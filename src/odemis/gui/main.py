@@ -207,6 +207,7 @@ class OdemisGUIApp(wx.App):
             if self.main_data.role in ("secom", "delphi", "sem", "optical"):
                 from odemis.gui.cont.tabs.secom_streams_tab import SecomStreamsTab
                 from odemis.gui.cont.tabs.secom_align_tab import SecomAlignTab
+                from odemis.gui.layout import PnlTabSecomStreams
 
                 tab_defs.extend([
                     {
@@ -217,7 +218,7 @@ class OdemisGUIApp(wx.App):
                         # Tab button for this tab
                         "button": self.main_frame.btn_tab_secom_streams,
                         # Constructor of the tab panel
-                        "panel": main_xrc.xrcpnl_tab_secom_streams
+                        "panel": PnlTabSecomStreams
                     },
                     {
                         "name": TabName.SECOM_ALIGN.value,
