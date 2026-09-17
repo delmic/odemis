@@ -42,7 +42,7 @@ from odemis.gui.layout.constants.strings import (
     LABEL_FILENAME,
     LABEL_START,
     LABEL_STREAMS,
-    TOOLTIP_OPEN_LOG_PANEL,
+    TOOLTIP_OPEN_LOG_PANEL, LABEL_CHANGE,
 )
 from odemis.gui.layout.constants.themes import Theme
 from odemis.gui.layout.util.fonts import set_font
@@ -429,7 +429,7 @@ class PnlTabSparcAcqui(wx.Panel):
 
             self.btn_sparc_change_file = create_text_button(
                 parent,
-                "change…",
+                LABEL_CHANGE,
                 height=24,
                 text_colour=self._theme.button_text,
                 face_colour="def",

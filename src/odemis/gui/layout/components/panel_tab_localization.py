@@ -46,6 +46,9 @@ from odemis.gui.layout.constants.strings import (
     LABEL_STATUS,
     LABEL_STREAMS,
     TOOLTIP_OPEN_LOG_PANEL,
+    LABEL_CREATE_MOVE,
+    LABEL_ACQUISITIONS,
+    LABEL_GO_TO_FEATURE,
 )
 from odemis.gui.layout.constants.themes import Theme
 from odemis.gui.layout.util.fonts import set_font
@@ -346,7 +349,7 @@ class PnlTabLocalization(wx.Panel):
             sizer.Add(self.btn_delete_feature)
             self.cmb_features = create_combo(parent, (145, 20), readonly=False, text_colour=self._theme.text_edit, background_colour=self._theme.background)
             sizer.Add(self.cmb_features)
-            self.btn_create_move_feature = create_text_button(parent, label="Create / Move", height=24, text_colour=self._theme.button_text, contrast_text_colour=self._theme.button_text_contrast, size=(120, 24))
+            self.btn_create_move_feature = create_text_button(parent, label=LABEL_CREATE_MOVE, height=24, text_colour=self._theme.button_text, contrast_text_colour=self._theme.button_text_contrast, size=(120, 24))
             sizer.Add(
                 self.btn_create_move_feature,
                 flag=wx.LEFT | wx.ALIGN_CENTER_VERTICAL,
@@ -364,7 +367,7 @@ class PnlTabLocalization(wx.Panel):
             sizer.Add(create_label(parent, LABEL_STATUS, self._theme.text_primary))
             self.cmb_feature_status = create_combo(parent, (122, 16), readonly=True, text_colour=self._theme.text_edit, background_colour=self._theme.background)
             sizer.Add(self.cmb_feature_status, flag=wx.LEFT, border=self._theme.spacing_standard)
-            self.btn_go_to_feature = create_text_button(parent, label="Go to Feature", height=24, text_colour=self._theme.button_text, contrast_text_colour=self._theme.button_text_contrast, size=(120, 24))
+            self.btn_go_to_feature = create_text_button(parent, label=LABEL_GO_TO_FEATURE, height=24, text_colour=self._theme.button_text, contrast_text_colour=self._theme.button_text_contrast, size=(120, 24))
             sizer.Add(
                 self.btn_go_to_feature,
                 flag=wx.LEFT | wx.ALIGN_CENTER_VERTICAL,
@@ -545,7 +548,7 @@ class PnlTabLocalization(wx.Panel):
 
         :param fold_bar: Parent fold-panel bar.
         """
-        self.fp_acquisitions = self._fold_item(fold_bar, "ACQUISITIONS")
+        self.fp_acquisitions = self._fold_item(fold_bar, LABEL_ACQUISITIONS)
         panel = wx.Panel(
             self.fp_acquisitions,
             size=(400, -1),

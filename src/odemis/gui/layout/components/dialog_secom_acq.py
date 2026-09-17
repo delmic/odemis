@@ -33,7 +33,7 @@ from odemis.gui.layout.constants.strings import (
     LABEL_PRESETS,
     LABEL_SEM_SETTINGS,
     LABEL_START,
-    LABEL_STREAMS,
+    LABEL_STREAMS, LABEL_CHANGE,
 )
 from odemis.gui.layout.constants.themes import Theme
 from odemis.gui.layout.util.fonts import set_font
@@ -168,7 +168,7 @@ class SecomAcqDialogBase(wx.Dialog):
 
             self.btn_change_file = ImageTextButton(
                 parent,
-                label="change…",
+                label=LABEL_CHANGE,
                 height=16,
             )
             self.btn_change_file.SetForegroundColour(

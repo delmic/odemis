@@ -45,6 +45,13 @@ from odemis.gui.layout.constants.strings import (
     LABEL_STATUS,
     LABEL_STREAMS,
     TOOLTIP_OPEN_LOG_PANEL,
+    LABEL_CHANGE,
+    LABEL_ACQUIRE,
+    LABEL_ACQUIRED,
+    LABEL_PATTERNS,
+    LABEL_CREATE_MOVE,
+    LABEL_GO_TO_FEATURE,
+    LABEL_ACQUISITIONS,
 )
 from odemis.gui.layout.constants.themes import Theme
 from odemis.gui.layout.util.fonts import set_font
@@ -288,7 +295,7 @@ class PnlTabFibsem(wx.Panel):
             with hbox() as button_sizer:
                 self.btn_create_move_feature = create_text_button(
                     button_panel,
-                    "Create / Move",
+                    LABEL_CREATE_MOVE,
                     height=24,
                     text_colour=self._theme.button_text,
                     contrast_text_colour=self._theme.button_text_contrast,
@@ -332,7 +339,7 @@ class PnlTabFibsem(wx.Panel):
             with hbox() as button_sizer:
                 self.btn_go_to_feature = create_text_button(
                     button_panel,
-                    "Go to Feature",
+                    LABEL_GO_TO_FEATURE,
                     height=24,
                     text_colour=self._theme.button_text,
                     contrast_text_colour=self._theme.button_text_contrast,
@@ -517,7 +524,7 @@ class PnlTabFibsem(wx.Panel):
 
         :param fold_bar: Parent fold-panel bar.
         """
-        self.fp_acquisitions = self._fold_item(fold_bar, "ACQUISITIONS")
+        self.fp_acquisitions = self._fold_item(fold_bar, LABEL_ACQUISITIONS)
         panel = wx.Panel(
             self.fp_acquisitions,
             size=(400, -1),
@@ -628,7 +635,7 @@ class PnlTabFibsem(wx.Panel):
             )
             self.btn_cryosecom_change_file = create_text_button(
                 parent,
-                "change…",
+                LABEL_CHANGE,
                 height=24,
                 text_colour=self._theme.button_text,
                 contrast_text_colour=self._theme.button_text_contrast,
@@ -653,7 +660,7 @@ class PnlTabFibsem(wx.Panel):
         with hbox() as button_sizer:
             self.btn_cryosecom_acquire = create_text_button(
                 button_panel,
-                "ACQUIRE",
+                LABEL_ACQUIRE,
                 height=48,
                 text_colour=self._theme.button_text,
                 contrast_text_colour=self._theme.button_text_contrast,
@@ -747,7 +754,7 @@ class PnlTabFibsem(wx.Panel):
 
         :param fold_bar: Parent fold-panel bar.
         """
-        self.fp_acquired = self._fold_item(fold_bar, "ACQUIRED")
+        self.fp_acquired = self._fold_item(fold_bar, LABEL_ACQUIRED)
         self.pnl_cryosecom_acquired = StreamBar(
             self.fp_acquired,
             size=(300, -1),
@@ -918,7 +925,7 @@ class PnlTabFibsem(wx.Panel):
 
         :param fold_bar: Parent fold-panel bar.
         """
-        self.fp_milling = self._fold_item(fold_bar, "PATTERNS")
+        self.fp_milling = self._fold_item(fold_bar, LABEL_PATTERNS)
 
         controls_panel = wx.Panel(self.fp_milling)
         controls_panel.SetForegroundColour(self._theme.button_text)
