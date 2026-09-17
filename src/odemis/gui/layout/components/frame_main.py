@@ -65,6 +65,13 @@ class MainFrame(wx.Frame):
             sizer.Add(self._build_log_panel(), flag=wx.EXPAND)
 
         self.SetSizer(sizer)
+        # wx's XRC loader always calls Layout() once a top-level window's
+        # sizer tree has been fully parsed. Without it, the frame's first
+        # size request (used by the window manager to place/maximize it,
+        # before Show() is even called) is computed from an unlaidout
+        # sizer, which can be far smaller than the eventual maximized
+        # size; the window then visibly snaps to full size a moment
+        # later, once a real resize event triggers layout.
         self.Centre()
 
     def _build_menu_bar(self) -> None:

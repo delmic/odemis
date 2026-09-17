@@ -185,6 +185,12 @@ class OdemisGUIApp(wx.App):
             # Also, Gnome's GDK library will start spewing error messages, saying
             # it cannot draw certain images, because the dimensions are 0x0.
             self.main_frame.SetMinSize((1000, 550))
+            # Explicitly size the frame to the display's client area, in
+            # addition to Maximize(): some window managers only honour the
+            # maximize request once the frame is actually mapped, which can
+            # otherwise make the (collapsed, mostly-hidden) frame flash at
+            # its small pre-layout size for a moment right after Show(),
+            # before snapping to full screen.
             self.main_frame.Maximize()  # must be done before Show()
 
             # Only show the dialog if today is the right day, before even showing the main window
@@ -388,6 +394,7 @@ class OdemisGUIApp(wx.App):
             # Due to a bug in wxPython, sometimes the .Maximize() at the beginning of the function
             # has no effect. So we call it after the Show() to be sure it works.
             wx.CallAfter(self.main_frame.Maximize)
+            wx.CallAfter(self.main_frame.SetSize, wx.Display(0).GetClientArea())
 
         except Exception:
             self.excepthook(*sys.exc_info())
