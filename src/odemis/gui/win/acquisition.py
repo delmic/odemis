@@ -50,8 +50,8 @@ from odemis.gui.conf import get_acqui_conf, util
 from odemis.gui.cont.multi_point_correlation import CorrelationPointsController
 from odemis.gui.cont.settings import LocalizationSettingsController, SecomSettingsController
 from odemis.gui.cont.stream_bar import StreamBarController
-from odemis.gui.layout.components import FrCorrelation
-from odemis.gui.main_xrc import xrcfr_acq, xrcfr_overview_acq
+from odemis.gui.layout.components import DlgOverviewAcq, FrCorrelation
+from odemis.gui.main_xrc import xrcfr_acq
 from odemis.gui.model import TOOL_NONE, AcquisitionWindowData, StreamView, TOOL_ACT_ZOOM_FIT
 from odemis.gui.preset import (apply_preset, get_global_settings_entries,
                                get_local_settings_entries, preset_as_is,
@@ -629,7 +629,7 @@ class AcquisitionDialog(xrcfr_acq):
 DEFAULT_FOV = (100e-6, 100e-6) # m
 
 
-class OverviewAcquisitionDialog(xrcfr_overview_acq):
+class OverviewAcquisitionDialog(DlgOverviewAcq):
     """
     Class used to control the overview acquisition dialog
     The data acquired is stored in a file, with predefined name, available on
@@ -637,7 +637,7 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
     """
     def __init__(self, parent, orig_tab_data,
                  mode: guimod.AcquiMode = guimod.AcquiMode.FLM):
-        xrcfr_overview_acq.__init__(self, parent)
+        DlgOverviewAcq.__init__(self, parent)
 
         self.conf = get_acqui_conf()
 
