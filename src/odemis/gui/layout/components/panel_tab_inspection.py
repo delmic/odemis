@@ -16,12 +16,12 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
-from typing import Any, Type
+from typing import Type
 
 import wx
 
 from odemis.gui import img
-from odemis.gui.comp.buttons import ImageButton, ImageTextButton, ViewButton
+from odemis.gui.comp.buttons import ImageButton, ViewButton
 from odemis.gui.comp.foldpanelbar import FoldPanelBar, FoldPanelItem
 from odemis.gui.comp.grid import ViewportGrid
 from odemis.gui.comp.stream_bar import StreamBar
@@ -40,6 +40,9 @@ from odemis.gui.cont.tools import ToolBar
 from odemis.gui.layout.constants import strings
 from odemis.gui.layout.constants.themes import DARK, Theme
 from odemis.gui.layout.util.sizers import hbox, vbox
+from odemis.gui.layout.util.widgets import (
+    create_text_button,
+)
 
 
 class PnlTabInspection(wx.Panel):
@@ -82,11 +85,7 @@ class PnlTabInspection(wx.Panel):
         panel.SetBackgroundColour(self._theme.background)
 
         with vbox() as sizer:
-            self.btn_open_image = self._text_button(
-                panel,
-                "Select image...",
-                height=24,
-            )
+            self.btn_open_image = create_text_button(panel, "Select image...", height=24, text_colour=self._theme.button_text, contrast_text_colour=self._theme.button_text_contrast)
             sizer.Add(
                 self.btn_open_image,
                 flag=wx.ALL | wx.EXPAND,
@@ -355,15 +354,7 @@ class PnlTabInspection(wx.Panel):
         panel.SetBackgroundColour(self._theme.field_background)
 
         with vbox() as sizer:
-            self.btn_export = self._text_button(
-                panel,
-                "EXPORT IMAGE",
-                height=48,
-                face_colour="blue",
-                icon="ico_export.png",
-                size=(382, -1),
-                contrast=True,
-            )
+            self.btn_export = create_text_button(panel, "EXPORT IMAGE", height=48, text_colour=self._theme.button_text, contrast_text_colour=self._theme.button_text_contrast, face_colour="blue", icon="ico_export.png", size=(382, -1), contrast=True)
             sizer.Add(
                 self.btn_export,
                 flag=wx.ALL,
@@ -420,48 +411,6 @@ class PnlTabInspection(wx.Panel):
         item.SetBackgroundColour(self._theme.section_header)
         fold_bar.add_item(item)
         return item
-
-    def _text_button(
-        self,
-        parent: wx.Window,
-        label: str,
-        height: int,
-        face_colour: str = "def",
-        icon: str = "",
-        size: Any = wx.DefaultSize,
-        contrast: bool = False,
-    ) -> ImageTextButton:
-        """Create a styled image text button.
-
-        :param parent: Parent window.
-        :param label: Button label.
-        :param height: Button face height.
-        :param face_colour: Named button face colour.
-        :param icon: Optional icon file name.
-        :param size: Explicit button size.
-        :param contrast: Use contrasting foreground text.
-        :returns: Image text button.
-        """
-        if contrast and face_colour == "def":
-            raise ValueError(
-                "Contrasting text requires a non-default button face"
-            )
-
-        button = ImageTextButton(
-            parent,
-            label=label,
-            icon=img.getBitmap(f"icon/{icon}") if icon else wx.NullBitmap,
-            height=height,
-            face_colour=face_colour,
-            size=size,
-            style=wx.ALIGN_CENTRE,
-        )
-        button.SetForegroundColour(
-            self._theme.button_text_contrast
-            if contrast
-            else self._theme.button_text
-        )
-        return button
 
 
 if __name__ == "__main__":

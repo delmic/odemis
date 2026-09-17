@@ -17,14 +17,13 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
 import wx
-from typing import Any, Optional
 
 from odemis.gui import img
-from odemis.gui.comp.buttons import ImageTextButton
 from odemis.gui.comp.foldpanelbar import CaptionBar
 from odemis.gui.layout.constants.themes import DARK, Theme
 from odemis.gui.layout.util.fonts import set_font
 from odemis.gui.layout.util.sizers import hbox, vbox
+from odemis.gui.layout.util.widgets import create_text_button
 
 
 class PnlTabFastemMultiBeam(wx.Panel):
@@ -133,12 +132,14 @@ class PnlTabFastemMultiBeam(wx.Panel):
                 flag=wx.EXPAND,
             )
 
-            self.btn_acquire = self._text_button(
+            self.btn_acquire = create_text_button(
                 section,
                 "START",
                 height=48,
+                text_colour=self._theme.button_text,
+                contrast_text_colour=self._theme.button_text_contrast,
                 face_colour="blue",
-                icon="icon/ico_multi_beam.png",
+                icon="ico_multi_beam.png",
                 font_size=self._theme.font_size_primary_action,
                 contrast=True,
             )
@@ -269,62 +270,18 @@ class PnlTabFastemMultiBeam(wx.Panel):
                 border=16,
             )
 
-            self.btn_cancel = self._text_button(
+            self.btn_cancel = create_text_button(
                 parent,
                 "Cancel",
                 height=24,
+                text_colour=self._theme.button_text,
+                contrast_text_colour=self._theme.button_text_contrast,
                 face_colour="def",
             )
             self.btn_cancel.Hide()
             sizer.Add(self.btn_cancel, flag=wx.ALL, border=10)
 
         return sizer
-
-    def _text_button(
-        self,
-        parent: wx.Window,
-        label: str,
-        height: int,
-        face_colour: str = "def",
-        icon: Optional[str] = None,
-        font_size: Optional[int] = None,
-        size: Any = wx.DefaultSize,
-        contrast: bool = False,
-    ) -> ImageTextButton:
-        """Create a styled text button.
-
-        :param parent: Parent window.
-        :param label: Button label.
-        :param height: Button face height.
-        :param face_colour: Named button face colour.
-        :param icon: Optional icon file path relative to the image root.
-        :param font_size: Optional font point size.
-        :param size: Explicit button size.
-        :param contrast: Use contrasting foreground text.
-        :returns: Styled text button.
-        """
-        if contrast and face_colour == "def":
-            raise ValueError(
-                "Contrasting text requires a non-default button face"
-            )
-
-        button = ImageTextButton(
-            parent,
-            label=label,
-            icon=img.getBitmap(icon) if icon else wx.NullBitmap,
-            height=height,
-            face_colour=face_colour,
-            size=size,
-            style=wx.ALIGN_CENTRE,
-        )
-        button.SetForegroundColour(
-            self._theme.button_text_contrast
-            if contrast
-            else self._theme.button_text
-        )
-        if font_size is not None:
-            set_font(button, font_size)
-        return button
 
 
 if __name__ == "__main__":

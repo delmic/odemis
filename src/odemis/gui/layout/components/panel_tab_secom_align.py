@@ -16,7 +16,6 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
-from typing import Any, Optional
 
 import wx
 import wx.adv
@@ -37,6 +36,9 @@ from odemis.gui.layout.constants import strings
 from odemis.gui.layout.constants.themes import DARK, Theme
 from odemis.gui.layout.util.fonts import set_font
 from odemis.gui.layout.util.sizers import hbox, vbox
+from odemis.gui.layout.util.widgets import (
+    create_text_button,
+)
 
 
 class PnlTabSecomAlign(wx.Panel):
@@ -316,12 +318,7 @@ class PnlTabSecomAlign(wx.Panel):
             self.lens_align_lbl_approc_center = wx.StaticText(panel)
             sizer.Add(self.lens_align_lbl_approc_center, flag=wx.EXPAND)
 
-            self.lens_align_btn_to_center = self._text_button(
-                panel,
-                "Move to center",
-                height=24,
-                style=wx.ALIGN_CENTRE,
-            )
+            self.lens_align_btn_to_center = create_text_button(panel, "Move to center", height=24, text_colour=self._theme.button_text, contrast_text_colour=self._theme.button_text_contrast, style=wx.ALIGN_CENTRE)
             sizer.Add(
                 self.lens_align_btn_to_center,
                 flag=wx.ALIGN_RIGHT,
@@ -382,12 +379,7 @@ class PnlTabSecomAlign(wx.Panel):
         :returns: Progress action row.
         """
         with hbox() as sizer:
-            button = self._text_button(
-                parent,
-                label,
-                height=24,
-                style=wx.ALIGN_CENTRE,
-            )
+            button = create_text_button(parent, label, height=24, text_colour=self._theme.button_text, contrast_text_colour=self._theme.button_text_contrast, style=wx.ALIGN_CENTRE)
             setattr(self, button_attribute, button)
             sizer.Add(button, flag=wx.RIGHT, border=self._theme.spacing_standard)
 
@@ -588,15 +580,7 @@ class PnlTabSecomAlign(wx.Panel):
         :param label: Button label.
         :returns: Actuator movement button.
         """
-        return self._text_button(
-            parent,
-            label,
-            height=48,
-            size=(64, -1),
-            style=wx.ALIGN_CENTRE,
-            font_size=self._theme.font_size_directional_button,
-            font_weight=wx.FONTWEIGHT_BOLD,
-        )
+        return create_text_button(parent, label, height=48, text_colour=self._theme.button_text, contrast_text_colour=self._theme.button_text_contrast, size=(64, -1), style=wx.ALIGN_CENTRE, font_size=self._theme.font_size_directional_button, font_weight=wx.FONTWEIGHT_BOLD)
 
     def _toggle_button(
         self,
@@ -623,53 +607,6 @@ class PnlTabSecomAlign(wx.Panel):
         )
         button.SetForegroundColour(self._theme.button_text)
         set_font(button, self._theme.font_size_button)
-        return button
-
-    def _text_button(
-        self,
-        parent: wx.Window,
-        label: str,
-        height: int,
-        face_colour: str = "def",
-        size: Any = wx.DefaultSize,
-        style: int = 0,
-        font_size: Optional[int] = None,
-        font_weight: int = wx.FONTWEIGHT_NORMAL,
-        contrast: bool = False,
-    ) -> ImageTextButton:
-        """Create a styled image text button.
-
-        :param parent: Parent window.
-        :param label: Button label.
-        :param height: Button face height.
-        :param face_colour: Named button face colour.
-        :param size: Explicit button size.
-        :param style: wx window style.
-        :param font_size: Optional font point size.
-        :param font_weight: wx font weight.
-        :param contrast: Use contrasting foreground text.
-        :returns: Image text button.
-        """
-        if contrast and face_colour == "def":
-            raise ValueError(
-                "Contrasting text requires a non-default button face"
-            )
-
-        button = ImageTextButton(
-            parent,
-            label=label,
-            height=height,
-            face_colour=face_colour,
-            size=size,
-            style=style,
-        )
-        button.SetForegroundColour(
-            self._theme.button_text_contrast
-            if contrast
-            else self._theme.button_text
-        )
-        if font_size is not None:
-            set_font(button, font_size, font_weight)
         return button
 
     def _stream_bar(self, parent: wx.Window) -> StreamBar:

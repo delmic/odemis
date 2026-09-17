@@ -16,12 +16,12 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
-from typing import Any, Optional
+from typing import Any
 
 import wx
 
 from odemis.gui import img
-from odemis.gui.comp.buttons import ImageButton, ImageTextButton, ViewButton
+from odemis.gui.comp.buttons import ImageButton, ViewButton
 from odemis.gui.comp.foldpanelbar import CaptionBar, FoldPanelBar, FoldPanelItem
 from odemis.gui.comp.grid import ViewportGrid
 from odemis.gui.comp.stream_bar import StreamBar
@@ -38,6 +38,7 @@ from odemis.gui.layout.constants import strings
 from odemis.gui.layout.constants.themes import DARK, Theme
 from odemis.gui.layout.util.fonts import set_font
 from odemis.gui.layout.util.sizers import hbox, vbox
+from odemis.gui.layout.util.widgets import create_text_button
 
 
 class PnlTabSparcAcqui(wx.Panel):
@@ -336,15 +337,17 @@ class PnlTabSparcAcqui(wx.Panel):
                 flag=wx.EXPAND,
             )
 
-            self.btn_sparc_acquire = self._text_button(
+            self.btn_sparc_acquire = create_text_button(
                 panel,
-                label="START",
-                icon="ico_acqui.png",
+                "START",
                 height=48,
+                text_colour=self._theme.button_text,
+                contrast_text_colour=self._theme.button_text_contrast,
                 face_colour="blue",
-                contrast=True,
+                icon="ico_acqui.png",
                 font_size=self._theme.font_size_primary_action,
                 style=wx.ALIGN_CENTRE,
+                contrast=True,
             )
             sizer.Add(
                 self.btn_sparc_acquire,
@@ -414,10 +417,11 @@ class PnlTabSparcAcqui(wx.Panel):
                 border=2,
             )
 
-            self.btn_sparc_change_file = self._text_button(
+            self.btn_sparc_change_file = create_text_button(
                 parent,
-                label="change…",
+                "change…",
                 height=24,
+                text_colour=self._theme.button_text,
                 face_colour="def",
             )
             filename_sizer.Add(self.btn_sparc_change_file, flag=wx.TOP, border=2)
@@ -516,10 +520,12 @@ class PnlTabSparcAcqui(wx.Panel):
                 border=16,
             )
 
-            self.btn_sparc_cancel = self._text_button(
+            self.btn_sparc_cancel = create_text_button(
                 parent,
-                label="Cancel",
+                "Cancel",
                 height=24,
+                text_colour=self._theme.button_text,
+                contrast_text_colour=self._theme.button_text_contrast,
                 face_colour="def",
                 style=wx.ALIGN_CENTRE,
             )
@@ -527,52 +533,6 @@ class PnlTabSparcAcqui(wx.Panel):
             sizer.Add(self.btn_sparc_cancel, flag=wx.ALL, border=10)
 
         return sizer
-
-    def _text_button(
-        self,
-        parent: wx.Window,
-        label: str,
-        height: int,
-        face_colour: str = "def",
-        icon: Optional[str] = None,
-        size: Any = wx.DefaultSize,
-        style: int = 0,
-        contrast: bool = False,
-        font_size: Optional[int] = None,
-    ) -> ImageTextButton:
-        """Create a styled image text button.
-
-        :param parent: Parent window.
-        :param label: Button label.
-        :param height: Button face height.
-        :param face_colour: Named button face colour.
-        :param icon: Optional icon file name.
-        :param size: Explicit button size.
-        :param style: wx window style.
-        :param contrast: Use contrasting foreground text.
-        :param font_size: Optional explicit font size.
-        :returns: Image text button.
-        """
-        if contrast and face_colour == "def":
-            raise ValueError(
-                "Contrasting text requires a non-default button face"
-            )
-
-        button = ImageTextButton(
-            parent,
-            label=label,
-            icon=img.getBitmap(f"icon/{icon}") if icon else wx.NullBitmap,
-            height=height,
-            face_colour=face_colour,
-            size=size,
-            style=style,
-        )
-        button.SetForegroundColour(
-            self._theme.button_text_contrast if contrast else self._theme.button_text
-        )
-        if font_size is not None:
-            set_font(button, font_size)
-        return button
 
 
 if __name__ == "__main__":

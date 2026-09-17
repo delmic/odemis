@@ -16,14 +16,13 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
+from typing import Optional
+
 import wx
-import wx.adv
-from typing import Any, Optional
 
 from odemis.gui import img
 from odemis.gui.comp.buttons import (
     ImageButton,
-    ImageTextButton,
     ImageToggleButton,
     ViewButton,
 )
@@ -41,6 +40,12 @@ from odemis.gui.layout.constants import strings
 from odemis.gui.layout.constants.themes import DARK, Theme
 from odemis.gui.layout.util.fonts import set_font
 from odemis.gui.layout.util.sizers import hbox, vbox
+from odemis.gui.layout.util.widgets import (
+    create_combo,
+    create_icon_button,
+    create_label,
+    create_text_button,
+)
 
 
 class PnlTabLocalization(wx.Panel):
@@ -326,16 +331,11 @@ class PnlTabLocalization(wx.Panel):
         :returns: Feature selection row.
         """
         with hbox() as sizer:
-            self.btn_delete_feature = self._icon_button(parent, "ico_trash.png")
+            self.btn_delete_feature = create_icon_button(parent, "ico_trash.png")
             sizer.Add(self.btn_delete_feature)
-            self.cmb_features = self._combo(parent, (145, 20), readonly=False)
+            self.cmb_features = create_combo(parent, (145, 20), readonly=False, text_colour=self._theme.text_edit, background_colour=self._theme.background)
             sizer.Add(self.cmb_features)
-            self.btn_create_move_feature = self._text_button(
-                parent,
-                "Create / Move",
-                height=24,
-                size=(120, 24),
-            )
+            self.btn_create_move_feature = create_text_button(parent, label="Create / Move", height=24, text_colour=self._theme.button_text, contrast_text_colour=self._theme.button_text_contrast, size=(120, 24))
             sizer.Add(
                 self.btn_create_move_feature,
                 flag=wx.LEFT | wx.ALIGN_CENTER_VERTICAL,
@@ -350,19 +350,10 @@ class PnlTabLocalization(wx.Panel):
         :returns: Feature status row.
         """
         with hbox() as sizer:
-            sizer.Add(self._label(parent, "Status"))
-            self.cmb_feature_status = self._combo(
-                parent,
-                (122, 16),
-                readonly=True,
-            )
+            sizer.Add(create_label(parent, "Status", self._theme.text_primary))
+            self.cmb_feature_status = create_combo(parent, (122, 16), readonly=True, text_colour=self._theme.text_edit, background_colour=self._theme.background)
             sizer.Add(self.cmb_feature_status, flag=wx.LEFT, border=self._theme.spacing_standard)
-            self.btn_go_to_feature = self._text_button(
-                parent,
-                "Go to Feature",
-                height=24,
-                size=(120, 24),
-            )
+            self.btn_go_to_feature = create_text_button(parent, label="Go to Feature", height=24, text_colour=self._theme.button_text, contrast_text_colour=self._theme.button_text_contrast, size=(120, 24))
             sizer.Add(
                 self.btn_go_to_feature,
                 flag=wx.LEFT | wx.ALIGN_CENTER_VERTICAL,
@@ -377,7 +368,7 @@ class PnlTabLocalization(wx.Panel):
         :returns: Feature Z row.
         """
         with hbox() as sizer:
-            self.lbl_feature_z = self._label(parent, "Feature Z")
+            self.lbl_feature_z = create_label(parent, "Feature Z", self._theme.text_primary)
             sizer.Add(self.lbl_feature_z)
             self.ctrl_feature_z = self._unit_ctrl(
                 parent,
@@ -386,11 +377,7 @@ class PnlTabLocalization(wx.Panel):
                 key_step=0.001,
             )
             sizer.Add(self.ctrl_feature_z, flag=wx.LEFT, border=self._theme.spacing_standard)
-            self.btn_use_current_z = self._text_button(
-                parent,
-                "Use Current Z",
-                height=24,
-            )
+            self.btn_use_current_z = create_text_button(parent, label="Use Current Z", height=24, text_colour=self._theme.button_text, contrast_text_colour=self._theme.button_text_contrast)
             self.btn_use_current_z.SetToolTip(
                 "Save the current position of the focus as the feature Z "
                 "position"
@@ -421,14 +408,10 @@ class PnlTabLocalization(wx.Panel):
                 border=1,
             )
 
-            self.btn_z_localization = self._text_button(
-                parent,
-                "Locate Z...",
-                height=24,
-            )
+            self.btn_z_localization = create_text_button(parent, label="Locate Z...", height=24, text_colour=self._theme.button_text, contrast_text_colour=self._theme.button_text_contrast)
             sizer.Add(self.btn_z_localization, flag=wx.RIGHT, border=2)
 
-            self.lbl_z_localization = self._label(parent, "~ 4 seconds")
+            self.lbl_z_localization = create_label(parent, "~ 4 seconds", self._theme.text_primary)
             sizer.Add(self.lbl_z_localization, flag=wx.TOP, border=3)
 
             self.gauge_z_localization = wx.Gauge(
@@ -464,10 +447,10 @@ class PnlTabLocalization(wx.Panel):
         :returns: Size selector row.
         """
         with hbox() as sizer:
-            label = self._label(parent, text)
+            label = create_label(parent, text, self._theme.text_primary)
             setattr(self, label_attribute, label)
             sizer.Add(label)
-            combo = self._combo(parent, (92, 16), readonly=True)
+            combo = create_combo(parent, (92, 16), readonly=True, text_colour=self._theme.text_edit, background_colour=self._theme.background)
             setattr(self, combo_attribute, combo)
             sizer.Add(combo, flag=wx.LEFT, border=combo_border)
         return sizer
@@ -479,15 +462,11 @@ class PnlTabLocalization(wx.Panel):
         :returns: Target selection row.
         """
         with hbox() as sizer:
-            self.btn_delete_target = self._icon_button(parent, "ico_trash.png")
+            self.btn_delete_target = create_icon_button(parent, "ico_trash.png")
             sizer.Add(self.btn_delete_target)
-            self.cmb_targets = self._combo(parent, (145, 20), readonly=False)
+            self.cmb_targets = create_combo(parent, (145, 20), readonly=False, text_colour=self._theme.text_edit, background_colour=self._theme.background)
             sizer.Add(self.cmb_targets)
-            self.btn_go_to_target = self._text_button(
-                parent,
-                "Go to Target Z",
-                height=24,
-            )
+            self.btn_go_to_target = create_text_button(parent, label="Go to Target Z", height=24, text_colour=self._theme.button_text, contrast_text_colour=self._theme.button_text_contrast)
             sizer.Add(self.btn_go_to_target, flag=wx.LEFT, border=52)
         return sizer
 
@@ -498,7 +477,7 @@ class PnlTabLocalization(wx.Panel):
         :returns: Target Z row.
         """
         with hbox() as sizer:
-            self.lbl_target_z = self._label(parent, "Target Z")
+            self.lbl_target_z = create_label(parent, "Target Z", self._theme.text_primary)
             sizer.Add(self.lbl_target_z)
             self.ctrl_target_z = self._unit_ctrl(
                 parent,
@@ -507,11 +486,7 @@ class PnlTabLocalization(wx.Panel):
                 key_step=0.001,
             )
             sizer.Add(self.ctrl_target_z, flag=wx.LEFT, border=self._theme.spacing_standard)
-            self.btn_use_current_target_z = self._text_button(
-                parent,
-                "Use Current Z ",
-                height=24,
-            )
+            self.btn_use_current_target_z = create_text_button(parent, label="Use Current Z ", height=24, text_colour=self._theme.button_text, contrast_text_colour=self._theme.button_text_contrast)
             self.btn_use_current_target_z.SetToolTip(
                 "Save the current position of the focus as the target Z "
                 "position"
@@ -606,12 +581,7 @@ class PnlTabLocalization(wx.Panel):
                 border=self._theme.spacing_standard,
             )
 
-            self.btn_acquire_overview = self._text_button(
-                panel,
-                "ACQUIRE OVERVIEW",
-                height=48,
-                font_size=self._theme.font_size_prominent_button,
-            )
+            self.btn_acquire_overview = create_text_button(panel, label="ACQUIRE OVERVIEW", height=48, text_colour=self._theme.button_text, contrast_text_colour=self._theme.button_text_contrast, font_size=self._theme.font_size_prominent_button)
             sizer.Add(
                 self.btn_acquire_overview,
                 flag=wx.TOP | wx.BOTTOM | wx.LEFT,
@@ -635,7 +605,7 @@ class PnlTabLocalization(wx.Panel):
             )
             for text, attribute, value, minimum, maximum, border in specs:
                 grid = wx.FlexGridSizer(rows=1, cols=2, vgap=3, hgap=6)
-                label = self._label(parent, text)
+                label = create_label(parent, text, self._theme.text_primary)
                 grid.Add(label, flag=wx.TOP, border=3)
                 control = self._unit_ctrl(
                     parent,
@@ -660,7 +630,7 @@ class PnlTabLocalization(wx.Panel):
         """
         with hbox() as sizer:
             sizer.Add(
-                self._label(parent, "Filename"),
+                create_label(parent, "Filename", self._theme.text_primary),
                 flag=wx.ALIGN_CENTER_VERTICAL,
             )
             self.txt_filename = wx.TextCtrl(
@@ -677,11 +647,7 @@ class PnlTabLocalization(wx.Panel):
                 flag=wx.LEFT | wx.EXPAND,
                 border=5,
             )
-            self.btn_cryosecom_change_file = self._text_button(
-                parent,
-                "change…",
-                height=24,
-            )
+            self.btn_cryosecom_change_file = create_text_button(parent, label="change…", height=24, text_colour=self._theme.button_text, contrast_text_colour=self._theme.button_text_contrast)
             sizer.Add(
                 self.btn_cryosecom_change_file,
                 flag=wx.LEFT,
@@ -696,25 +662,14 @@ class PnlTabLocalization(wx.Panel):
         :returns: Acquisition row.
         """
         grid = wx.FlexGridSizer(rows=1, cols=3, vgap=0, hgap=5)
-        self.btn_cryosecom_acquire = self._text_button(
-            parent,
-            "ACQUIRE",
-            height=48,
-            face_colour="blue",
-            icon="ico_acqui.png",
-            font_size=self._theme.font_size_primary_action,
-            contrast=True,
-        )
+        self.btn_cryosecom_acquire = create_text_button(parent, label="ACQUIRE", height=48, text_colour=self._theme.button_text, contrast_text_colour=self._theme.button_text_contrast, face_colour="blue", icon="ico_acqui.png", font_size=self._theme.font_size_primary_action, contrast=True)
         grid.Add(
             self.btn_cryosecom_acquire,
             flag=wx.ALL | wx.EXPAND,
             border=2,
         )
 
-        self.txt_cryosecom_est_time = self._label(
-            parent,
-            "Estimated time ...",
-        )
+        self.txt_cryosecom_est_time = create_label(parent, "Estimated time ...", self._theme.text_primary)
         self.txt_cryosecom_est_time.Hide()
         grid.Add(self.txt_cryosecom_est_time, flag=wx.TOP, border=17)
 
@@ -732,7 +687,7 @@ class PnlTabLocalization(wx.Panel):
                     flag=wx.TOP,
                     border=self._theme.spacing_standard,
                 )
-                self.txt_cryosecom_left_time = self._label(parent, "")
+                self.txt_cryosecom_left_time = create_label(parent, "", self._theme.text_primary)
                 self.txt_cryosecom_left_time.Hide()
                 gauge_sizer.Add(
                     self.txt_cryosecom_left_time,
@@ -742,11 +697,7 @@ class PnlTabLocalization(wx.Panel):
                 )
             progress_sizer.Add(gauge_sizer, flag=wx.TOP, border=-8)
 
-            self.btn_cryosecom_acqui_cancel = self._text_button(
-                parent,
-                "cancel",
-                height=24,
-            )
+            self.btn_cryosecom_acqui_cancel = create_text_button(parent, label="cancel", height=24, text_colour=self._theme.button_text, contrast_text_colour=self._theme.button_text_contrast)
             progress_sizer.Add(
                 self.btn_cryosecom_acqui_cancel,
                 flag=wx.TOP,
@@ -793,25 +744,14 @@ class PnlTabLocalization(wx.Panel):
                 border=15,
             )
 
-            self.btn_acquire_features = self._text_button(
-                self.pnl_automation,
-                "ACQUIRE AT FEATURES",
-                height=48,
-                face_colour="blue",
-                icon="ico_acqui.png",
-                font_size=self._theme.font_size_prominent_button,
-                contrast=True,
-            )
+            self.btn_acquire_features = create_text_button(self.pnl_automation, label="ACQUIRE AT FEATURES", height=48, text_colour=self._theme.button_text, contrast_text_colour=self._theme.button_text_contrast, face_colour="blue", icon="ico_acqui.png", font_size=self._theme.font_size_prominent_button, contrast=True)
             self.automation_sizer.Add(
                 self.btn_acquire_features,
                 flag=wx.TOP | wx.BOTTOM | wx.LEFT,
                 border=self._theme.spacing_standard,
             )
 
-            self.txt_acquire_features_est_time = self._label(
-                self.pnl_automation,
-                "Estimated time ...",
-            )
+            self.txt_acquire_features_est_time = create_label(self.pnl_automation, "Estimated time ...", self._theme.text_primary)
             self.txt_acquire_features_est_time.Hide()
             self.automation_sizer.Add(
                 self.txt_acquire_features_est_time,
@@ -857,110 +797,6 @@ class PnlTabLocalization(wx.Panel):
         item.SetBackgroundColour(self._theme.section_header)
         fold_bar.add_item(item)
         return item
-
-    def _label(self, parent: wx.Window, text: str) -> wx.StaticText:
-        """Create a primary-colour static label.
-
-        :param parent: Parent window.
-        :param text: Label text.
-        :returns: Styled static label.
-        """
-        label = wx.StaticText(parent, label=text)
-        label.SetForegroundColour(self._theme.text_primary)
-        return label
-
-    def _icon_button(
-        self,
-        parent: wx.Window,
-        icon_name: str,
-    ) -> ImageButton:
-        """Create a small icon button.
-
-        :param parent: Parent window.
-        :param icon_name: Icon file name.
-        :returns: Icon button.
-        """
-        return ImageButton(
-            parent,
-            icon=img.getBitmap(f"icon/{icon_name}"),
-            height=16,
-            style=wx.ALIGN_CENTRE,
-        )
-
-    def _text_button(
-        self,
-        parent: wx.Window,
-        label: str,
-        height: int,
-        face_colour: str = "def",
-        icon: Optional[str] = None,
-        font_size: Optional[int] = None,
-        size: Any = wx.DefaultSize,
-        contrast: bool = False,
-    ) -> ImageTextButton:
-        """Create a styled text button.
-
-        :param parent: Parent window.
-        :param label: Button label.
-        :param height: Button face height.
-        :param face_colour: Named button face colour.
-        :param icon: Optional icon file name.
-        :param font_size: Optional font point size.
-        :param size: Explicit button size.
-        :param contrast: Use contrasting foreground text.
-        :returns: Styled text button.
-        """
-        if contrast and face_colour == "def":
-            raise ValueError(
-                "Contrasting text requires a non-default button face"
-            )
-
-        button = ImageTextButton(
-            parent,
-            label=label,
-            icon=img.getBitmap(f"icon/{icon}") if icon else wx.NullBitmap,
-            height=height,
-            face_colour=face_colour,
-            size=size,
-            style=wx.ALIGN_CENTRE,
-        )
-        button.SetForegroundColour(
-            self._theme.button_text_contrast
-            if contrast
-            else self._theme.button_text
-        )
-        if font_size is not None:
-            set_font(button, font_size)
-        return button
-
-    def _combo(
-        self,
-        parent: wx.Window,
-        size: Any,
-        readonly: bool,
-    ) -> wx.adv.OwnerDrawnComboBox:
-        """Create a themed owner-drawn combobox.
-
-        :param parent: Parent window.
-        :param size: Control size.
-        :param readonly: Whether text entry is disabled.
-        :returns: Styled combobox.
-        """
-        style = wx.BORDER_NONE | wx.CB_DROPDOWN | wx.TE_PROCESS_ENTER
-        if readonly:
-            style |= wx.CB_READONLY
-        combo = wx.adv.OwnerDrawnComboBox(
-            parent,
-            size=size,
-            style=style,
-        )
-        combo.SetButtonBitmaps(
-            img.getBitmap("button/btn_down.png"),
-            pushButtonBg=False,
-        )
-        combo.SetForegroundColour(self._theme.text_edit)
-        combo.SetBackgroundColour(self._theme.background)
-        return combo
 
     def _unit_ctrl(
         self,

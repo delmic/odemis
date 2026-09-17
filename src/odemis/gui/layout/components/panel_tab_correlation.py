@@ -16,13 +16,9 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
-from typing import Any, Optional
-
 import wx
-import wx.adv
 
-from odemis.gui import img
-from odemis.gui.comp.buttons import ImageButton, ImageTextButton, ViewButton
+from odemis.gui.comp.buttons import ViewButton
 from odemis.gui.comp.foldpanelbar import FoldPanelBar, FoldPanelItem
 from odemis.gui.comp.grid import ViewportGrid
 from odemis.gui.comp.stream_bar import StreamBar
@@ -33,6 +29,11 @@ from odemis.gui.layout.constants import strings
 from odemis.gui.layout.constants.themes import DARK, Theme
 from odemis.gui.layout.util.fonts import set_font
 from odemis.gui.layout.util.sizers import hbox, vbox
+from odemis.gui.layout.util.widgets import (
+    create_chevron_button,
+    create_combo,
+    create_text_button,
+)
 
 
 class PnlTabCorrelation(wx.Panel):
@@ -131,14 +132,9 @@ class PnlTabCorrelation(wx.Panel):
                 border=self._theme.spacing_standard,
             )
 
-            self.btn_log = ImageButton(
-                panel,
-                icon=img.getBitmap("icon/ico_chevron_up.png"),
-                height=16,
-                face_colour="def",
-                style=wx.ALIGN_CENTRE,
+            self.btn_log = create_chevron_button(
+                panel, "up", tooltip=strings.TOOLTIP_OPEN_LOG_PANEL
             )
-            self.btn_log.SetToolTip(strings.TOOLTIP_OPEN_LOG_PANEL)
             outer_sizer.Add(
                 self.btn_log,
                 flag=wx.BOTTOM | wx.LEFT | wx.RIGHT,
@@ -274,10 +270,12 @@ class PnlTabCorrelation(wx.Panel):
             sizer.Add(instructions, flag=wx.EXPAND, border=5)
             sizer.Add(self._build_correlation_controls(panel))
 
-            self.btn_reset_correlation = self._text_button(
+            self.btn_reset_correlation = create_text_button(
                 panel,
-                "Reset Correlation Data",
+                label="Reset Correlation Data",
                 height=24,
+                text_colour=self._theme.button_text,
+                contrast_text_colour=self._theme.button_text_contrast,
             )
             sizer.Add(
                 self.btn_reset_correlation,
@@ -319,12 +317,18 @@ class PnlTabCorrelation(wx.Panel):
             grid,
             parent,
             "Reference Frame",
-            self._combo(
+            create_combo(
                 parent,
-                "The reference frame defines the base images that others "
-                "will be correlated to. This allows selecting positions from "
-                "the correlated images. Images in the reference frame cannot "
-                "be moved.",
+                (250, -1),
+                readonly=True,
+                text_colour=self._theme.text_edit,
+                background_colour=self._theme.background,
+                tooltip=(
+                    "The reference frame defines the base images that others "
+                    "will be correlated to. This allows selecting positions "
+                    "from the correlated images. Images in the reference "
+                    "frame cannot be moved."
+                ),
             ),
             "cmb_correlation_reference",
             5,
@@ -333,12 +337,18 @@ class PnlTabCorrelation(wx.Panel):
             grid,
             parent,
             "Move Stream",
-            self._combo(
+            create_combo(
                 parent,
-                "Select a stream to move. Shift + Left Click to Move the "
-                "Stream.  Use the arrow keys to move the stream. Use Shift + "
-                "Left / Right Arrow Keys to control Rotation. Use Shift + Up "
-                "/ Down Arrow Keys to control scale.",
+                (250, -1),
+                readonly=True,
+                text_colour=self._theme.text_edit,
+                background_colour=self._theme.background,
+                tooltip=(
+                    "Select a stream to move. Shift + Left Click to Move the "
+                    "Stream.  Use the arrow keys to move the stream. Use "
+                    "Shift + Left / Right Arrow Keys to control Rotation. "
+                    "Use Shift + Up / Down Arrow Keys to control scale."
+                ),
             ),
             "cmb_correlation_stream",
             5,
@@ -381,10 +391,12 @@ class PnlTabCorrelation(wx.Panel):
         panel.SetBackgroundColour(self._theme.field_background)
 
         with vbox() as sizer:
-            self.btn_correlate = self._text_button(
+            self.btn_correlate = create_text_button(
                 panel,
-                "CORRELATE IMAGES",
+                label="CORRELATE IMAGES",
                 height=48,
+                text_colour=self._theme.button_text,
+                contrast_text_colour=self._theme.button_text_contrast,
                 face_colour="blue",
                 icon="feature_active_selected.png",
                 size=(382, -1),
@@ -396,10 +408,12 @@ class PnlTabCorrelation(wx.Panel):
                 border=self._theme.spacing_standard,
             )
 
-            self.btn_export = self._text_button(
+            self.btn_export = create_text_button(
                 panel,
-                "EXPORT IMAGE",
+                label="EXPORT IMAGE",
                 height=48,
+                text_colour=self._theme.button_text,
+                contrast_text_colour=self._theme.button_text_contrast,
                 face_colour="blue",
                 icon="ico_export.png",
                 size=(382, -1),
@@ -452,36 +466,6 @@ class PnlTabCorrelation(wx.Panel):
         checkbox = wx.CheckBox(parent, label=label)
         checkbox.SetForegroundColour(self._theme.text_primary)
         return checkbox
-
-    def _combo(
-        self,
-        parent: wx.Window,
-        tooltip: str,
-    ) -> wx.adv.OwnerDrawnComboBox:
-        """Create a themed read-only owner-drawn combobox.
-
-        :param parent: Parent panel.
-        :param tooltip: Help text shown for the control.
-        :returns: Styled combobox.
-        """
-        combo = wx.adv.OwnerDrawnComboBox(
-            parent,
-            size=(250, -1),
-            style=(
-                wx.BORDER_NONE
-                | wx.CB_DROPDOWN
-                | wx.CB_READONLY
-                | wx.TE_PROCESS_ENTER
-            ),
-        )
-        combo.SetButtonBitmaps(
-            img.getBitmap("button/btn_down.png"),
-            pushButtonBg=False,
-        )
-        combo.SetForegroundColour(self._theme.text_edit)
-        combo.SetBackgroundColour(self._theme.background)
-        combo.SetToolTip(tooltip)
-        return combo
 
     def _unit_ctrl(
         self,
@@ -542,49 +526,6 @@ class PnlTabCorrelation(wx.Panel):
         )
         setattr(self, control_attribute, control)
         grid.Add(control)
-
-    def _text_button(
-        self,
-        parent: wx.Window,
-        label: str,
-        height: int,
-        face_colour: str = "def",
-        icon: Optional[str] = None,
-        size: Any = wx.DefaultSize,
-        contrast: bool = False,
-    ) -> ImageTextButton:
-        """Create a styled text button.
-
-        :param parent: Parent window.
-        :param label: Button label.
-        :param height: Button face height.
-        :param face_colour: Named button face colour.
-        :param icon: Optional icon file name.
-        :param size: Explicit button size.
-        :param contrast: Use contrasting foreground text.
-        :returns: Styled text button.
-        """
-        if contrast and face_colour == "def":
-            raise ValueError(
-                "Contrasting text requires a non-default button face"
-            )
-
-        button = ImageTextButton(
-            parent,
-            label=label,
-            icon=img.getBitmap(f"icon/{icon}") if icon else wx.NullBitmap,
-            height=height,
-            face_colour=face_colour,
-            size=size,
-            style=wx.ALIGN_CENTRE,
-        )
-        button.SetForegroundColour(
-            self._theme.button_text_contrast
-            if contrast
-            else self._theme.button_text
-        )
-        return button
-
 
 if __name__ == "__main__":
     from odemis.gui.layout.util.preview import run_preview

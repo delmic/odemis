@@ -16,16 +16,11 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
-from typing import Any, Optional
-
 import wx
-import wx.adv
 
 from odemis.gui import img
 from odemis.gui.comp.buttons import (
     ImageButton,
-    ImageTextButton,
-    ProgressRadioButton,
     ViewButton,
 )
 from odemis.gui.comp.foldpanelbar import FoldPanelBar, FoldPanelItem
@@ -38,6 +33,13 @@ from odemis.gui.layout.constants import strings
 from odemis.gui.layout.constants.themes import DARK, Theme
 from odemis.gui.layout.util.fonts import set_font
 from odemis.gui.layout.util.sizers import hbox, vbox
+from odemis.gui.layout.util.widgets import (
+    create_combo,
+    create_icon_button,
+    create_label,
+    create_progress_button,
+    create_text_button,
+)
 
 
 class PnlTabFibsem(wx.Panel):
@@ -248,22 +250,31 @@ class PnlTabFibsem(wx.Panel):
         :returns: Feature selection row.
         """
         with hbox() as sizer:
-            self.btn_delete_feature = self._icon_button(
+            self.btn_delete_feature = create_icon_button(
                 parent,
                 "ico_trash.png",
+                text_colour=self._theme.button_text_contrast,
             )
             sizer.Add(self.btn_delete_feature)
 
-            self.cmb_features = self._combo(parent, (156, 20), readonly=False)
+            self.cmb_features = create_combo(
+                parent,
+                (156, 20),
+                readonly=False,
+                text_colour=self._theme.text_edit,
+                background_colour=self._theme.background,
+            )
             sizer.Add(self.cmb_features)
 
             button_panel = wx.Panel(parent, size=(120, 24))
             button_panel.SetBackgroundColour(self._theme.background)
             with hbox() as button_sizer:
-                self.btn_create_move_feature = self._text_button(
+                self.btn_create_move_feature = create_text_button(
                     button_panel,
                     "Create / Move",
                     height=24,
+                    text_colour=self._theme.button_text,
+                    contrast_text_colour=self._theme.button_text_contrast,
                 )
                 button_sizer.Add(
                     self.btn_create_move_feature,
@@ -285,11 +296,13 @@ class PnlTabFibsem(wx.Panel):
         :returns: Feature status row.
         """
         with hbox() as sizer:
-            sizer.Add(self._label(parent, "Status"))
-            self.cmb_feature_status = self._combo(
+            sizer.Add(create_label(parent, "Status", self._theme.text_primary))
+            self.cmb_feature_status = create_combo(
                 parent,
                 (133, 16),
                 readonly=True,
+                text_colour=self._theme.text_edit,
+                background_colour=self._theme.background,
             )
             sizer.Add(
                 self.cmb_feature_status,
@@ -300,10 +313,12 @@ class PnlTabFibsem(wx.Panel):
             button_panel = wx.Panel(parent, size=(120, 24))
             button_panel.SetBackgroundColour(self._theme.background)
             with hbox() as button_sizer:
-                self.btn_go_to_feature = self._text_button(
+                self.btn_go_to_feature = create_text_button(
                     button_panel,
                     "Go to Feature",
                     height=24,
+                    text_colour=self._theme.button_text,
+                    contrast_text_colour=self._theme.button_text_contrast,
                 )
                 button_sizer.Add(
                     self.btn_go_to_feature,
@@ -325,10 +340,12 @@ class PnlTabFibsem(wx.Panel):
         :returns: Save-position row.
         """
         with hbox() as sizer:
-            self.btn_feature_save_position = self._text_button(
+            self.btn_feature_save_position = create_text_button(
                 parent,
                 "SAVE POSITION",
                 height=48,
+                text_colour=self._theme.button_text,
+                contrast_text_colour=self._theme.button_text_contrast,
                 face_colour="blue",
                 icon="ico_save.png",
                 font_size=self._theme.font_size_body,
@@ -373,12 +390,14 @@ class PnlTabFibsem(wx.Panel):
         :returns: Posture button row.
         """
         with hbox() as sizer:
-            self.btn_switch_sem_imaging = self._progress_button(
+            self.btn_switch_sem_imaging = create_progress_button(
                 parent,
                 "SEM IMAGING",
                 "ico_sem.png",
                 "ico_sem_orange.png",
                 "ico_sem_green.png",
+                text_colour=self._theme.button_text,
+                font_size=self._theme.font_size_button,
             )
             sizer.Add(
                 self.btn_switch_sem_imaging,
@@ -387,12 +406,14 @@ class PnlTabFibsem(wx.Panel):
                 border=self._theme.spacing_standard,
             )
 
-            self.btn_switch_milling = self._progress_button(
+            self.btn_switch_milling = create_progress_button(
                 parent,
                 "MILLING",
                 "ico_milling.png",
                 "ico_milling_orange.png",
                 "ico_milling_green.png",
+                text_colour=self._theme.button_text,
+                font_size=self._theme.font_size_button,
             )
             sizer.Add(
                 self.btn_switch_milling,
@@ -524,10 +545,12 @@ class PnlTabFibsem(wx.Panel):
                 border=self._theme.spacing_standard,
             )
 
-            self.btn_acquire_all = self._text_button(
+            self.btn_acquire_all = create_text_button(
                 panel,
                 "ACQUIRE BOTH",
                 height=48,
+                text_colour=self._theme.button_text,
+                contrast_text_colour=self._theme.button_text_contrast,
                 face_colour="blue",
                 icon="ico_acqui.png",
                 font_size=self._theme.font_size_primary_action,
@@ -539,10 +562,12 @@ class PnlTabFibsem(wx.Panel):
                 border=self._theme.spacing_standard,
             )
 
-            self.btn_acquire_overview = self._text_button(
+            self.btn_acquire_overview = create_text_button(
                 panel,
                 "ACQUIRE OVERVIEW",
                 height=48,
+                text_colour=self._theme.button_text,
+                contrast_text_colour=self._theme.button_text_contrast,
                 font_size=self._theme.font_size_prominent_button,
             )
             sizer.Add(
@@ -567,7 +592,7 @@ class PnlTabFibsem(wx.Panel):
         """
         with hbox() as sizer:
             sizer.Add(
-                self._label(parent, "Filename"),
+                create_label(parent, "Filename", self._theme.text_primary),
                 flag=wx.ALIGN_CENTER_VERTICAL,
             )
             self.txt_filename = wx.TextCtrl(
@@ -584,10 +609,12 @@ class PnlTabFibsem(wx.Panel):
                 flag=wx.LEFT | wx.EXPAND,
                 border=5,
             )
-            self.btn_cryosecom_change_file = self._text_button(
+            self.btn_cryosecom_change_file = create_text_button(
                 parent,
                 "change…",
                 height=24,
+                text_colour=self._theme.button_text,
+                contrast_text_colour=self._theme.button_text_contrast,
             )
             sizer.Add(
                 self.btn_cryosecom_change_file,
@@ -607,10 +634,12 @@ class PnlTabFibsem(wx.Panel):
         button_panel = wx.Panel(parent, size=(200, 48))
         button_panel.SetBackgroundColour(self._theme.background)
         with hbox() as button_sizer:
-            self.btn_cryosecom_acquire = self._text_button(
+            self.btn_cryosecom_acquire = create_text_button(
                 button_panel,
                 "ACQUIRE",
                 height=48,
+                text_colour=self._theme.button_text,
+                contrast_text_colour=self._theme.button_text_contrast,
                 face_colour="blue",
                 icon="ico_acqui.png",
                 font_size=self._theme.font_size_primary_action,
@@ -628,9 +657,10 @@ class PnlTabFibsem(wx.Panel):
             border=2,
         )
 
-        self.txt_cryosecom_est_time = self._label(
+        self.txt_cryosecom_est_time = create_label(
             parent,
             "Estimated time ...",
+            self._theme.text_primary,
         )
         self.txt_cryosecom_est_time.Hide()
         grid.Add(self.txt_cryosecom_est_time, flag=wx.TOP, border=17)
@@ -649,7 +679,9 @@ class PnlTabFibsem(wx.Panel):
                     flag=wx.TOP,
                     border=self._theme.spacing_standard,
                 )
-                self.txt_cryosecom_left_time = self._label(parent, "")
+                self.txt_cryosecom_left_time = create_label(
+                    parent, "", self._theme.text_primary
+                )
                 self.txt_cryosecom_left_time.Hide()
                 gauge_sizer.Add(
                     self.txt_cryosecom_left_time,
@@ -659,10 +691,12 @@ class PnlTabFibsem(wx.Panel):
                 )
             progress_sizer.Add(gauge_sizer, flag=wx.TOP, border=-8)
 
-            self.btn_cryosecom_acqui_cancel = self._text_button(
+            self.btn_cryosecom_acqui_cancel = create_text_button(
                 parent,
                 "Cancel",
                 height=24,
+                text_colour=self._theme.button_text,
+                contrast_text_colour=self._theme.button_text_contrast,
             )
             progress_sizer.Add(
                 self.btn_cryosecom_acqui_cancel,
@@ -680,10 +714,12 @@ class PnlTabFibsem(wx.Panel):
         :returns: Correlation action row.
         """
         with hbox() as sizer:
-            self.btn_tdct = self._text_button(
+            self.btn_tdct = create_text_button(
                 parent,
                 "Correlate FIB/FM",
                 height=48,
+                text_colour=self._theme.button_text,
+                contrast_text_colour=self._theme.button_text_contrast,
                 font_size=self._theme.font_size_prominent_button,
             )
             sizer.Add(self.btn_tdct)
@@ -743,10 +779,12 @@ class PnlTabFibsem(wx.Panel):
                 border=self._theme.spacing_standard,
             )
 
-            self.btn_run_automated_milling = self._text_button(
+            self.btn_run_automated_milling = create_text_button(
                 panel,
                 "MILL",
                 height=48,
+                text_colour=self._theme.button_text,
+                contrast_text_colour=self._theme.button_text_contrast,
                 face_colour="blue",
                 icon="ico_milling.png",
                 font_size=self._theme.font_size_primary_action,
@@ -758,9 +796,10 @@ class PnlTabFibsem(wx.Panel):
                 border=self._theme.spacing_standard,
             )
 
-            self.txt_automated_milling_est_time = self._label(
+            self.txt_automated_milling_est_time = create_label(
                 panel,
                 "Estimated time ...",
+                self._theme.text_primary,
             )
             sizer.Add(
                 self.txt_automated_milling_est_time,
@@ -772,7 +811,9 @@ class PnlTabFibsem(wx.Panel):
                 flag=wx.EXPAND,
             )
 
-            self.txt_automated_milling_status = self._label(panel, "")
+            self.txt_automated_milling_status = create_label(
+                panel, "", self._theme.text_primary
+            )
             sizer.Add(
                 self.txt_automated_milling_status,
                 flag=wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND,
@@ -814,9 +855,10 @@ class PnlTabFibsem(wx.Panel):
             time_panel = wx.Panel(parent, size=(80, 24))
             time_panel.SetBackgroundColour(self._theme.section_header)
             with hbox() as time_sizer:
-                self.txt_automated_milling_left_time = self._label(
+                self.txt_automated_milling_left_time = create_label(
                     time_panel,
                     "",
+                    self._theme.text_primary,
                 )
                 time_sizer.Add(
                     self.txt_automated_milling_left_time,
@@ -835,10 +877,12 @@ class PnlTabFibsem(wx.Panel):
                 border=self._theme.spacing_standard,
             )
 
-            self.btn_automated_milling_cancel = self._text_button(
+            self.btn_automated_milling_cancel = create_text_button(
                 parent,
                 "Cancel",
                 height=24,
+                text_colour=self._theme.button_text,
+                contrast_text_colour=self._theme.button_text_contrast,
             )
             sizer.Add(
                 self.btn_automated_milling_cancel,
@@ -876,10 +920,12 @@ class PnlTabFibsem(wx.Panel):
             )
             controls_sizer.Add((0, self._theme.spacing_standard))
 
-            self.btn_run_milling = self._text_button(
+            self.btn_run_milling = create_text_button(
                 controls_panel,
                 "MILL",
                 height=48,
+                text_colour=self._theme.button_text,
+                contrast_text_colour=self._theme.button_text_contrast,
                 face_colour="blue",
                 icon="ico_milling.png",
                 font_size=self._theme.font_size_primary_action,
@@ -892,9 +938,10 @@ class PnlTabFibsem(wx.Panel):
                 border=self._theme.spacing_standard,
             )
 
-            self.txt_milling_est_time = self._label(
+            self.txt_milling_est_time = create_label(
                 controls_panel,
                 "Estimated time ...",
+                self._theme.text_primary,
             )
             self.txt_milling_est_time.Hide()
             controls_sizer.Add(
@@ -907,10 +954,12 @@ class PnlTabFibsem(wx.Panel):
                 flag=wx.EXPAND,
             )
 
-            self.btn_milling_cancel = self._text_button(
+            self.btn_milling_cancel = create_text_button(
                 controls_panel,
                 "Cancel",
                 height=24,
+                text_colour=self._theme.button_text,
+                contrast_text_colour=self._theme.button_text_contrast,
             )
             self.btn_milling_cancel.Hide()
             controls_sizer.Add(
@@ -954,7 +1003,9 @@ class PnlTabFibsem(wx.Panel):
                     border=self._theme.spacing_standard,
                 )
 
-                self.txt_milling_series_left_time = self._label(parent, "")
+                self.txt_milling_series_left_time = create_label(
+                    parent, "", self._theme.text_primary
+                )
                 self.txt_milling_series_left_time.Hide()
                 gauge_sizer.Add(
                     self.txt_milling_series_left_time,
@@ -981,149 +1032,6 @@ class PnlTabFibsem(wx.Panel):
         item.SetBackgroundColour(self._theme.section_header)
         fold_bar.add_item(item)
         return item
-
-    def _label(self, parent: wx.Window, text: str) -> wx.StaticText:
-        """Create a primary-colour static label.
-
-        :param parent: Parent window.
-        :param text: Label text.
-        :returns: Styled static label.
-        """
-        label = wx.StaticText(parent, label=text)
-        label.SetForegroundColour(self._theme.text_primary)
-        return label
-
-    def _icon_button(
-        self,
-        parent: wx.Window,
-        icon_name: str,
-    ) -> ImageButton:
-        """Create a small icon button.
-
-        :param parent: Parent window.
-        :param icon_name: Icon file name.
-        :returns: Icon button.
-        """
-        button = ImageButton(
-            parent,
-            icon=img.getBitmap("icon/{}".format(icon_name)),
-            height=16,
-            style=wx.ALIGN_CENTRE,
-        )
-        button.SetForegroundColour(self._theme.button_text_contrast)
-        return button
-
-    def _text_button(
-        self,
-        parent: wx.Window,
-        label: str,
-        height: int,
-        face_colour: str = "def",
-        icon: Optional[str] = None,
-        font_size: Optional[int] = None,
-        size: Any = wx.DefaultSize,
-        contrast: bool = False,
-    ) -> ImageTextButton:
-        """Create a styled text button.
-
-        :param parent: Parent window.
-        :param label: Button label.
-        :param height: Button face height.
-        :param face_colour: Named button face colour.
-        :param icon: Optional icon file name.
-        :param font_size: Optional font point size.
-        :param size: Explicit button size.
-        :param contrast: Use contrasting foreground text.
-        :returns: Styled text button.
-        """
-        if contrast and face_colour == "def":
-            raise ValueError(
-                "Contrasting text requires a non-default button face"
-            )
-
-        button = ImageTextButton(
-            parent,
-            label=label,
-            icon=(
-                img.getBitmap("icon/{}".format(icon))
-                if icon
-                else wx.NullBitmap
-            ),
-            height=height,
-            face_colour=face_colour,
-            size=size,
-            style=wx.ALIGN_CENTRE,
-        )
-        button.SetForegroundColour(
-            self._theme.button_text_contrast
-            if contrast
-            else self._theme.button_text
-        )
-        if font_size is not None:
-            set_font(button, font_size)
-        return button
-
-    def _progress_button(
-        self,
-        parent: wx.Window,
-        label: str,
-        icon: str,
-        icon_progress: str,
-        icon_on: str,
-    ) -> ProgressRadioButton:
-        """Create a themed posture-progress button.
-
-        :param parent: Parent window.
-        :param label: Button label.
-        :param icon: Untoggled icon file name.
-        :param icon_progress: In-progress icon file name.
-        :param icon_on: Completed icon file name.
-        :returns: Posture-progress button.
-        """
-        button = ProgressRadioButton(
-            parent,
-            label=label,
-            icon=img.getBitmap("icon/{}".format(icon)),
-            icon_progress=img.getBitmap(
-                "icon/{}".format(icon_progress)
-            ),
-            icon_on=img.getBitmap("icon/{}".format(icon_on)),
-            height=48,
-            face_colour="def",
-            style=wx.ALIGN_CENTRE,
-        )
-        button.SetForegroundColour(self._theme.button_text)
-        set_font(button, self._theme.font_size_button)
-        return button
-
-    def _combo(
-        self,
-        parent: wx.Window,
-        size: Any,
-        readonly: bool,
-    ) -> wx.adv.OwnerDrawnComboBox:
-        """Create a themed owner-drawn combobox.
-
-        :param parent: Parent window.
-        :param size: Control size.
-        :param readonly: Whether text entry is disabled.
-        :returns: Styled combobox.
-        """
-        style = wx.BORDER_NONE | wx.CB_DROPDOWN | wx.TE_PROCESS_ENTER
-        if readonly:
-            style |= wx.CB_READONLY
-        combo = wx.adv.OwnerDrawnComboBox(
-            parent,
-            size=size,
-            style=style,
-        )
-        combo.SetButtonBitmaps(
-            img.getBitmap("button/btn_down.png"),
-            pushButtonBg=False,
-        )
-        combo.SetForegroundColour(self._theme.text_edit)
-        combo.SetBackgroundColour(self._theme.background)
-        return combo
 
 
 if __name__ == "__main__":

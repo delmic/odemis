@@ -21,11 +21,12 @@ from typing import Optional
 import wx
 
 from odemis.gui import img
-from odemis.gui.comp.buttons import ImageButton, TabButton
+from odemis.gui.comp.buttons import TabButton
 from odemis.gui.layout.constants.themes import DARK, Theme
 from odemis.gui.layout.constants.strings import TOOLTIP_CLOSE_LOG_PANEL
 from odemis.gui.layout.util.fonts import set_font
 from odemis.gui.layout.util.sizers import hbox, vbox
+from odemis.gui.layout.util.widgets import create_chevron_button
 
 # Foreground colour of the hidden temperature readout, distinct from the
 # theme's text roles (dark grey against the light tab bar).
@@ -349,14 +350,9 @@ class MainFrame(wx.Frame):
         self.pnl_log.Hide()
 
         with hbox() as sizer:
-            self.btn_log = ImageButton(
-                self.pnl_log,
-                icon=img.getBitmap("icon/ico_chevron_down.png"),
-                height=16,
-                face_colour="def",
-                style=wx.ALIGN_CENTRE,
+            self.btn_log = create_chevron_button(
+                self.pnl_log, "down", tooltip=TOOLTIP_CLOSE_LOG_PANEL
             )
-            self.btn_log.SetToolTip(TOOLTIP_CLOSE_LOG_PANEL)
             sizer.Add(
                 self.btn_log, flag=wx.ALL | wx.ALIGN_BOTTOM, border=10
             )

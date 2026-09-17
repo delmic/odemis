@@ -26,6 +26,7 @@ from odemis.gui.layout.constants import strings
 from odemis.gui.layout.constants.themes import DARK, Theme
 from odemis.gui.layout.util.fonts import set_font
 from odemis.gui.layout.util.sizers import hbox, vbox
+from odemis.gui.layout.util.widgets import create_chevron_button
 
 
 class PnlTabFastemMain(wx.Panel):
@@ -89,8 +90,9 @@ class PnlTabFastemMain(wx.Panel):
         with vbox() as sizer:
             sizer.AddSpacer(20)
 
-            self.btn_pnl_user_settings = self._chevron_button(
-                self.pnl_toolbar, "left"
+            self.btn_pnl_user_settings = create_chevron_button(
+                self.pnl_toolbar,
+                "left",
             )
             sizer.Add(self.btn_pnl_user_settings)
 
@@ -101,7 +103,7 @@ class PnlTabFastemMain(wx.Panel):
 
             sizer.AddStretchSpacer(8)
 
-            self.btn_log = self._chevron_button(self.pnl_toolbar, "up")
+            self.btn_log = create_chevron_button(self.pnl_toolbar, "up")
             self.btn_log.SetToolTip(strings.TOOLTIP_OPEN_LOG_PANEL)
             sizer.Add(self.btn_log)
 
@@ -200,8 +202,9 @@ class PnlTabFastemMain(wx.Panel):
 
             sizer.AddStretchSpacer()
 
-            self.btn_pnl_project_manager = self._chevron_button(
-                self.pnl_project_manager_header, "up"
+            self.btn_pnl_project_manager = create_chevron_button(
+                self.pnl_project_manager_header,
+                "up",
             )
             sizer.Add(self.btn_pnl_project_manager)
 
@@ -291,21 +294,6 @@ class PnlTabFastemMain(wx.Panel):
 
         self.pnl_tabbuttons.SetSizer(sizer)
         return self.pnl_tabbuttons
-
-    def _chevron_button(self, parent: wx.Window, direction: str) -> ImageButton:
-        """Create a small chevron toggle button.
-
-        :param parent: Parent window.
-        :param direction: Chevron direction, one of "left", "up".
-        :returns: Chevron button.
-        """
-        return ImageButton(
-            parent,
-            icon=img.getBitmap(f"icon/ico_chevron_{direction}.png"),
-            height=16,
-            face_colour="def",
-            style=wx.ALIGN_CENTRE,
-        )
 
     def _tab_button(self, parent: wx.Window, label: str) -> TabButton:
         """Create a SETUP/ACQUISITION sub-tab switching button.

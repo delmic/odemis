@@ -20,8 +20,6 @@ from typing import Any, Optional
 
 import wx
 
-from odemis.gui import img
-from odemis.gui.comp.buttons import ImageTextButton
 from odemis.gui.comp.foldpanelbar import FoldPanelBar, FoldPanelItem
 from odemis.gui.comp.slider import UnitIntegerSlider
 from odemis.gui.comp.stream_bar import StreamBar
@@ -30,6 +28,7 @@ from odemis.gui.comp.viewport import LiveViewport
 from odemis.gui.layout.constants.themes import DARK, Theme
 from odemis.gui.layout.util.fonts import set_font
 from odemis.gui.layout.util.sizers import hbox, vbox
+from odemis.gui.layout.util.widgets import create_label, create_text_button
 
 
 class OverviewAcqDialogBase(wx.Dialog):
@@ -161,8 +160,11 @@ class OverviewAcqDialogBase(wx.Dialog):
                 border=5,
             )
 
-            self.selected_grid_lbl = self._label(
-                scroll_window, "Selected grid areas", font_size=9
+            self.selected_grid_lbl = create_label(
+                scroll_window,
+                "Selected grid areas",
+                _LABEL_TEXT_COLOUR,
+                9,
             )
             scroll_sizer.Add(
                 self.selected_grid_lbl, flag=wx.LEFT, border=13
@@ -202,7 +204,12 @@ class OverviewAcqDialogBase(wx.Dialog):
         """
         grid = wx.GridBagSizer(vgap=10, hgap=50)
 
-        self.zstack_steps_label = self._label(parent, "ZStack steps", font_size=9)
+        self.zstack_steps_label = create_label(
+            parent,
+            "ZStack steps",
+            _LABEL_TEXT_COLOUR,
+            9,
+        )
         grid.Add(self.zstack_steps_label, pos=(0, 0), flag=wx.LEFT, border=13)
 
         self.zstack_steps = UnitIntegerSlider(
@@ -222,7 +229,12 @@ class OverviewAcqDialogBase(wx.Dialog):
             border=10,
         )
 
-        self.zstep_size_label = self._label(parent, "Zstep size", font_size=9)
+        self.zstep_size_label = create_label(
+            parent,
+            "Zstep size",
+            _LABEL_TEXT_COLOUR,
+            9,
+        )
         grid.Add(self.zstep_size_label, pos=(1, 0), flag=wx.LEFT, border=13)
 
         self.zstep_size_ctrl = self._float_ctrl(
@@ -249,7 +261,12 @@ class OverviewAcqDialogBase(wx.Dialog):
         """
         grid = wx.GridBagSizer(vgap=10, hgap=50)
 
-        tiles_number_x_lbl = self._label(parent, "Tiles number x", font_size=9)
+        tiles_number_x_lbl = create_label(
+            parent,
+            "Tiles number x",
+            _LABEL_TEXT_COLOUR,
+            9,
+        )
         grid.Add(tiles_number_x_lbl, pos=(0, 0), flag=wx.LEFT, border=13)
 
         self.tiles_number_x = self._integer_ctrl(parent, value=10, min_val=1, max_val=1000)
@@ -260,7 +277,12 @@ class OverviewAcqDialogBase(wx.Dialog):
             border=10,
         )
 
-        tiles_number_y_lbl = self._label(parent, "Tiles number y", font_size=9)
+        tiles_number_y_lbl = create_label(
+            parent,
+            "Tiles number y",
+            _LABEL_TEXT_COLOUR,
+            9,
+        )
         grid.Add(tiles_number_y_lbl, pos=(1, 0), flag=wx.LEFT, border=13)
 
         self.tiles_number_y = self._integer_ctrl(parent, value=10, min_val=1, max_val=1000)
@@ -281,7 +303,12 @@ class OverviewAcqDialogBase(wx.Dialog):
         """
         grid = wx.GridBagSizer(vgap=10, hgap=50)
 
-        area_size_lbl = self._label(parent, "Tiled area size", font_size=9)
+        area_size_lbl = create_label(
+            parent,
+            "Tiled area size",
+            _LABEL_TEXT_COLOUR,
+            9,
+        )
         grid.Add(area_size_lbl, pos=(0, 0), flag=wx.LEFT, border=13)
 
         self.area_size_txt = wx.StaticText(parent, label="...")
@@ -298,8 +325,11 @@ class OverviewAcqDialogBase(wx.Dialog):
         :returns: Focus-points distance row.
         """
         with hbox() as sizer:
-            self.focus_points_dist_lbl = self._label(
-                parent, "Distance between Focus Points", font_size=9
+            self.focus_points_dist_lbl = create_label(
+                parent,
+                "Distance between Focus Points",
+                _LABEL_TEXT_COLOUR,
+                9,
             )
             sizer.Add(
                 self.focus_points_dist_lbl, flag=wx.LEFT, border=self._theme.spacing_standard
@@ -364,10 +394,12 @@ class OverviewAcqDialogBase(wx.Dialog):
         panel.SetBackgroundColour(self._theme.panel_background)
 
         with hbox() as sizer:
-            self.btn_cancel = self._text_button(
+            self.btn_cancel = create_text_button(
                 panel,
                 "Close",
                 height=48,
+                text_colour=self._theme.button_text,
+                contrast_text_colour=self._theme.button_text_contrast,
                 font_size=self._theme.font_size_prominent_button,
             )
             sizer.Add(
@@ -377,10 +409,12 @@ class OverviewAcqDialogBase(wx.Dialog):
                 border=10,
             )
 
-            self.btn_secom_acquire = self._text_button(
+            self.btn_secom_acquire = create_text_button(
                 panel,
                 "ACQUIRE OVERVIEW",
                 height=48,
+                text_colour=self._theme.button_text,
+                contrast_text_colour=self._theme.button_text_contrast,
                 face_colour="blue",
                 icon="ico_acqui.png",
                 size=(242, 48),
@@ -420,20 +454,6 @@ class OverviewAcqDialogBase(wx.Dialog):
         stream_bar.SetForegroundColour(self._theme.text_muted)
         stream_bar.SetBackgroundColour(self._theme.background)
         return stream_bar
-
-    def _label(self, parent: wx.Window, text: str, font_size: Optional[int] = None) -> wx.StaticText:
-        """Create a label using this dialog's label text colour.
-
-        :param parent: Parent window.
-        :param text: Label text.
-        :param font_size: Optional font point size.
-        :returns: Styled static label.
-        """
-        label = wx.StaticText(parent, label=text)
-        label.SetForegroundColour(self._theme.field_foreground)
-        if font_size is not None:
-            set_font(label, font_size)
-        return label
 
     def _integer_ctrl(
         self,
@@ -499,50 +519,6 @@ class OverviewAcqDialogBase(wx.Dialog):
         if font_size is not None:
             set_font(control, font_size)
         return control
-
-    def _text_button(
-        self,
-        parent: wx.Window,
-        label: str,
-        height: int,
-        face_colour: str = "def",
-        icon: Optional[str] = None,
-        size: Any = wx.DefaultSize,
-        font_size: Optional[int] = None,
-        contrast: bool = False,
-    ) -> ImageTextButton:
-        """Create a styled text button.
-
-        :param parent: Parent window.
-        :param label: Button label.
-        :param height: Button face height.
-        :param face_colour: Named button face colour.
-        :param icon: Optional icon file name.
-        :param size: Explicit button size.
-        :param font_size: Optional font point size.
-        :param contrast: Use contrasting foreground text.
-        :returns: Styled text button.
-        """
-        if contrast and face_colour == "def":
-            raise ValueError(
-                "Contrasting text requires a non-default button face"
-            )
-
-        button = ImageTextButton(
-            parent,
-            label=label,
-            icon=img.getBitmap(f"icon/{icon}") if icon else wx.NullBitmap,
-            height=height,
-            face_colour=face_colour,
-            size=size,
-            style=wx.ALIGN_CENTRE,
-        )
-        button.SetForegroundColour(
-            self._theme.button_text_contrast if contrast else self._theme.button_text
-        )
-        if font_size is not None:
-            set_font(button, font_size)
-        return button
 
 
 if __name__ == "__main__":

@@ -19,9 +19,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from typing import Any, Optional
 
 import wx
-import wx.adv
 
-from odemis.gui import img
 from odemis.gui.comp.buttons import ImageTextButton
 from odemis.gui.comp.foldpanelbar import FoldPanelBar, FoldPanelItem
 from odemis.gui.comp.stream_bar import StreamBar
@@ -29,6 +27,7 @@ from odemis.gui.comp.viewport import LiveViewport
 from odemis.gui.layout.constants.themes import DARK, Theme
 from odemis.gui.layout.util.fonts import set_font
 from odemis.gui.layout.util.sizers import hbox, vbox
+from odemis.gui.layout.util.widgets import create_combo, create_text_button
 
 
 class SecomAcqDialogBase(wx.Dialog):
@@ -101,7 +100,13 @@ class SecomAcqDialogBase(wx.Dialog):
 
             lbl_presets = wx.StaticText(panel, label="Presets")
             grid.Add(lbl_presets)
-            self.cmb_presets = self._combo(panel, size=(-1, 16))
+            self.cmb_presets = create_combo(
+                panel,
+                (-1, 16),
+                readonly=True,
+                text_colour=self._theme.text_edit,
+                background_colour=self._theme.field_background,
+            )
             grid.Add(self.cmb_presets, flag=wx.EXPAND)
 
             lbl_filename = wx.StaticText(panel, label="Filename")
@@ -161,35 +166,6 @@ class SecomAcqDialogBase(wx.Dialog):
             sizer.Add(self.btn_change_file)
 
         return sizer
-
-    def _combo(
-        self,
-        parent: wx.Window,
-        size: Any,
-    ) -> wx.adv.OwnerDrawnComboBox:
-        """Create a themed read-only owner-drawn combobox.
-
-        :param parent: Parent panel.
-        :param size: Explicit combobox size.
-        :returns: Styled combobox.
-        """
-        combo = wx.adv.OwnerDrawnComboBox(
-            parent,
-            size=size,
-            style=(
-                wx.BORDER_NONE
-                | wx.CB_DROPDOWN
-                | wx.CB_READONLY
-                | wx.TE_PROCESS_ENTER
-            ),
-        )
-        combo.SetButtonBitmaps(
-            img.getBitmap("button/btn_down.png"),
-            pushButtonBg=False,
-        )
-        combo.SetForegroundColour(self._theme.text_edit)
-        combo.SetBackgroundColour(self._theme.field_background)
-        return combo
 
     def _build_scrolled_settings(self, parent: wx.Window) -> wx.ScrolledWindow:
         """Build the optical, SEM, and stream settings fold panels.
@@ -337,10 +313,12 @@ class SecomAcqDialogBase(wx.Dialog):
         panel.SetBackgroundColour(self._theme.panel_background)
 
         with hbox() as sizer:
-            self.btn_cancel = self._text_button(
+            self.btn_cancel = create_text_button(
                 panel,
                 label="Close",
                 height=48,
+                text_colour=self._theme.button_text,
+                contrast_text_colour=self._theme.button_text_contrast,
             )
             sizer.Add(
                 self.btn_cancel,
@@ -349,10 +327,12 @@ class SecomAcqDialogBase(wx.Dialog):
                 border=10,
             )
 
-            self.btn_secom_acquire = self._text_button(
+            self.btn_secom_acquire = create_text_button(
                 panel,
                 label="START",
                 height=48,
+                text_colour=self._theme.button_text,
+                contrast_text_colour=self._theme.button_text_contrast,
                 face_colour="blue",
                 icon="ico_acqui.png",
                 size=(242, 48),
@@ -367,49 +347,6 @@ class SecomAcqDialogBase(wx.Dialog):
 
         panel.SetSizer(sizer)
         return panel
-
-    def _text_button(
-        self,
-        parent: wx.Window,
-        label: str,
-        height: int,
-        face_colour: str = "def",
-        icon: Optional[str] = None,
-        size: Any = wx.DefaultSize,
-        contrast: bool = False,
-    ) -> ImageTextButton:
-        """Create a styled image text button.
-
-        :param parent: Parent window.
-        :param label: Button label.
-        :param height: Button face height.
-        :param face_colour: Named button face colour.
-        :param icon: Optional icon file name.
-        :param size: Explicit button size.
-        :param contrast: Use contrasting foreground text.
-        :returns: Image text button.
-        """
-        if contrast and face_colour == "def":
-            raise ValueError(
-                "Contrasting text requires a non-default button face"
-            )
-
-        button = ImageTextButton(
-            parent,
-            label=label,
-            icon=img.getBitmap(f"icon/{icon}") if icon else wx.NullBitmap,
-            height=height,
-            face_colour=face_colour,
-            size=size,
-            style=wx.ALIGN_CENTRE,
-        )
-        button.SetForegroundColour(
-            self._theme.button_text_contrast
-            if contrast
-            else self._theme.button_text
-        )
-        return button
-
 
 if __name__ == "__main__":
     from odemis.gui.layout.util.preview import run_preview

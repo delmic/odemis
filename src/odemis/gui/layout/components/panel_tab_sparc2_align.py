@@ -16,7 +16,7 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
-from typing import Any, Optional, Tuple
+from typing import Optional, Tuple
 
 import wx
 import wx.adv
@@ -44,6 +44,7 @@ from odemis.gui.layout.constants import strings
 from odemis.gui.layout.constants.themes import DARK, Theme
 from odemis.gui.layout.util.fonts import set_font
 from odemis.gui.layout.util.sizers import hbox, vbox
+from odemis.gui.layout.util.widgets import create_text_button
 
 # (attribute name, label, icon file name, active icon file name, cellpos column)
 _MODE_BUTTONS: Tuple[Tuple[str, str, str, str, int], ...] = (
@@ -252,7 +253,12 @@ class PnlTabSparc2Align(wx.Panel):
 
             grid = wx.GridBagSizer(vgap=5, hgap=5)
 
-            autofocus_btn = self._text_button(panel, "Auto focus", height=24)
+            autofocus_btn = create_text_button(
+                panel,
+                "Auto focus",
+                height=24,
+                text_colour=self._theme.button_text,
+            )
             autofocus_btn.SetToolTip(
                 "Attempts to auto focus the spectrometer with all its "
                 "gratings and detectors."
@@ -349,8 +355,11 @@ class PnlTabSparc2Align(wx.Panel):
 
             grid = wx.GridBagSizer(vgap=5, hgap=5)
 
-            self.btn_auto_grating_center = self._text_button(
-                panel, "Auto calib", height=24
+            self.btn_auto_grating_center = create_text_button(
+                panel,
+                "Auto calib",
+                height=24,
+                text_colour=self._theme.button_text,
             )
             self.btn_auto_grating_center.SetToolTip(
                 "Auto-calibrate grating offset by centering the zero-th "
@@ -512,7 +521,12 @@ class PnlTabSparc2Align(wx.Panel):
 
             grid = wx.GridBagSizer(vgap=5, hgap=5)
 
-            self.btn_auto_align = self._text_button(panel, "Auto align", height=24)
+            self.btn_auto_align = create_text_button(
+                panel,
+                "Auto align",
+                height=24,
+                text_colour=self._theme.button_text,
+            )
             self.btn_auto_align.Hide()
             grid.Add(self.btn_auto_align, pos=(0, 0), flag=wx.LEFT, border=5)
 
@@ -744,8 +758,11 @@ class PnlTabSparc2Align(wx.Panel):
                     border=5,
                 )
 
-                self.btn_open_streak_calib_file = self._text_button(
-                    panel, "Load...", height=16
+                self.btn_open_streak_calib_file = create_text_button(
+                    panel,
+                    "Load...",
+                    height=16,
+                    text_colour=self._theme.button_text,
                 )
                 self.btn_open_streak_calib_file.SetToolTip(
                     "Open a trigger calibration file."
@@ -756,8 +773,11 @@ class PnlTabSparc2Align(wx.Panel):
                     border=5,
                 )
 
-                self.btn_save_streak_calib_file = self._text_button(
-                    panel, "Save...", height=16
+                self.btn_save_streak_calib_file = create_text_button(
+                    panel,
+                    "Save...",
+                    height=16,
+                    text_colour=self._theme.button_text,
                 )
                 self.btn_save_streak_calib_file.SetToolTip(
                     "Save the trigger calibration to a file."
@@ -808,8 +828,11 @@ class PnlTabSparc2Align(wx.Panel):
             )
 
             with hbox() as action_sizer:
-                self.btn_spec_switch_retract = self._text_button(
-                    panel, "Retract", height=24
+                self.btn_spec_switch_retract = create_text_button(
+                    panel,
+                    "Retract",
+                    height=24,
+                    text_colour=self._theme.button_text,
                 )
                 self.btn_spec_switch_retract.SetToolTip(
                     "Moves the selector mirror away, so that the light "
@@ -819,8 +842,11 @@ class PnlTabSparc2Align(wx.Panel):
                     self.btn_spec_switch_retract, flag=wx.LEFT, border=5
                 )
 
-                self.btn_spec_switch_engage = self._text_button(
-                    panel, "Engage", height=24
+                self.btn_spec_switch_engage = create_text_button(
+                    panel,
+                    "Engage",
+                    height=24,
+                    text_colour=self._theme.button_text,
                 )
                 self.btn_spec_switch_engage.SetToolTip(
                     "Moves the selector mirror so that the light goes "
@@ -896,8 +922,11 @@ class PnlTabSparc2Align(wx.Panel):
         self.pnl_fib_focus = self._section_panel(parent)
 
         with hbox() as sizer:
-            self.btn_fib_autofocus = self._text_button(
-                self.pnl_fib_focus, "Auto focus", height=24
+            self.btn_fib_autofocus = create_text_button(
+                self.pnl_fib_focus,
+                "Auto focus",
+                height=24,
+                text_colour=self._theme.button_text,
             )
             self.btn_fib_autofocus.SetToolTip(
                 "Attempts to auto focus the spectrometer, which is "
@@ -1138,8 +1167,11 @@ class PnlTabSparc2Align(wx.Panel):
         panel.Hide()
 
         with vbox() as sizer:
-            self.btn_bkg_acquire = self._text_button(
-                panel, "Acquire background", height=24
+            self.btn_bkg_acquire = create_text_button(
+                panel,
+                "Acquire background",
+                height=24,
+                text_colour=self._theme.button_text,
             )
             sizer.Add(
                 self.btn_bkg_acquire,
@@ -1332,32 +1364,6 @@ class PnlTabSparc2Align(wx.Panel):
         set_font(button, self._theme.font_size_directional_button, wx.FONTWEIGHT_BOLD)
         if attribute is not None:
             setattr(self, attribute, button)
-        return button
-
-    def _text_button(
-        self,
-        parent: wx.Window,
-        label: str,
-        height: int,
-        size: Any = wx.DefaultSize,
-    ) -> ImageTextButton:
-        """Create a default-face text button.
-
-        :param parent: Parent window.
-        :param label: Button label.
-        :param height: Button face height.
-        :param size: Explicit button size.
-        :returns: Text button.
-        """
-        button = ImageTextButton(
-            parent,
-            label=label,
-            height=height,
-            face_colour="def",
-            size=size,
-            style=wx.ALIGN_CENTRE,
-        )
-        button.SetForegroundColour(self._theme.button_text)
         return button
 
     def _fold_item(self, fold_bar: FoldPanelBar, label: str) -> FoldPanelItem:

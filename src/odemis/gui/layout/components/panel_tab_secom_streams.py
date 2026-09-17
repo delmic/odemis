@@ -23,7 +23,6 @@ import wx
 from odemis.gui import img
 from odemis.gui.comp.buttons import (
     ImageButton,
-    ImageTextButton,
     ImageTextToggleButton,
     ViewButton,
 )
@@ -40,6 +39,7 @@ from odemis.gui.layout.constants import strings
 from odemis.gui.layout.constants.themes import DARK, Theme
 from odemis.gui.layout.util.fonts import set_font
 from odemis.gui.layout.util.sizers import hbox, vbox
+from odemis.gui.layout.util.widgets import create_text_button
 
 
 class PnlTabSecomStreams(wx.Panel):
@@ -493,12 +493,14 @@ class PnlTabSecomStreams(wx.Panel):
         panel.SetBackgroundColour(self._theme.field_background)
 
         with vbox() as sizer:
-            self.btn_secom_acquire = self._text_button(
+            self.btn_secom_acquire = create_text_button(
                 panel,
-                label="ACQUIRE IMAGE",
-                icon="ico_acqui.png",
+                "ACQUIRE IMAGE",
                 height=48,
+                text_colour=self._theme.button_text,
+                contrast_text_colour=self._theme.button_text_contrast,
                 face_colour="blue",
+                icon="ico_acqui.png",
                 size=(382, -1),
                 style=wx.ALIGN_CENTRE,
                 contrast=True,
@@ -555,50 +557,6 @@ class PnlTabSecomStreams(wx.Panel):
         )
         button.SetForegroundColour(self._theme.button_text)
         set_font(button, self._theme.font_size_button)
-        return button
-
-    def _text_button(
-        self,
-        parent: wx.Window,
-        label: str,
-        height: int,
-        face_colour: str = "def",
-        icon: Optional[str] = None,
-        size: Any = wx.DefaultSize,
-        style: int = 0,
-        contrast: bool = False,
-    ) -> ImageTextButton:
-        """Create a styled image text button.
-
-        :param parent: Parent window.
-        :param label: Button label.
-        :param height: Button face height.
-        :param face_colour: Named button face colour.
-        :param icon: Optional icon file name.
-        :param size: Explicit button size.
-        :param style: wx window style.
-        :param contrast: Use contrasting foreground text.
-        :returns: Image text button.
-        """
-        if contrast and face_colour == "def":
-            raise ValueError(
-                "Contrasting text requires a non-default button face"
-            )
-
-        button = ImageTextButton(
-            parent,
-            label=label,
-            icon=img.getBitmap(f"icon/{icon}") if icon else wx.NullBitmap,
-            height=height,
-            face_colour=face_colour,
-            size=size,
-            style=style,
-        )
-        button.SetForegroundColour(
-            self._theme.button_text_contrast
-            if contrast
-            else self._theme.button_text
-        )
         return button
 
     def _stream_bar(

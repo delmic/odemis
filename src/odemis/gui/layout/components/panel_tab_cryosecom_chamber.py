@@ -17,14 +17,10 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
 import wx
-from typing import Any, Optional
 
 from odemis.gui import img
 from odemis.gui.comp.buttons import (
-    ImageButton,
-    ImageTextButton,
     ImageTextToggleButton,
-    ProgressRadioButton,
 )
 from odemis.gui.comp.slider import UnitFloatSlider
 from odemis.gui.comp.text import UnitFloatCtrl
@@ -33,6 +29,12 @@ from odemis.gui.layout.constants import strings
 from odemis.gui.layout.constants.themes import DARK, Theme
 from odemis.gui.layout.util.fonts import set_font
 from odemis.gui.layout.util.sizers import hbox, vbox
+from odemis.gui.layout.util.widgets import (
+    create_chevron_button,
+    create_label,
+    create_progress_button,
+    create_text_button,
+)
 
 
 class PnlTabCryosecomChamber(wx.Panel):
@@ -94,14 +96,9 @@ class PnlTabCryosecomChamber(wx.Panel):
             )
             sizer.AddStretchSpacer()
 
-            self.btn_log = ImageButton(
-                panel,
-                icon=img.getBitmap("icon/ico_chevron_up.png"),
-                height=16,
-                face_colour="def",
-                style=wx.ALIGN_CENTRE,
+            self.btn_log = create_chevron_button(
+                panel, "up", tooltip=strings.TOOLTIP_OPEN_LOG_PANEL
             )
-            self.btn_log.SetToolTip(strings.TOOLTIP_OPEN_LOG_PANEL)
             sizer.Add(self.btn_log)
 
         panel.SetSizer(sizer)
@@ -128,11 +125,11 @@ class PnlTabCryosecomChamber(wx.Panel):
         panel = self._section_panel(parent)
         grid = wx.GridBagSizer(vgap=0, hgap=50)
 
-        title = self._label(
+        title = create_label(
             panel,
             "Project",
-            self._theme.font_size_section_heading,
             self._theme.text_primary,
+            self._theme.font_size_section_heading,
         )
         grid.Add(
             title,
@@ -158,10 +155,11 @@ class PnlTabCryosecomChamber(wx.Panel):
             border=self._theme.spacing_standard,
         )
 
-        self.btn_change_folder = self._text_button(
+        self.btn_change_folder = create_text_button(
             panel,
-            "New Project",
+            label="New Project",
             height=24,
+            text_colour=self._theme.button_text,
             face_colour="blue",
             font_size=self._theme.font_size_prominent_button,
         )
@@ -172,10 +170,11 @@ class PnlTabCryosecomChamber(wx.Panel):
             border=self._theme.spacing_standard,
         )
 
-        self.btn_load_project = self._text_button(
+        self.btn_load_project = create_text_button(
             panel,
-            "Load Project",
+            label="Load Project",
             height=24,
+            text_colour=self._theme.button_text,
             face_colour="blue",
             font_size=self._theme.font_size_prominent_button,
         )
@@ -198,11 +197,11 @@ class PnlTabCryosecomChamber(wx.Panel):
         panel = self._section_panel(parent)
 
         with vbox() as sizer:
-            title = self._label(
+            title = create_label(
                 panel,
                 "Position",
-                self._theme.font_size_section_heading,
                 self._theme.text_primary,
+                self._theme.font_size_section_heading,
             )
             sizer.Add(title, flag=wx.ALL | wx.BOTTOM, border=self._theme.spacing_standard)
 
@@ -279,7 +278,16 @@ class PnlTabCryosecomChamber(wx.Panel):
             ("btn_switch_grid2", "GRID 2", "ico_meteorgrid", (3, 1)),
         )
         for attribute, label, icon_name, position in specs:
-            button = self._progress_button(parent, label, icon_name)
+            button = create_progress_button(
+                parent,
+                label,
+                f"{icon_name}.png",
+                f"{icon_name}_orange.png",
+                f"{icon_name}_green.png",
+                text_colour=self._theme.button_text,
+                font_size=self._theme.font_size_button,
+            )
+            button.Hide()
             setattr(self, attribute, button)
             grid.Add(
                 button,
@@ -303,8 +311,18 @@ class PnlTabCryosecomChamber(wx.Panel):
             ("COATING", "ico_coating", (1, 1)),
         )
         for label, icon_name, position in specs:
+            button = create_progress_button(
+                parent,
+                label,
+                f"{icon_name}.png",
+                f"{icon_name}_orange.png",
+                f"{icon_name}_green.png",
+                text_colour=self._theme.button_text,
+                font_size=self._theme.font_size_button,
+            )
+            button.Hide()
             grid.Add(
-                self._progress_button(parent, label, icon_name),
+                button,
                 pos=position,
                 flag=wx.ALL | wx.EXPAND,
                 border=self._theme.spacing_standard,
@@ -325,13 +343,19 @@ class PnlTabCryosecomChamber(wx.Panel):
             ("COATING", "ico_coating", (1, 1)),
         )
         for label, icon_name, position in specs:
+            button = create_progress_button(
+                parent,
+                label,
+                f"{icon_name}.png",
+                f"{icon_name}_orange.png",
+                f"{icon_name}_green.png",
+                text_colour=self._theme.button_text,
+                font_size=self._theme.font_size_button,
+            )
+            button.SetInitialSize((140, -1))
+            button.Hide()
             grid.Add(
-                self._progress_button(
-                    parent,
-                    label,
-                    icon_name,
-                    size=(140, -1),
-                ),
+                button,
                 pos=position,
                 flag=wx.ALL | wx.EXPAND,
                 border=self._theme.spacing_standard,
@@ -359,10 +383,11 @@ class PnlTabCryosecomChamber(wx.Panel):
                 border=self._theme.spacing_standard,
             )
 
-            self.btn_cancel = self._text_button(
+            self.btn_cancel = create_text_button(
                 parent,
-                "Cancel",
+                label="Cancel",
                 height=24,
+                text_colour=self._theme.button_text,
                 face_colour="def",
                 style=wx.ALIGN_CENTRE,
             )
@@ -400,11 +425,11 @@ class PnlTabCryosecomChamber(wx.Panel):
         """
         panel = self._section_panel(parent)
         with vbox() as sizer:
-            title = self._label(
+            title = create_label(
                 panel,
                 "Stage",
-                self._theme.font_size_section_heading,
                 self._theme.text_primary,
+                self._theme.font_size_section_heading,
             )
             sizer.Add(title, flag=wx.ALL | wx.BOTTOM, border=5)
             sizer.Add(self._build_rx_row(panel), flag=wx.ALIGN_CENTRE)
@@ -415,11 +440,16 @@ class PnlTabCryosecomChamber(wx.Panel):
             )
             sizer.Add(self._build_axis_grid(panel), flag=wx.ALIGN_CENTRE)
 
-            self.btn_switch_align = self._progress_button(
+            self.btn_switch_align = create_progress_button(
                 panel,
                 "FACTORY ALIGNMENT",
-                "ico_lens",
+                "ico_lens.png",
+                "ico_lens_orange.png",
+                "ico_lens_green.png",
+                text_colour=self._theme.button_text,
+                font_size=self._theme.font_size_button,
             )
+            self.btn_switch_align.Hide()
             sizer.Add(self.btn_switch_align, flag=wx.ALIGN_CENTRE)
 
         panel.SetSizer(sizer)
@@ -432,11 +462,11 @@ class PnlTabCryosecomChamber(wx.Panel):
         :returns: Milling angle row.
         """
         with hbox() as sizer:
-            label = self._label(
+            label = create_label(
                 parent,
                 "RX Angle",
-                self._theme.font_size_body,
                 self._theme.text_secondary,
+                self._theme.font_size_body,
             )
             sizer.Add(label, flag=wx.TOP | wx.LEFT, border=25)
 
@@ -466,9 +496,10 @@ class PnlTabCryosecomChamber(wx.Panel):
         :returns: Step-size row.
         """
         with hbox() as sizer:
-            label = self._label(
+            label = create_label(
                 parent,
                 "Step size",
+                self._theme.text_primary,
                 self._theme.font_size_body,
             )
             sizer.Add(label, flag=wx.RIGHT, border=5)
@@ -509,11 +540,11 @@ class PnlTabCryosecomChamber(wx.Panel):
             ("-Z", (4, 5), wx.TOP | wx.BOTTOM | wx.ALIGN_CENTRE, 5),
         )
         for text, position, flag, border in label_specs:
-            label = self._label(
+            label = create_label(
                 parent,
                 text,
-                self._theme.font_size_axis_label,
                 self._theme.text_primary,
+                self._theme.font_size_axis_label,
                 wx.FONTWEIGHT_BOLD,
             )
             grid.Add(label, pos=position, flag=flag, border=border)
@@ -527,10 +558,11 @@ class PnlTabCryosecomChamber(wx.Panel):
             ("stage_align_btn_m_aligner_z", "↓", (3, 5), wx.LEFT | wx.RIGHT, 7),
         )
         for attribute, text, position, flag, border in button_specs:
-            button = self._text_button(
+            button = create_text_button(
                 parent,
-                text,
+                label=text,
                 height=48,
+                text_colour=self._theme.button_text,
                 face_colour="def",
                 font_size=self._theme.font_size_directional_button,
                 font_weight=wx.FONTWEIGHT_BOLD,
@@ -550,20 +582,20 @@ class PnlTabCryosecomChamber(wx.Panel):
         """
         panel = self._section_panel(parent)
         with vbox() as sizer:
-            title = self._label(
+            title = create_label(
                 panel,
                 "Temperature",
-                self._theme.font_size_section_heading,
                 self._theme.text_primary,
+                self._theme.font_size_section_heading,
             )
             sizer.Add(title, flag=wx.ALL | wx.BOTTOM, border=5)
 
             with hbox() as heater_sizer:
-                label = self._label(
+                label = create_label(
                     panel,
                     "Sample heater",
-                    self._theme.font_size_body,
                     self._theme.text_secondary,
+                    self._theme.font_size_body,
                 )
                 heater_sizer.Add(
                     label,
@@ -582,11 +614,11 @@ class PnlTabCryosecomChamber(wx.Panel):
             sizer.Add(heater_sizer)
 
             with hbox() as target_sizer:
-                label = self._label(
+                label = create_label(
                     panel,
                     "Target temperature",
-                    self._theme.font_size_body,
                     self._theme.text_secondary,
+                    self._theme.font_size_body,
                 )
                 target_sizer.Add(
                     label,
@@ -628,96 +660,6 @@ class PnlTabCryosecomChamber(wx.Panel):
         panel.SetForegroundColour(self._theme.text_primary)
         panel.SetBackgroundColour(self._theme.panel_background)
         return panel
-
-    def _label(
-        self,
-        parent: wx.Window,
-        text: str,
-        font_size: int,
-        colour: Optional[str] = None,
-        font_weight: int = wx.FONTWEIGHT_NORMAL,
-    ) -> wx.StaticText:
-        """Create a styled static text control.
-
-        :param parent: Parent window.
-        :param text: Label text.
-        :param font_size: Font point size.
-        :param colour: Optional foreground colour.
-        :param font_weight: wx font weight.
-        :returns: Styled label.
-        """
-        label = wx.StaticText(parent, label=text)
-        label.SetForegroundColour(colour or self._theme.text_primary)
-        set_font(label, font_size, font_weight)
-        return label
-
-    def _text_button(
-        self,
-        parent: wx.Window,
-        label: str,
-        height: int,
-        face_colour: str,
-        font_size: Optional[int] = None,
-        font_weight: int = wx.FONTWEIGHT_NORMAL,
-        size: Any = wx.DefaultSize,
-        style: int = 0,
-    ) -> ImageTextButton:
-        """Create a styled text button.
-
-        :param parent: Parent window.
-        :param label: Button label.
-        :param height: Button face height.
-        :param face_colour: Named button face colour.
-        :param font_size: Optional font point size.
-        :param font_weight: wx font weight.
-        :param size: Explicit button size.
-        :param style: wx window style.
-        :returns: Styled text button.
-        """
-        button = ImageTextButton(
-            parent,
-            label=label,
-            height=height,
-            face_colour=face_colour,
-            size=size,
-            style=style,
-        )
-        button.SetForegroundColour(self._theme.button_text)
-        if font_size is not None:
-            set_font(button, font_size, font_weight)
-        return button
-
-    def _progress_button(
-        self,
-        parent: wx.Window,
-        label: str,
-        icon_name: str,
-        size: Any = wx.DefaultSize,
-    ) -> ProgressRadioButton:
-        """Create an initially hidden three-state posture button.
-
-        :param parent: Parent window.
-        :param label: Button label.
-        :param icon_name: Base icon file name without suffix or extension.
-        :param size: Explicit button size.
-        :returns: Hidden posture button.
-        """
-        button = ProgressRadioButton(
-            parent,
-            icon=img.getBitmap(f"icon/{icon_name}.png"),
-            icon_progress=img.getBitmap(f"icon/{icon_name}_orange.png"),
-            icon_on=img.getBitmap(f"icon/{icon_name}_green.png"),
-            height=48,
-            face_colour="def",
-            label=label,
-            size=size,
-            style=wx.ALIGN_CENTRE,
-        )
-        button.SetForegroundColour(self._theme.button_text)
-        set_font(button, self._theme.font_size_button)
-        button.Hide()
-        return button
-
 
 if __name__ == "__main__":
     from odemis.gui.layout.util.preview import run_preview
