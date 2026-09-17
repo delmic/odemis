@@ -37,6 +37,7 @@ from odemis.gui.cont.tabs.fastem_acquisition_tab import FastEMAcquisitionTab
 from odemis.gui.cont.tabs.fastem_setup_tab import FastEMSetupTab
 from odemis.gui.cont.tabs.tab import Tab
 from odemis.gui.cont.tabs.tab_bar_controller import TabController
+from odemis.gui.layout import PnlTabFastemAcqui
 from odemis.gui.model import (
     TOOL_ACT_ZOOM_FIT,
     TOOL_CURSOR,
@@ -151,7 +152,7 @@ class FastEMMainTab(Tab):
             tab_data,
         )
 
-        acquisition_panel = main_xrc.xrcpnl_tab_fastem_acqui(panel.pnl_tabs)
+        acquisition_panel = PnlTabFastemAcqui(panel.pnl_tabs)
         self.acquisition_tab = FastEMAcquisitionTab(
             "fastem_acq",
             panel.btn_tab_acqui,
