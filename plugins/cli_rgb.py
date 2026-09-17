@@ -47,10 +47,7 @@ import os.path
 import time
 import wx
 
-try:
-    import configparser
-except ImportError:  # Python 2
-    import ConfigParser as configparser
+import configparser
 
 CONF_FILE = os.path.join(get_home_folder(), ".config", "odemis", "cli_rgb.ini")
 
@@ -137,7 +134,7 @@ class RGBCLIntensity(Plugin):
         In the worst case, it will not update the filter values.
         """
         try:
-            config = configparser.SafeConfigParser()  # Note: in Python 3, this is now also just called "ConfigParser"
+            config = configparser.ConfigParser()
             config.read(CONF_FILE)  # Returns empty config if no file
             for fname, va in zip(("blue", "green", "red"), self._filters):
                 fval = config.getfloat("filters", fname)
@@ -155,7 +152,7 @@ class RGBCLIntensity(Plugin):
         Store the filter values into the config file
         """
         try:
-            config = configparser.SafeConfigParser()
+            config = configparser.ConfigParser()
             config.add_section("filters")
             config.set("filters", "blue", "%f" % self.filter1.value)
             config.set("filters", "green", "%f" % self.filter2.value)
