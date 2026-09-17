@@ -948,7 +948,7 @@ class TestSpectrumLineExport(unittest.TestCase):
 
 class TestSpatialExport(test.GuiTestCase):
 
-    frame_class = test.test_gui.xrccanvas_frame
+    frame_class = test.test_gui.CanvasTestFrame
 
     @classmethod
     def tearDownClass(cls):

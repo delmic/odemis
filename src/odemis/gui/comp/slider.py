@@ -200,7 +200,6 @@ class Slider(BaseSlider):
         :param style:  use wx.Panel styles
         :param name:   Window name.
         :param scale:  'linear' (default), 'cubic' or 'log'
-            *Note*: Make sure to add any new option to the Slider ParamScale in xmlh.delmic!
         :param ignored: This is a way to catch all the extra keyword arguments that might be passed
             using a conf dict, but not have them cause exceptions (unexpected keyword argument)
 

@@ -631,22 +631,6 @@ different files. Also, as the GUI relies on the wxPython and cairo libraries to
 display widgets, it is also recommended to have a basic knowledge of these
 libraries.
 
-When you modify GUI layout files (``.xrc``), regenerate the corresponding
-Python resource module. To rebuild ``main_xrc.py`` from all ``.xrc`` files
-under ``src/odemis/gui/xmlh/resources``, run::
-
-    ./src/odemis/gui/xmlh/generate_xrc.py
-
-To generate a specific ``.py`` from a ``.xrc`` use the following command::
-
-    ./src/odemis/gui/xmlh/generate_xrc.py [path_to_xrc_file]
-
-Note that on Ubuntu 18.04 this call does not work with python3, therefore you
-will need to explicitly call this with python2::
-
-    python2 ./src/odemis/gui/xmlh/generate_xrc.py
-
-
 If you add/modify an image (used as a GUI element, not a microscope acquisition),
 it should be done in ``src/odemis/gui/img``. After the modifications, you should
 make sure the images are optimised, with the following script::

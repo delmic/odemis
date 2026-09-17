@@ -25,13 +25,12 @@ import argparse
 import logging
 from odemis import model, gui
 import odemis
-from odemis.gui import main_xrc, log, img, plugin, layout
+from odemis.gui import log, img, plugin, layout
 from odemis.gui.win.thoughts import show_important_thought_dialog
 from odemis.gui.cont import acquisition
 from odemis.gui.cont.menu import MenuController
 from odemis.gui.cont.temperature import TemperatureController
 from odemis.gui.util import call_in_wx_main
-from odemis.gui.xmlh import odemis_get_resources
 from odemis.util.datacollector import DataCollector
 import sys
 import threading
@@ -56,10 +55,6 @@ class OdemisGUIApp(wx.App):
             file_name: (str) Path to the file to open on launch
 
         """
-        # Replace the standard 'get_resources' with our augmented one, that
-        # can handle more control types. See the xhandler package for more info.
-        main_xrc.get_resources = odemis_get_resources
-
         # Declare attributes BEFORE calling the super class constructor
         # because it will call 'OnInit' which uses them.
 

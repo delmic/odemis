@@ -35,7 +35,7 @@ BTN_WIDTHS = (-1, 32, 64, 128)
 
 class ButtonsTestCase(test.GuiTestCase):
 
-    frame_class = test.test_gui.xrcbutton_frame
+    frame_class = test.test_gui.ButtonTestFrame
 
     @classmethod
     def setUpClass(cls):

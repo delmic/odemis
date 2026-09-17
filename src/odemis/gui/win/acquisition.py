@@ -51,7 +51,6 @@ from odemis.gui.cont.multi_point_correlation import CorrelationPointsController
 from odemis.gui.cont.settings import LocalizationSettingsController, SecomSettingsController
 from odemis.gui.cont.stream_bar import StreamBarController
 from odemis.gui.layout.components import OverviewAcqDialogBase, SecomAcqDialogBase, TDCorrelationDialogBase
-from odemis.gui.main_xrc import xrcfr_overview_acq
 from odemis.gui.model import TOOL_NONE, AcquisitionWindowData, StreamView, TOOL_ACT_ZOOM_FIT
 from odemis.gui.preset import (apply_preset, get_global_settings_entries,
                                get_local_settings_entries, preset_as_is,
@@ -722,10 +721,6 @@ class OverviewAcquisitionDialog(OverviewAcqDialogBase):
 
             self.whole_grid_chkbox.Value = True
 
-            # GridSelectionPanel doesn't have xmlh helper, and in addition a refactoring
-            # would be needed to allow changing the grid layout after init. So
-            # for now we use a placeholder panel, and insert the GridSelectionPanel
-            # here at runtime.
             layout = sample_positions_to_layout(self._main_data_model.sample_centers)
             subsizer = wx.BoxSizer(wx.VERTICAL)
             self.selected_grid_pnl_holder.SetSizer(subsizer)

@@ -57,7 +57,7 @@ def get_image_from_buffer(canvas):
 
 
 class TestDblMicroscopeCanvas(test.GuiTestCase):
-    frame_class = test.test_gui.xrccanvas_frame
+    frame_class = test.test_gui.CanvasTestFrame
 
     def setUp(self):
         test.gui_loop()

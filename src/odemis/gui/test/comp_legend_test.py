@@ -38,7 +38,7 @@ BAD_RANGES = [(0, 0), (65535, 65535)]
 
 class LegendTestCase(test.GuiTestCase):
 
-    frame_class = test.test_gui.xrccanvas_frame
+    frame_class = test.test_gui.CanvasTestFrame
 
     def test_legend(self):
         test.goto_manual()

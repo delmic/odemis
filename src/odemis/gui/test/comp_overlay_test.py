@@ -86,7 +86,7 @@ CONFIG_SEM = {"name": "sem_int",
 
 class OverlayTestCase(test.GuiTestCase):
 
-    frame_class = test.test_gui.xrccanvas_frame
+    frame_class = test.test_gui.CanvasTestFrame
 
     def setUp(self) -> None:
         # Ignore RuntimeWarning: numpy.ndarray size changed, may indicate binary incompatibility.

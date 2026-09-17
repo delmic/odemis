@@ -58,7 +58,7 @@ class TemperatureController(object):
 
     def __init__(self, main_frame, thermostat, max_duration=5):
         '''
-        main_frame: (wx) main xrc frame of the GUI
+        main_frame: (wx) main frame of the GUI
         thermostat: (HwComponent) a component with the VA "temperature"
         max_duration: (float) in seconds, the maximum duration
         '''

@@ -843,7 +843,7 @@ class Sparc2AlignTab(Tab):
             self._support_mirror_auto_align = ("auto_align_min_step_size" in calib and "ebeam_working_distance" in calib)
 
         if self._support_mirror_auto_align:
-            # hidden by default in xrc file
+            # hidden by default
             self.panel.lbl_step_size_z.Show(True)
             self.panel.slider_stage.Show(True)
             self.panel.lbl_pz.Show(True)
@@ -2711,7 +2711,7 @@ class Sparc2AlignTab(Tab):
 class FocusPanelContainer:
     """
     This is a workaround Class, usually this adds a combo box to the focus panel.
-    It must be named so, to look like a StreamPanel. No components are created, this is already defined in the xrc file.
+    It must be named so, to look like a StreamPanel. No components are created, this is already defined in the python file.
     """
     def __init__(self, pnl_focus_lbl, pnl_focus_cmb):
         self.pnl_focus_gratings_lbl = pnl_focus_lbl

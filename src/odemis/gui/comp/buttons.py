@@ -21,13 +21,6 @@
 
 """
 
-# This module contains various custom button classes used throughout the odemis
-# project.
-#
-# All these classes are supported within XRCED as long as the xmlh/delmic.py
-# and xmlh/xh_delmic.py modules are available (e.g. through a symbolic link)
-# in XRCED's plugin directory.
-
 import logging
 import math
 from typing import Any, List, Tuple, Dict, Callable, Optional

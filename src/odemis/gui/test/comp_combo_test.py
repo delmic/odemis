@@ -32,7 +32,7 @@ test.goto_manual()
 
 class ComboTestCase(test.GuiTestCase):
 
-    frame_class = test.test_gui.xrcbutton_frame
+    frame_class = test.test_gui.ButtonTestFrame
 
     @classmethod
     def setUpClass(cls):

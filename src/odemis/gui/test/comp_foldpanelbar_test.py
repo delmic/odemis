@@ -38,7 +38,7 @@ FPB_SPACING = 0
 
 class FoldPanelBarTestCase(test.GuiTestCase):
 
-    frame_class = test.test_gui.xrcfpb_frame
+    frame_class = test.test_gui.FoldPanelBarFrame
 
     @classmethod
     def setUpClass(cls):

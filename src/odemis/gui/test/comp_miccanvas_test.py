@@ -169,7 +169,7 @@ def gen_test_data():
 
 class PlotCanvasTestCase(test.GuiTestCase):
 
-    frame_class = test.test_gui.xrccanvas_frame
+    frame_class = test.test_gui.CanvasTestFrame
 
     def _generate_sine_list(self, period, amp=1):
 

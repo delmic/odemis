@@ -23,10 +23,6 @@
 
 # This module contains various custom spinner classes used throughout the odemis
 # project.
-#
-# All these classes are supported within XRCED as long as the xmlh/delmic.py
-# and xmlh/xh_delmic.py modules are available (e.g. through a symbolic link)
-# in XRCED's plugin directory.
 
 import wx
 

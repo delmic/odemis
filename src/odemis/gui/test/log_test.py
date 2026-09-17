@@ -37,7 +37,7 @@ LOG_FUNCTIONS = (logging.debug, logging.info, logging.warning, logging.error, lo
 
 
 class TestLogWindow(test.GuiTestCase):
-    frame_class = test.test_gui.xrclog_frame
+    frame_class = test.test_gui.LogFrame
     frame_size = (800, 200)
 
     def test_log_window(self):

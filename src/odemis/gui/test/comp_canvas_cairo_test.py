@@ -46,7 +46,7 @@ logging.getLogger().setLevel(logging.ERROR)
 
 class TestCanvas(test.GuiTestCase):
 
-    frame_class = test.test_gui.xrccanvas_frame
+    frame_class = test.test_gui.CanvasTestFrame
 
     def setUp(self):
         test.gui_loop()

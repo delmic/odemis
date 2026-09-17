@@ -33,7 +33,7 @@ test.goto_manual()
 
 class GridPanelTestCase(test.GuiTestCase):
 
-    frame_class = test.test_gui.xrcgrid_frame
+    frame_class = test.test_gui.ViewportGridFrame
     # test.set_log_level(logging.DEBUG)
 
     @classmethod
