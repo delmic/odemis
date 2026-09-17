@@ -20,6 +20,7 @@ from typing import Any, Optional
 
 import wx
 
+import odemis.gui.layout as layout
 from odemis.gui.comp.foldpanelbar import FoldPanelBar, FoldPanelItem
 from odemis.gui.comp.slider import UnitIntegerSlider
 from odemis.gui.comp.stream_bar import StreamBar
@@ -31,7 +32,6 @@ from odemis.gui.layout.constants.strings import (
     LABEL_OPTICAL_SETTINGS,
     LABEL_STREAMS,
 )
-import odemis.gui.layout as layout
 from odemis.gui.layout.constants.themes import Theme
 from odemis.gui.layout.util.fonts import set_font
 from odemis.gui.layout.util.sizers import hbox, vbox

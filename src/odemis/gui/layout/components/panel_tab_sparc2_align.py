@@ -22,6 +22,7 @@ import wx
 import wx.adv
 import wx.html
 
+import odemis.gui.layout as layout
 from odemis.gui import img
 from odemis.gui.comp.buttons import (
     GraphicRadioButton,
@@ -45,7 +46,6 @@ from odemis.gui.layout.constants.strings import (
     LABEL_STEP_SIZE,
     TOOLTIP_OPEN_LOG_PANEL,
 )
-import odemis.gui.layout as layout
 from odemis.gui.layout.constants.themes import Theme
 from odemis.gui.layout.util.fonts import set_font
 from odemis.gui.layout.util.sizers import hbox, vbox

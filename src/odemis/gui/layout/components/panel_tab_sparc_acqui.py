@@ -20,6 +20,7 @@ from typing import Any, Optional
 
 import wx
 
+import odemis.gui.layout as layout
 from odemis.gui import img
 from odemis.gui.comp.buttons import ImageButton, ViewButton
 from odemis.gui.comp.foldpanelbar import CaptionBar, FoldPanelBar, FoldPanelItem
@@ -43,7 +44,6 @@ from odemis.gui.layout.constants.strings import (
     LABEL_STREAMS,
     TOOLTIP_OPEN_LOG_PANEL,
 )
-import odemis.gui.layout as layout
 from odemis.gui.layout.constants.themes import Theme
 from odemis.gui.layout.util.fonts import set_font
 from odemis.gui.layout.util.sizers import hbox, vbox

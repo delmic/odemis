@@ -21,6 +21,7 @@ from typing import Optional
 import wx
 import wx.grid
 
+import odemis.gui.layout as layout
 from odemis.gui import img
 from odemis.gui.comp.buttons import ImageButton, ImageTextButton
 from odemis.gui.comp.foldpanelbar import FoldPanelBar, FoldPanelItem
@@ -32,7 +33,6 @@ from odemis.gui.layout.constants.strings import (
     LABEL_CLOSE,
     LABEL_STREAMS,
 )
-import odemis.gui.layout as layout
 from odemis.gui.layout.constants.themes import Theme
 from odemis.gui.layout.util.fonts import set_font
 from odemis.gui.layout.util.sizers import hbox, vbox

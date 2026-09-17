@@ -20,11 +20,11 @@ from typing import Optional, Tuple
 
 import wx
 
+import odemis.gui.layout as layout
 from odemis.gui import img
 from odemis.gui.comp.buttons import ImageButton, TabButton
 from odemis.gui.comp.foldpanelbar import CaptionBar
 from odemis.gui.layout.constants.strings import LABEL_PROJECTS
-import odemis.gui.layout as layout
 from odemis.gui.layout.constants.themes import Theme
 from odemis.gui.layout.util.fonts import set_font
 from odemis.gui.layout.util.sizers import hbox, vbox

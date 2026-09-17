@@ -20,6 +20,7 @@ from typing import Optional
 
 import wx
 
+import odemis.gui.layout as layout
 from odemis.gui import img
 from odemis.gui.comp.foldpanelbar import CaptionBar
 from odemis.gui.layout.constants.strings import (
@@ -30,7 +31,6 @@ from odemis.gui.layout.constants.strings import (
     LABEL_START,
     LABEL_TOTAL_NUMBER,
 )
-import odemis.gui.layout as layout
 from odemis.gui.layout.constants.themes import Theme
 from odemis.gui.layout.util.fonts import set_font
 from odemis.gui.layout.util.sizers import hbox, vbox

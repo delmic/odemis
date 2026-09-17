@@ -16,10 +16,11 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
-from typing import Any, Optional, Type
+from typing import Optional, Type
 
 import wx
 
+import odemis.gui.layout as layout
 from odemis.gui import img
 from odemis.gui.comp.buttons import ImageButton, ViewButton
 from odemis.gui.comp.foldpanelbar import FoldPanelBar, FoldPanelItem
@@ -41,7 +42,6 @@ from odemis.gui.layout.constants.strings import (
     LABEL_STREAMS,
     TOOLTIP_OPEN_LOG_PANEL,
 )
-import odemis.gui.layout as layout
 from odemis.gui.layout.constants.themes import Theme
 from odemis.gui.layout.util.sizers import hbox, vbox
 from odemis.gui.layout.util.widgets import (
