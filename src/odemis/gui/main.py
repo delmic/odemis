@@ -238,6 +238,7 @@ class OdemisGUIApp(wx.App):
                 from odemis.gui.cont.tabs.sparc2_align_tab import Sparc2AlignTab
                 from odemis.gui.cont.tabs.sparc2_chamber_tab import ChamberTab
                 from odemis.gui.layout import (
+                    PnlTabSparcAcqui,
                     PnlTabSparcChamber,
                     PnlTabSparcAlign,
                     PnlTabSparc2Align,
@@ -248,7 +249,7 @@ class OdemisGUIApp(wx.App):
                         "name": TabName.SPARC_ACQUI.value,
                         "controller": SparcAcquisitionTab,
                         "button": self.main_frame.btn_tab_sparc_acqui,
-                        "panel": main_xrc.xrcpnl_tab_sparc_acqui
+                        "panel": PnlTabSparcAcqui
                     },
                     {
                         "name": TabName.SPARC_CHAMBER.value,

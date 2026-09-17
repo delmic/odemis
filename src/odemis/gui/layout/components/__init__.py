@@ -17,6 +17,7 @@ from .panel_tab_fastem_single_beam import PnlTabFastemSingleBeam
 from .panel_tab_localization import PnlTabLocalization
 from .panel_tab_secom_align import PnlTabSecomAlign
 from .panel_tab_secom_streams import PnlTabSecomStreams
+from .panel_tab_sparc_acqui import PnlTabSparcAcqui
 from .panel_tab_sparc_chamber import PnlTabSparcChamber
 from .panel_tab_sparc_align import PnlTabSparcAlign
 from .panel_tab_sparc2_align import PnlTabSparc2Align
@@ -41,6 +42,7 @@ __all__ = [
     "PnlTabLocalization",
     "PnlTabSecomAlign",
     "PnlTabSecomStreams",
+    "PnlTabSparcAcqui",
     "PnlTabSparcChamber",
     "PnlTabSparcAlign",
     "PnlTabSparc2Align",
