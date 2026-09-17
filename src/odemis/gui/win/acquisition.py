@@ -50,8 +50,8 @@ from odemis.gui.conf import get_acqui_conf, util
 from odemis.gui.cont.multi_point_correlation import CorrelationPointsController
 from odemis.gui.cont.settings import LocalizationSettingsController, SecomSettingsController
 from odemis.gui.cont.stream_bar import StreamBarController
-from odemis.gui.layout.components import DlgOverviewAcq, FrCorrelation
-from odemis.gui.main_xrc import xrcfr_acq
+from odemis.gui.layout.components import DlgOverviewAcq, FrAcq, FrCorrelation
+from odemis.gui.main_xrc import xrcfr_overview_acq
 from odemis.gui.model import TOOL_NONE, AcquisitionWindowData, StreamView, TOOL_ACT_ZOOM_FIT
 from odemis.gui.preset import (apply_preset, get_global_settings_entries,
                                get_local_settings_entries, preset_as_is,
@@ -64,14 +64,14 @@ from odemis.util import units
 from odemis.util.filename import create_filename, guess_pattern, update_counter
 
 
-class AcquisitionDialog(xrcfr_acq):
+class AcquisitionDialog(FrAcq):
     """ Wrapper class responsible for additional initialization of the
     Acquisition Dialog created in XRCed
     """
 
     # TODO: share more code with cont.acquisition
     def __init__(self, parent, orig_tab_data):
-        xrcfr_acq.__init__(self, parent)
+        FrAcq.__init__(self, parent)
 
         self.conf = get_acqui_conf()
 

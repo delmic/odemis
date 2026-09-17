@@ -1,3 +1,4 @@
+from .dialog_acq import FrAcq
 from .dialog_overview_acq import DlgOverviewAcq
 from .dialog_correlation_tdct import FrCorrelation
 from .frame_main import MainFrame
@@ -20,6 +21,7 @@ from .panel_tab_sparc_align import PnlTabSparcAlign
 from .panel_tab_sparc2_align import PnlTabSparc2Align
 
 __all__ = [
+    "FrAcq",
     "FrCorrelation",
     "MainFrame",
     "DlgOverviewAcq",
