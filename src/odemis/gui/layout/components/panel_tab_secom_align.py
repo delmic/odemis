@@ -17,10 +17,11 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
 
-from typing import Any, Optional
+from typing import Optional
 
 import wx
 import wx.adv
+import wx.html
 
 from odemis.gui import img
 from odemis.gui.comp.buttons import (
