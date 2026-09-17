@@ -6,6 +6,8 @@ from .panel_tab_fastem_acqui import PnlTabFastemAcqui
 from .panel_tab_fastem_main import PnlTabFastemMain
 from .panel_tab_fibsem import PnlTabFibsem
 from .panel_tab_inspection import PnlTabInspection
+from .panel_tab_fastem_multi_beam import PnlTabFastemMultiBeam
+from .panel_tab_fastem_single_beam import PnlTabFastemSingleBeam
 from .panel_tab_localization import PnlTabLocalization
 from .panel_tab_secom_align import PnlTabSecomAlign
 from .panel_tab_secom_streams import PnlTabSecomStreams
@@ -18,6 +20,8 @@ __all__ = [
     "PnlTabCorrelation",
     "PnlTabCryosecomChamber",
     "PnlTabFastemAcqui",
+    "PnlTabFastemMultiBeam",
+    "PnlTabFastemSingleBeam",
     "PnlTabFastemMain",
     "PnlTabFibsem",
     "PnlTabInspection",

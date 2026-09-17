@@ -42,6 +42,7 @@ class PnlTabFastemAcqui(wx.Panel):
         :param theme: Semantic layout theme.
         """
         super().__init__(parent, size=(400, -1))
+        self.SetMinSize((400, -1))
         self._theme = theme
         self.SetBackgroundColour(theme.background)
 
@@ -81,6 +82,7 @@ class PnlTabFastemAcqui(wx.Panel):
         :returns: Tab buttons panel.
         """
         self.pnl_tabbuttons = wx.Panel(parent, size=(400, 40))
+        self.pnl_tabbuttons.SetMinSize((400, 40))
         self.pnl_tabbuttons.SetBackgroundColour(_TAB_BAR_BACKGROUND)
 
         with hbox() as sizer:

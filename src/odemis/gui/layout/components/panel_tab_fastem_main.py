@@ -81,6 +81,7 @@ class PnlTabFastemMain(wx.Panel):
         :returns: User-settings host panel.
         """
         self.pnl_user_settings = wx.Panel(self, size=(300, 600))
+        self.pnl_user_settings.SetMinSize((300, 600))
         self.pnl_user_settings.SetBackgroundColour(self._theme.background)
         return self.pnl_user_settings
 
@@ -127,6 +128,7 @@ class PnlTabFastemMain(wx.Panel):
             self.pnl_vp_grid = ViewportGrid(
                 self.pnl_vp_grid_project_manager, size=(1108, 998)
             )
+            self.pnl_vp_grid.SetMinSize((1108, 998))
             sizer.Add(self.pnl_vp_grid, proportion=1, flag=wx.EXPAND)
 
             sizer.Add(
@@ -139,6 +141,7 @@ class PnlTabFastemMain(wx.Panel):
             self.pnl_project_manager = wx.Panel(
                 self.pnl_vp_grid_project_manager, size=(1108, 200)
             )
+            self.pnl_project_manager.SetMinSize((1108, 200))
             self.pnl_project_manager.SetBackgroundColour(
                 _PROJECT_MANAGER_BACKGROUND
             )
@@ -155,6 +158,7 @@ class PnlTabFastemMain(wx.Panel):
         :returns: Project-manager housing panel.
         """
         panel = wx.Panel(parent, size=(1108, 30))
+        panel.SetMinSize((1108, 30))
 
         with hbox() as sizer:
             self.pnl_project_manager_left_padding = wx.Panel(panel)
@@ -228,6 +232,7 @@ class PnlTabFastemMain(wx.Panel):
         :returns: Title panel.
         """
         panel = wx.Panel(parent, size=(-1, 30))
+        panel.SetMinSize((-1, 30))
 
         with vbox() as sizer:
             sizer.AddStretchSpacer()
@@ -253,10 +258,12 @@ class PnlTabFastemMain(wx.Panel):
             sizer.Add(self._build_tab_buttons_panel(), flag=wx.EXPAND)
 
             line = wx.StaticLine(self, size=(-1, 1))
+            line.SetMinSize((-1, 1))
             line.SetBackgroundColour(self._theme.background)
             sizer.Add(line, flag=wx.EXPAND)
 
             self.pnl_tabs = wx.Panel(self, size=(400, 1500))
+            self.pnl_tabs.SetMinSize((400, 1500))
             self.pnl_tabs.SetBackgroundColour(self._theme.background)
             sizer.Add(self.pnl_tabs, flag=wx.EXPAND)
 
@@ -268,6 +275,7 @@ class PnlTabFastemMain(wx.Panel):
         :returns: Tab buttons panel.
         """
         self.pnl_tabbuttons = wx.Panel(self, size=(400, 40))
+        self.pnl_tabbuttons.SetMinSize((400, 40))
         self.pnl_tabbuttons.SetBackgroundColour(_TAB_BAR_BACKGROUND)
 
         with hbox() as sizer:

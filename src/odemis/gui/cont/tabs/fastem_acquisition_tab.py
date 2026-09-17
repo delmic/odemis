@@ -21,11 +21,11 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 import odemis.gui.model as guimod
-from odemis.gui import main_xrc
 from odemis.gui.cont.tabs.fastem_multi_beam_tab import FastEMMultiBeamTab
 from odemis.gui.cont.tabs.fastem_single_beam_tab import FastEMSingleBeamTab
 from odemis.gui.cont.tabs.tab import Tab
 from odemis.gui.cont.tabs.tab_bar_controller import TabController
+from odemis.gui.layout import PnlTabFastemMultiBeam, PnlTabFastemSingleBeam
 
 
 class FastEMAcquisitionTab(Tab):
@@ -50,8 +50,8 @@ class FastEMAcquisitionTab(Tab):
 
         self.main_tab_data = main_tab_data
 
-        single_beam_panel = main_xrc.xrcpnl_tab_fastem_single_beam(panel.pnl_acqui_tabs)
-        multi_beam_panel = main_xrc.xrcpnl_tab_fastem_multi_beam(panel.pnl_acqui_tabs)
+        single_beam_panel = PnlTabFastemSingleBeam(panel.pnl_acqui_tabs)
+        multi_beam_panel = PnlTabFastemMultiBeam(panel.pnl_acqui_tabs)
 
         self.single_beam_tab = FastEMSingleBeamTab(
             "Single Beam",
