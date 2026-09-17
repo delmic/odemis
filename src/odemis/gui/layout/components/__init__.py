@@ -1,3 +1,4 @@
+from .dialog_correlation_tdct import FrCorrelation
 from .panel_fastem_project_manager import PnlFastemProjectManager
 from .panel_fastem_user_settings import PnlFastemUserSettings
 from .panel_tab_correlation import PnlTabCorrelation
@@ -15,6 +16,7 @@ from .panel_tab_sparc_chamber import PnlTabSparcChamber
 from .panel_tab_sparc_align import PnlTabSparcAlign
 
 __all__ = [
+    "FrCorrelation",
     "PnlFastemProjectManager",
     "PnlFastemUserSettings",
     "PnlTabCorrelation",

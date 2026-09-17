@@ -50,7 +50,8 @@ from odemis.gui.conf import get_acqui_conf, util
 from odemis.gui.cont.multi_point_correlation import CorrelationPointsController
 from odemis.gui.cont.settings import LocalizationSettingsController, SecomSettingsController
 from odemis.gui.cont.stream_bar import StreamBarController
-from odemis.gui.main_xrc import xrcfr_acq, xrcfr_overview_acq, xrcfr_correlation
+from odemis.gui.layout.components import FrCorrelation
+from odemis.gui.main_xrc import xrcfr_acq, xrcfr_overview_acq
 from odemis.gui.model import TOOL_NONE, AcquisitionWindowData, StreamView, TOOL_ACT_ZOOM_FIT
 from odemis.gui.preset import (apply_preset, get_global_settings_entries,
                                get_local_settings_entries, preset_as_is,
@@ -1325,12 +1326,12 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         self.EndModal(wx.ID_OPEN)
 
 
-class CorrelationDialog(xrcfr_correlation):
+class CorrelationDialog(FrCorrelation):
     """
     Initialize the controllers for CorrelationDialog box.
     """
     def __init__(self,  parent, orig_tab_data):
-        xrcfr_correlation.__init__(self, parent)
+        FrCorrelation.__init__(self, parent)
         main_data = orig_tab_data.main
         tab_data = guimod.CryoTdctCorrelationGUIData(main_data)
         self.tab_data = tab_data
