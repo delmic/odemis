@@ -35,7 +35,7 @@ from odemis.gui.conf import get_acqui_conf
 from odemis.gui.conf.data import get_local_vas, get_stream_settings_config
 from odemis.gui.cont.settings import SettingsController
 from odemis.gui.cont.stream_bar import StreamBarController
-from odemis.gui.main_xrc import xrcfr_plugin
+from odemis.gui.layout import PluginDialog
 from odemis.gui.model import ContentView, MicroscopyGUIData
 from odemis.gui.plugin import Plugin, AcquisitionDialog
 from odemis.gui.util import img, call_in_wx_main, formats_to_wildcards
@@ -64,7 +64,7 @@ class ContentAcquisitionDialog(AcquisitionDialog):
         stage (None or actuator with x/y axes)
         fov_hw=None
         """
-        xrcfr_plugin.__init__(self, plugin.main_app.main_frame)
+        PluginDialog.__init__(self, plugin.main_app.main_frame)
 
         self.plugin = plugin
 

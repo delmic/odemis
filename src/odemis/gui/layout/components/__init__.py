@@ -2,6 +2,7 @@ from .dialog_acq import FrAcq
 from .dialog_overview_acq import DlgOverviewAcq
 from .dialog_correlation_tdct import FrCorrelation
 from .frame_main import MainFrame
+from .dialog_plugin import PluginDialog
 from .panel_fastem_project_manager import PnlFastemProjectManager
 from .panel_fastem_user_settings import PnlFastemUserSettings
 from .panel_tab_correlation import PnlTabCorrelation
@@ -25,6 +26,7 @@ __all__ = [
     "FrCorrelation",
     "MainFrame",
     "DlgOverviewAcq",
+    "PluginDialog",
     "PnlFastemProjectManager",
     "PnlFastemUserSettings",
     "PnlTabCorrelation",

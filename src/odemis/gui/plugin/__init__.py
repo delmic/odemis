@@ -38,7 +38,7 @@ from odemis.gui import FG_COLOUR_ERROR, FG_COLOUR_WARNING, FG_COLOUR_MAIN
 from odemis.gui.comp.buttons import ImageTextButton
 from odemis.gui.cont.settings import SettingsController
 from odemis.gui.cont.stream_bar import StreamBarController
-from odemis.gui.main_xrc import xrcfr_plugin
+from odemis.gui.layout import PluginDialog
 from odemis.gui.model import MicroscopeView, MicroscopyGUIData, StreamView, TabName
 from odemis.gui.util import call_in_wx_main, get_home_folder
 from odemis.gui.util.widgets import ProgressiveFutureConnector
@@ -377,7 +377,7 @@ class Plugin(metaclass=ABCMeta):
         analysis_tab.load_data(filename)
 
 
-class AcquisitionDialog(xrcfr_plugin):
+class AcquisitionDialog(PluginDialog):
     def __init__(self, plugin, title, text=None):
         """
         Creates a modal window. The return code is the button number that was
