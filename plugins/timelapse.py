@@ -33,6 +33,7 @@ other dealings in the software.
 from collections import OrderedDict
 import logging
 import math
+import numpy
 from odemis import model, dataio
 from odemis.acq import stream, acqmng
 from odemis.acq.stream import MonochromatorSettingsStream, ARStream, \
@@ -72,6 +73,11 @@ class TimelapsePlugin(Plugin):
             "tooltip": "Acquire SEM images only once, after the timelapse",
             "control_type": odemis.gui.CONTROL_NONE,  # hidden by default
         }),
+        ("oneFilePerAcquisition", {
+            "label": "One file per acquisition",
+            "tooltip": "Save each acquisition in a separate file",
+            "control_type": odemis.gui.CONTROL_CHECK,
+        }),
         ("filename", {
             "control_type": odemis.gui.CONTROL_SAVE_FILE,
             "wildcard": formats_to_wildcards(get_available_formats(os.O_WRONLY))[0],
@@ -91,6 +97,7 @@ class TimelapsePlugin(Plugin):
         # TODO: prevent period < acquisition time of all streams
         self.numberOfAcquisitions = model.IntContinuous(100, (2, 100000))
         self.semOnlyOnLast = model.BooleanVA(False)
+        self.oneFilePerAcquisition = model.BooleanVA(True)
         self.filename = model.StringVA("a.h5")
         self.expectedDuration = model.VigilantAttribute(1, unit="s", readonly=True)
 
@@ -330,6 +337,70 @@ class TimelapsePlugin(Plugin):
         """
         self._to_store.put((fn, das))
 
+    def _stack_frames(self, frames, rel_times):
+        """
+        Combine a series of images of the same stream, acquired at different
+        times, into a single DataArray with an extra "T" dimension.
+        frames (list of DataArray): the successive images, all of the same shape
+        rel_times (list of float): time (s) of each frame, relative to the first one
+        return (DataArray): a single array, with a "T" dimension inserted in
+          2nd position (CTZYX order)
+        raises ValueError: if the frames cannot be stacked (eg, already has a
+          "T" dimension of size > 1, or the shapes don't match)
+        """
+        dims = frames[0].metadata.get(model.MD_DIMS, "CTZYX"[-frames[0].ndim:])
+        if "T" in dims:
+            ti = dims.index("T")
+            if frames[0].shape[ti] != 1:
+                raise ValueError("Data already has a T dimension of size %d, "
+                                  "cannot merge over time" % (frames[0].shape[ti],))
+            # It's just a placeholder axis of size 1: drop it, a new (real) one
+            # is added back below.
+            frames = [numpy.squeeze(da, axis=ti) for da in frames]
+            dims = dims[:ti] + dims[ti + 1:]
+
+        # StaticSpectrumStream (used to display data with a "T" dimension)
+        # expects CTZYX ordering, with T in 2nd position. Without this dummy
+        # C axis, T would end up 1st and be mistaken for the C axis instead.
+        if dims[:1] != "C":
+            frames = [da[numpy.newaxis] for da in frames]
+            dims = "C" + dims
+
+        md = dict(frames[0].metadata)
+        md[model.MD_DIMS] = dims[:1] + "T" + dims[1:]
+        md[model.MD_TIME_LIST] = rel_times
+        # MD_ACQ_DATE should still correspond to the first frame, as before
+
+        data = numpy.stack(frames, axis=1)
+        return model.DataArray(data, md)
+
+    def _merge_time_series(self, all_das, times):
+        """
+        Combine a series of acquisitions of the same streams, taken at
+        different times, into a single DataArray per stream, with an extra
+        dimension for the time.
+        all_das (list of list of DataArray): for each repetition, the
+          DataArrays returned for each stream (in the same order every repetition)
+        times (list of float): the time (as given by time.time()) at which
+          each repetition started
+        return (list of DataArray): one DataArray per stream, with a new "T"
+          dimension corresponding to the repetitions
+        """
+        t0 = times[0]
+        rel_times = [t - t0 for t in times]
+
+        nb_das = len(all_das[0])
+        merged = []
+        for j in range(nb_das):
+            frames = [rep[j] for rep in all_das]
+            try:
+                merged.append(self._stack_frames(frames, rel_times))
+            except Exception:
+                logging.exception("Failed to merge the time series for stream %d, "
+                                   "will only keep the last acquisition", j)
+                merged.append(frames[-1])
+        return merged
+
     def acquire(self, dlg):
         main_data = self.main_app.main_data
         str_ctrl = main_data.tab.value.streambar_controller
@@ -375,6 +446,7 @@ class TimelapsePlugin(Plugin):
         # It's much faster because we don't have to stop/start the detector between
         # each acquisition.
         nb = self.numberOfAcquisitions.value
+        one_file = not self.oneFilePerAcquisition.value
 
         fn = self.filename.value
         self._exporter = dataio.find_fittest_converter(fn)
@@ -382,6 +454,8 @@ class TimelapsePlugin(Plugin):
         fn_pat = bs + "-%.5d" + ext
 
         self._acq_completed = threading.Event()
+        self._fast_frames = []  # for one_file mode: the frames received so far
+        self._fast_times = []  # for one_file mode: the time each frame was received at
 
         f = model.ProgressiveFuture()
         f.task_canceller = self._cancel_fast_acquire
@@ -391,7 +465,7 @@ class TimelapsePlugin(Plugin):
             extra_dur = acqmng.estimateTime([st] + last_ss)
         else:
             extra_dur = 0
-        self._hijack_live_stream(st, f, nb, fn_pat, extra_dur)
+        self._hijack_live_stream(st, f, nb, fn_pat, extra_dur, one_file)
 
         try:
             # Start acquisition and wait until it's done
@@ -401,6 +475,14 @@ class TimelapsePlugin(Plugin):
             self._acq_completed.wait()
 
             if f.cancelled():
+                if one_file and self._fast_frames:
+                    logging.info("Saving the %d frames acquired before cancellation",
+                                 len(self._fast_frames))
+                    merged_das = self._merge_time_series(
+                        [[da] for da in self._fast_frames], self._fast_times)
+                    self._save_data(fn, merged_das)
+                self._fast_frames = []
+                self._fast_times = []
                 dlg.resumeSettings()
                 return
         finally:
@@ -408,13 +490,27 @@ class TimelapsePlugin(Plugin):
             logging.debug("Restoring stream %s", st)
             self._restore_live_stream(st)
 
+        extra_das = None
         # last "normal" acquisition, if needed
         if last_ss:
             logging.debug("Acquiring last acquisition, with all the streams")
             ss = [st] + last_ss
             f.set_progress(remaining_time=acqmng.estimateTime(ss))
             das, e = acqmng.acquire(ss, self.main_app.main_data.settings_obs).result()
-            self._save_data(fn_pat % (nb,), das)
+            if one_file:
+                extra_das = das[1:]
+                self._fast_frames.append(das[0])
+                self._fast_times.append(time.time())
+            else:
+                self._save_data(fn_pat % (nb,), das)
+
+        if one_file:
+            merged_das = self._merge_time_series([[da] for da in self._fast_frames], self._fast_times)
+            if extra_das:
+                merged_das += extra_das
+            self._save_data(fn, merged_das)
+        self._fast_frames = []
+        self._fast_times = []
 
         self._stop_saving_threads()  # Wait for all the data to be stored
         f.set_result(None)  # Indicate it's over
@@ -424,7 +520,7 @@ class TimelapsePlugin(Plugin):
         self._acq_completed.set()
         return True
 
-    def _hijack_live_stream(self, st, f, nb, fn_pat, extra_dur=0):
+    def _hijack_live_stream(self, st, f, nb, fn_pat, extra_dur=0, one_file=False):
         st._old_shouldUpdateHistogram = st._shouldUpdateHistogram
         st._shouldUpdateHistogram = lambda: None
         self._data_received = 0
@@ -445,7 +541,14 @@ class TimelapsePlugin(Plugin):
                 logging.debug("Skipping extra data")
                 return
 
-            self._save_data(fn_pat % (i,), [st.raw[0]])
+            if one_file:
+                # Some detectors/drivers reuse the same buffer for every new
+                # acquisition, so the data must be copied to keep each frame
+                # independent, as we are not saving them right away.
+                self._fast_frames.append(st.raw[0].copy())
+                self._fast_times.append(time.time())
+            else:
+                self._save_data(fn_pat % (i,), [st.raw[0]])
 
             # Update progress bar
             left = nb - i
@@ -464,6 +567,7 @@ class TimelapsePlugin(Plugin):
     def _acquire_multi(self, dlg, ss, last_ss):
         p = self.period.value
         nb = self.numberOfAcquisitions.value
+        one_file = not self.oneFilePerAcquisition.value
 
         fn = self.filename.value
         self._exporter = dataio.find_fittest_converter(fn)
@@ -485,6 +589,16 @@ class TimelapsePlugin(Plugin):
         f.set_running_or_notify_cancel()  # Indicate the work is starting now
         dlg.showProgress(f)
 
+        # Number of DataArrays produced by the "regular" streams (ie, ss before
+        # last_ss is appended) on every repetition. A single Stream can return
+        # more than one DataArray (eg, a MultipleDetectorStream combining SEM,
+        # CL and AR acquisition), so this cannot be assumed to be len(ss): it's
+        # measured from the first repetition instead.
+        nb_regular_das = None
+        all_das = []  # for one_file mode: one entry per repetition, list of DataArray
+        all_times = []  # for one_file mode: start time of each repetition
+        extra_das = None  # for one_file mode: DataArrays only acquired on the last repetition
+
         for i in range(nb):
             left = nb - i
             dur = sacqt * left + intp * (left - 1)
@@ -496,10 +610,31 @@ class TimelapsePlugin(Plugin):
             f.set_progress(remaining_time=dur)
             das, e = acqmng.acquire(ss, self.main_app.main_data.settings_obs).result()
             if f.cancelled():
+                if one_file and all_das:
+                    logging.info("Saving the %d repetitions acquired before cancellation",
+                                 len(all_das))
+                    merged_das = self._merge_time_series(all_das, all_times)
+                    if extra_das:
+                        merged_das += extra_das
+                    self._save_data(fn, merged_das)
                 dlg.resumeSettings()
                 return
 
-            self._save_data(fn_pat % (i,), das)
+            if nb_regular_das is None:
+                # First repetition: last_ss hasn't been added to ss yet, so
+                # every DataArray returned belongs to a "regular" stream.
+                nb_regular_das = len(das)
+
+            if one_file:
+                # acqmng.acquire() can return the stream's own .raw list (eg, for
+                # simple LiveStreams), whose elements get replaced in place on
+                # the next repetition, so they must be copied to be kept.
+                all_das.append([da.copy() for da in das[:nb_regular_das]])
+                all_times.append(startt)
+                if len(das) > nb_regular_das:
+                    extra_das = [da.copy() for da in das[nb_regular_das:]]
+            else:
+                self._save_data(fn_pat % (i,), das)
 
             # Wait the period requested, excepted the last time
             if left > 1:
@@ -508,6 +643,12 @@ class TimelapsePlugin(Plugin):
                     time.sleep(sleept)
                 else:
                     logging.info("Immediately starting next acquisition, %g s late", -sleept)
+
+        if one_file:
+            merged_das = self._merge_time_series(all_das, all_times)
+            if extra_das:
+                merged_das += extra_das
+            self._save_data(fn, merged_das)
 
         self._stop_saving_threads()  # Wait for all the data to be stored
         f.set_result(None)  # Indicate it's over
