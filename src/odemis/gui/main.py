@@ -266,6 +266,7 @@ class OdemisGUIApp(wx.App):
                 from odemis.gui.cont.tabs.localization_tab import LocalizationTab
                 from odemis.gui.cont.tabs.fibsem_tab import FibsemTab
                 from odemis.gui.layout import (
+                    PnlTabCorrelation,
                     PnlTabCryosecomChamber,
                     PnlTabLocalization,
                 )
@@ -277,7 +278,7 @@ class OdemisGUIApp(wx.App):
                         "name": TabName.METEOR_CORRELATION.value,
                         "controller": CorrelationTab,
                         "button": self.main_frame.btn_tab_correlation,
-                        "panel": main_xrc.xrcpnl_tab_correlation
+                        "panel": PnlTabCorrelation
                     },
                     {
                         "name": TabName.CRYOSECOM_CHAMBER.value,
@@ -314,13 +315,14 @@ class OdemisGUIApp(wx.App):
             elif self.main_data.role is None:  # viewer
                 # Correlation tab is also an option on the viewer.
                 from odemis.gui.cont.tabs.correlation_tab import CorrelationTab
+                from odemis.gui.layout import PnlTabCorrelation
 
                 tab_defs.extend([
                     {
                         "name": TabName.METEOR_CORRELATION.value,
                         "controller": CorrelationTab,
                         "button": self.main_frame.btn_tab_correlation,
-                        "panel": main_xrc.xrcpnl_tab_correlation
+                        "panel": PnlTabCorrelation
                     },
                 ])
             else:
