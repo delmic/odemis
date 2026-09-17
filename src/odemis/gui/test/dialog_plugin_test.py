@@ -24,11 +24,11 @@ from odemis.gui.comp.buttons import ImageTextButton
 from odemis.gui.comp.foldpanelbar import FoldPanelItem
 from odemis.gui.comp.stream_bar import StreamBar
 from odemis.gui.comp.viewport import LiveViewport, PointSpectrumViewport
-from odemis.gui.layout import PluginDialog
+from odemis.gui.layout import PluginDialogBase
 from odemis.gui.layout.constants.themes import DARK
 
 
-class PnlDialogPluginTest(unittest.TestCase):
+class PluginDialogTest(unittest.TestCase):
     """Verify the pure-Python plugin acquisition dialog layout."""
 
     @classmethod
@@ -43,7 +43,7 @@ class PnlDialogPluginTest(unittest.TestCase):
 
     def setUp(self) -> None:
         """Create a fresh plugin acquisition dialog."""
-        self.dialog = PluginDialog(None)
+        self.dialog = PluginDialogBase(None)
 
     def tearDown(self) -> None:
         """Destroy the plugin acquisition dialog."""

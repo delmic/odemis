@@ -37,7 +37,7 @@ _DIALOG_BACKGROUND = "#000000"
 _LABEL_TEXT_COLOUR = "#DDDDDD"
 
 
-class DlgOverviewAcq(wx.Dialog):
+class OverviewAcqDialogBase(wx.Dialog):
     """Provide the overview acquisition dialog layout."""
 
     def __init__(self, parent: Optional[wx.Window], theme: Theme = DARK) -> None:
@@ -553,4 +553,4 @@ class DlgOverviewAcq(wx.Dialog):
 if __name__ == "__main__":
     from odemis.gui.layout.util.preview import run_preview
 
-    run_preview(DlgOverviewAcq)
+    run_preview(OverviewAcqDialogBase)

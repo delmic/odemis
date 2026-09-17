@@ -50,7 +50,7 @@ from odemis.gui.conf import get_acqui_conf, util
 from odemis.gui.cont.multi_point_correlation import CorrelationPointsController
 from odemis.gui.cont.settings import LocalizationSettingsController, SecomSettingsController
 from odemis.gui.cont.stream_bar import StreamBarController
-from odemis.gui.layout.components import DlgOverviewAcq, FrAcq, FrCorrelation
+from odemis.gui.layout.components import OverviewAcqDialogBase, SecomAcqDialogBase, TDCorrelationDialogBase
 from odemis.gui.main_xrc import xrcfr_overview_acq
 from odemis.gui.model import TOOL_NONE, AcquisitionWindowData, StreamView, TOOL_ACT_ZOOM_FIT
 from odemis.gui.preset import (apply_preset, get_global_settings_entries,
@@ -64,14 +64,15 @@ from odemis.util import units
 from odemis.util.filename import create_filename, guess_pattern, update_counter
 
 
-class AcquisitionDialog(FrAcq):
-    """ Wrapper class responsible for additional initialization of the
-    Acquisition Dialog created in XRCed
+class SecomAcquisitionDialog(SecomAcqDialogBase):
+    """
+    Class responsible for controlling the acquisition dialog for SECOM
+    The GUI is defined in the parent class.
     """
 
     # TODO: share more code with cont.acquisition
     def __init__(self, parent, orig_tab_data):
-        FrAcq.__init__(self, parent)
+        SecomAcqDialogBase.__init__(self, parent)
 
         self.conf = get_acqui_conf()
 
@@ -629,7 +630,7 @@ class AcquisitionDialog(FrAcq):
 DEFAULT_FOV = (100e-6, 100e-6) # m
 
 
-class OverviewAcquisitionDialog(DlgOverviewAcq):
+class OverviewAcquisitionDialog(OverviewAcqDialogBase):
     """
     Class used to control the overview acquisition dialog
     The data acquired is stored in a file, with predefined name, available on
@@ -637,7 +638,7 @@ class OverviewAcquisitionDialog(DlgOverviewAcq):
     """
     def __init__(self, parent, orig_tab_data,
                  mode: guimod.AcquiMode = guimod.AcquiMode.FLM):
-        DlgOverviewAcq.__init__(self, parent)
+        OverviewAcqDialogBase.__init__(self, parent)
 
         self.conf = get_acqui_conf()
 
@@ -1326,12 +1327,13 @@ class OverviewAcquisitionDialog(DlgOverviewAcq):
         self.EndModal(wx.ID_OPEN)
 
 
-class CorrelationDialog(FrCorrelation):
+class TDCorrelationDialog(TDCorrelationDialogBase):
     """
-    Initialize the controllers for CorrelationDialog box.
+    Control the 3D correlation dialog.
+    The GUI layout is defined in the parent class.
     """
     def __init__(self,  parent, orig_tab_data):
-        FrCorrelation.__init__(self, parent)
+        TDCorrelationDialogBase.__init__(self, parent)
         main_data = orig_tab_data.main
         tab_data = guimod.CryoTdctCorrelationGUIData(main_data)
         self.tab_data = tab_data

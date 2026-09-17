@@ -306,7 +306,7 @@ class ExternalAcquisition:
     def acquire(self, dlg):
         """
         Acquire the data, and store it
-        dlg: AcquisitionDialog
+        dlg: SecomAcquisitionDialog
         """
         # Stop the streams
         dlg.streambar_controller.pauseStreams()

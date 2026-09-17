@@ -33,7 +33,7 @@ import wx
 
 from odemis.gui.preset import preset_as_is, get_global_settings_entries, \
     get_local_settings_entries, apply_preset
-from odemis.gui.win.acquisition import OverviewAcquisitionDialog, CorrelationDialog
+from odemis.gui.win.acquisition import OverviewAcquisitionDialog, TDCorrelationDialog
 from odemis.gui import model as guimod
 
 class OverviewStreamAcquiController(object):
@@ -106,7 +106,7 @@ class OverviewStreamAcquiController(object):
 
 
 class CorrelationDialogController:
-    """Controller to handle the multipoint correlation (3DCT) iniMtialization"""
+    """Controller to handle the multipoint correlation (3DCT) initialization"""
 
     def __init__(self, tab_data, tab):
         """
@@ -138,7 +138,7 @@ class CorrelationDialogController:
 
         # create the dialog
         try:
-            self.cor_dialog = CorrelationDialog(
+            self.cor_dialog = TDCorrelationDialog(
                 self._tab.main_frame, self._tab_data_model)
             parent_size = [int(v * 0.9) for v in self._tab.main_frame.GetSize()]
 

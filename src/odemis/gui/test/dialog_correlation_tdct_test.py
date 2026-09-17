@@ -20,10 +20,10 @@ import unittest
 
 import wx
 
-from odemis.gui.layout import FrCorrelation
+from odemis.gui.layout import TDCorrelationDialogBase
 
 
-class FrCorrelationTest(unittest.TestCase):
+class TDCorrelationDialogTest(unittest.TestCase):
     """Verify the pure-Python multipoint correlation dialog layout."""
 
     @classmethod
@@ -38,7 +38,7 @@ class FrCorrelationTest(unittest.TestCase):
 
     def setUp(self) -> None:
         """Create a fresh correlation dialog."""
-        self.dialog = FrCorrelation(None)
+        self.dialog = TDCorrelationDialogBase(None)
 
     def tearDown(self) -> None:
         """Destroy the correlation dialog."""

@@ -25,7 +25,7 @@ Usage — add two lines at the bottom of any component module::
 
     if __name__ == "__main__":
         from odemis.gui.layout.preview import run_preview
-        run_preview(FrCorrelation)
+        run_preview(TDCorrelationDialogBase)
 
 Then run the component file directly::
 

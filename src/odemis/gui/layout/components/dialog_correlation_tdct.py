@@ -33,7 +33,7 @@ from odemis.gui.layout.util.fonts import set_font
 from odemis.gui.layout.util.sizers import hbox, vbox
 
 
-class FrCorrelation(wx.Dialog):
+class TDCorrelationDialogBase(wx.Dialog):
     """Provide the multipoint 3DCT correlation dialog layout."""
 
     def __init__(
@@ -332,4 +332,4 @@ class FrCorrelation(wx.Dialog):
 if __name__ == "__main__":
     from odemis.gui.layout.util.preview import run_preview
 
-    run_preview(FrCorrelation)
+    run_preview(TDCorrelationDialogBase)

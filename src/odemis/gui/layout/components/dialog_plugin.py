@@ -27,7 +27,7 @@ from odemis.gui.layout.util.fonts import set_font
 from odemis.gui.layout.util.sizers import hbox, vbox
 
 
-class PluginDialog(wx.Dialog):
+class PluginDialogBase(wx.Dialog):
     """Provide the plugin acquisition dialog layout.
 
     Plugins build the actual acquisition UI at runtime on top of the
@@ -277,4 +277,4 @@ class PluginDialog(wx.Dialog):
 if __name__ == "__main__":
     from odemis.gui.layout.util.preview import run_preview
 
-    run_preview(PluginDialog)
+    run_preview(PluginDialogBase)

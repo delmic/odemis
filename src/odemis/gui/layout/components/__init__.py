@@ -1,8 +1,8 @@
-from .dialog_acq import FrAcq
-from .dialog_overview_acq import DlgOverviewAcq
-from .dialog_correlation_tdct import FrCorrelation
+from .dialog_secom_acq import SecomAcqDialogBase
+from .dialog_overview_acq import OverviewAcqDialogBase
+from .dialog_correlation_tdct import TDCorrelationDialogBase
 from .frame_main import MainFrame
-from .dialog_plugin import PluginDialog
+from .dialog_plugin import PluginDialogBase
 from .panel_fastem_project_manager import PnlFastemProjectManager
 from .panel_fastem_user_settings import PnlFastemUserSettings
 from .panel_tab_correlation import PnlTabCorrelation
@@ -23,11 +23,11 @@ from .panel_tab_sparc_align import PnlTabSparcAlign
 from .panel_tab_sparc2_align import PnlTabSparc2Align
 
 __all__ = [
-    "FrAcq",
-    "FrCorrelation",
+    "SecomAcqDialogBase",
+    "TDCorrelationDialogBase",
     "MainFrame",
-    "DlgOverviewAcq",
-    "PluginDialog",
+    "OverviewAcqDialogBase",
+    "PluginDialogBase",
     "PnlFastemProjectManager",
     "PnlFastemUserSettings",
     "PnlTabCorrelation",

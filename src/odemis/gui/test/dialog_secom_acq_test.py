@@ -20,10 +20,10 @@ import unittest
 
 import wx
 
-from odemis.gui.layout import FrAcq
+from odemis.gui.layout import SecomAcqDialogBase
 
 
-class FrAcqTest(unittest.TestCase):
+class SecomAcqDialogTest(unittest.TestCase):
     """Verify the pure-Python SECOM acquisition dialog layout."""
 
     @classmethod
@@ -38,7 +38,7 @@ class FrAcqTest(unittest.TestCase):
 
     def setUp(self) -> None:
         """Create a fresh acquisition dialog."""
-        self.dialog = FrAcq(None)
+        self.dialog = SecomAcqDialogBase(None)
 
     def tearDown(self) -> None:
         """Destroy the acquisition dialog."""

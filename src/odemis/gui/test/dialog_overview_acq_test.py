@@ -20,11 +20,11 @@ import unittest
 
 import wx
 
-from odemis.gui.layout import DlgOverviewAcq
+from odemis.gui.layout import OverviewAcqDialogBase
 from odemis.gui.layout.constants.themes import DARK
 
 
-class DlgOverviewAcqTest(unittest.TestCase):
+class OverviewAcqDialogTest(unittest.TestCase):
     """Verify the pure-Python overview acquisition dialog layout."""
 
     @classmethod
@@ -39,7 +39,7 @@ class DlgOverviewAcqTest(unittest.TestCase):
 
     def setUp(self) -> None:
         """Create a fresh overview acquisition dialog."""
-        self.dlg = DlgOverviewAcq(None)
+        self.dlg = OverviewAcqDialogBase(None)
 
     def tearDown(self) -> None:
         """Destroy the dialog."""

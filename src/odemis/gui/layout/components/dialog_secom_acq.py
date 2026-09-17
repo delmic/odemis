@@ -31,7 +31,7 @@ from odemis.gui.layout.util.fonts import set_font
 from odemis.gui.layout.util.sizers import hbox, vbox
 
 
-class FrAcq(wx.Dialog):
+class SecomAcqDialogBase(wx.Dialog):
     """Provide the SECOM image acquisition dialog layout."""
 
     def __init__(
@@ -414,4 +414,4 @@ class FrAcq(wx.Dialog):
 if __name__ == "__main__":
     from odemis.gui.layout.util.preview import run_preview
 
-    run_preview(FrAcq)
+    run_preview(SecomAcqDialogBase)

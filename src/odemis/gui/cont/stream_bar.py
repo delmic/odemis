@@ -1099,7 +1099,7 @@ class StreamBarController(object):
 
         if not self._view_controller:
             # Too bad, but this can happen if the GUI has no viewport controller
-            # (ie, the AcquisitionDialog
+            # (ie, the SecomAcquisitionDialog
             logging.info("Can not show repetition, as view controller is unknown")
             return
 
