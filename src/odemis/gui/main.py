@@ -300,13 +300,14 @@ class OdemisGUIApp(wx.App):
 
             elif self.main_data.role == "mbsem":
                 from odemis.gui.cont.tabs.fastem_main_tab import FastEMMainTab
+                from odemis.gui.layout import PnlTabFastemMain
 
                 tab_defs.extend([
                     {
                         "name": TabName.FASTEM_MAIN.value,
                         "controller": FastEMMainTab,
                         "button": self.main_frame.btn_tab_fastem_main,
-                        "panel": main_xrc.xrcpnl_tab_fastem_main
+                        "panel": PnlTabFastemMain
                     },
                 ])
             elif self.main_data.role is None:  # viewer
