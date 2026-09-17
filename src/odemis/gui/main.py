@@ -207,7 +207,10 @@ class OdemisGUIApp(wx.App):
             if self.main_data.role in ("secom", "delphi", "sem", "optical"):
                 from odemis.gui.cont.tabs.secom_streams_tab import SecomStreamsTab
                 from odemis.gui.cont.tabs.secom_align_tab import SecomAlignTab
-                from odemis.gui.layout import PnlTabSecomStreams
+                from odemis.gui.layout import (
+                    PnlTabSecomAlign,
+                    PnlTabSecomStreams,
+                )
 
                 tab_defs.extend([
                     {
@@ -224,7 +227,7 @@ class OdemisGUIApp(wx.App):
                         "name": TabName.SECOM_ALIGN.value,
                         "controller": SecomAlignTab,
                         "button": self.main_frame.btn_tab_align,
-                        "panel": main_xrc.xrcpnl_tab_secom_align
+                        "panel": PnlTabSecomAlign
                     },
                 ])
             elif self.main_data.role in ("sparc-simplex", "sparc", "sparc2"):
