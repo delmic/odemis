@@ -1,4 +1,5 @@
 from .panel_fastem_project_manager import PnlFastemProjectManager
+from .panel_fastem_user_settings import PnlFastemUserSettings
 from .panel_tab_correlation import PnlTabCorrelation
 from .panel_tab_cryosecom_chamber import PnlTabCryosecomChamber
 from .panel_tab_fastem_acqui import PnlTabFastemAcqui
@@ -12,6 +13,7 @@ from .panel_tab_sparc_chamber import PnlTabSparcChamber
 
 __all__ = [
     "PnlFastemProjectManager",
+    "PnlFastemUserSettings",
     "PnlTabCorrelation",
     "PnlTabCryosecomChamber",
     "PnlTabFastemAcqui",

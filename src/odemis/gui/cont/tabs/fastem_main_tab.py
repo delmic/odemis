@@ -33,7 +33,7 @@ from odemis.gui import img, main_xrc
 from odemis.gui.comp.fastem_project_manager_panel import FastEMProjectManagerPanel
 from odemis.gui.comp.fastem_user_settings_panel import FastEMUserSettingsPanel
 from odemis.gui.comp.viewport import FastEMMainViewport
-from odemis.gui.layout.components import PnlFastemProjectManager
+from odemis.gui.layout.components import PnlFastemProjectManager, PnlFastemUserSettings
 from odemis.gui.cont.tabs.fastem_acquisition_tab import FastEMAcquisitionTab
 from odemis.gui.cont.tabs.fastem_setup_tab import FastEMSetupTab
 from odemis.gui.cont.tabs.tab import Tab
@@ -108,9 +108,7 @@ class FastEMMainTab(Tab):
             wx.EVT_SIZE, self.on_pnl_vp_grid_project_manager_size
         )
 
-        user_settings_panel = main_xrc.xrcpnl_fastem_user_settings(
-            panel.pnl_user_settings
-        )
+        user_settings_panel = PnlFastemUserSettings(panel.pnl_user_settings)
         self.user_settings_panel = FastEMUserSettingsPanel(
             user_settings_panel, tab_data
         )
