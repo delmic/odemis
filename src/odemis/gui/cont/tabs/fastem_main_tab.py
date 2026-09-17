@@ -29,11 +29,15 @@ import wx
 
 import odemis.gui.cont.views as viewcont
 from odemis.acq.stream import EMStream, FastEMSEMStream
-from odemis.gui import img, main_xrc
+from odemis.gui import img
 from odemis.gui.comp.fastem_project_manager_panel import FastEMProjectManagerPanel
 from odemis.gui.comp.fastem_user_settings_panel import FastEMUserSettingsPanel
 from odemis.gui.comp.viewport import FastEMMainViewport
-from odemis.gui.layout.components import PnlFastemProjectManager, PnlFastemUserSettings
+from odemis.gui.layout.components import (
+    PnlFastemProjectManager,
+    PnlFastemUserSettings,
+    PnlTabFastemSetup,
+)
 from odemis.gui.cont.tabs.fastem_acquisition_tab import FastEMAcquisitionTab
 from odemis.gui.cont.tabs.fastem_setup_tab import FastEMSetupTab
 from odemis.gui.cont.tabs.tab import Tab
@@ -138,7 +142,7 @@ class FastEMMainTab(Tab):
         panel.pnl_tabs.Bind(wx.EVT_SIZE, self.on_pnl_tabs_size)
         self.panel_tabs = panel.pnl_tabs
 
-        overview_panel = main_xrc.xrcpnl_tab_fastem_setup(panel.pnl_tabs)
+        overview_panel = PnlTabFastemSetup(panel.pnl_tabs)
         self.setup_tab = FastEMSetupTab(
             "fastem_setup",
             panel.btn_tab_setup,

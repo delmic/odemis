@@ -5,6 +5,7 @@ from .panel_tab_correlation import PnlTabCorrelation
 from .panel_tab_cryosecom_chamber import PnlTabCryosecomChamber
 from .panel_tab_fastem_acqui import PnlTabFastemAcqui
 from .panel_tab_fastem_main import PnlTabFastemMain
+from .panel_tab_fastem_setup import PnlTabFastemSetup
 from .panel_tab_fibsem import PnlTabFibsem
 from .panel_tab_inspection import PnlTabInspection
 from .panel_tab_fastem_multi_beam import PnlTabFastemMultiBeam
@@ -25,6 +26,7 @@ __all__ = [
     "PnlTabFastemMultiBeam",
     "PnlTabFastemSingleBeam",
     "PnlTabFastemMain",
+    "PnlTabFastemSetup",
     "PnlTabFibsem",
     "PnlTabInspection",
     "PnlTabLocalization",
