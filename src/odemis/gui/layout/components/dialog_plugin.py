@@ -69,7 +69,7 @@ class PluginDialogBase(wx.Dialog):
         """
         panel = wx.Panel(self)
         panel.SetForegroundColour(self._theme.text_primary)
-        panel.SetBackgroundColour("#1A1A1A")
+        panel.SetBackgroundColour(self._theme.button_text)
         set_font(panel, 13)
         panel.SetSizer(wx.BoxSizer(wx.VERTICAL))
         return panel
@@ -198,8 +198,8 @@ class PluginDialogBase(wx.Dialog):
 
         with vbox() as sizer:
             self.lbl_acquisition_info = wx.StaticText(panel)
-            self.lbl_acquisition_info.SetForegroundColour("#DDDDDD")
-            set_font(self.lbl_acquisition_info, 10)
+            self.lbl_acquisition_info.SetForegroundColour(self._theme.field_foreground)
+            set_font(self.lbl_acquisition_info, self._theme.font_size_checklist)
             sizer.Add(
                 self.lbl_acquisition_info,
                 proportion=1,
@@ -235,8 +235,8 @@ class PluginDialogBase(wx.Dialog):
 
             with hbox() as row:
                 self.lbl_gauge = wx.StaticText(panel)
-                self.lbl_gauge.SetForegroundColour("#DDDDDD")
-                set_font(self.lbl_gauge, 14)
+                self.lbl_gauge.SetForegroundColour(self._theme.field_foreground)
+                set_font(self.lbl_gauge, self._theme.font_size_prominent_button)
                 row.Add(
                     self.lbl_gauge,
                     proportion=1,

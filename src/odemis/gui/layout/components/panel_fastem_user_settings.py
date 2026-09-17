@@ -25,10 +25,6 @@ from odemis.gui.layout.constants.themes import DARK, Theme
 from odemis.gui.layout.util.fonts import set_font
 from odemis.gui.layout.util.sizers import hbox, vbox
 
-# Default foreground colour for the pressure readout row. Not yet a shared
-# semantic theme role: this is the only converted layout using it so far.
-_PRESSURE_TEXT_COLOUR = "#DDDDDD"
-
 
 class PnlFastemUserSettings(wx.Panel):
     """Provide the FastEM user settings layout.
@@ -130,14 +126,14 @@ class PnlFastemUserSettings(wx.Panel):
         """
         with hbox() as sizer:
             label = wx.StaticText(parent, label="Pressure: ")
-            label.SetForegroundColour(_PRESSURE_TEXT_COLOUR)
+            label.SetForegroundColour(self._theme.field_foreground)
             set_font(label, self._theme.font_size_checklist)
             sizer.Add(label)
 
             self.pressure_label = wx.StaticText(
                 parent, label="...", size=(150, 20)
             )
-            self.pressure_label.SetForegroundColour(_PRESSURE_TEXT_COLOUR)
+            self.pressure_label.SetForegroundColour(self._theme.field_foreground)
             self.pressure_label.SetBackgroundColour(self._theme.background)
             sizer.Add(self.pressure_label)
 

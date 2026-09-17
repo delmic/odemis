@@ -31,11 +31,6 @@ from odemis.gui.layout.constants.themes import DARK, Theme
 from odemis.gui.layout.util.fonts import set_font
 from odemis.gui.layout.util.sizers import hbox, vbox
 
-# One-off colours used only within this dialog: they are not application-wide
-# semantic roles, so they are kept local rather than added to the theme.
-_DIALOG_BACKGROUND = "#000000"
-_LABEL_TEXT_COLOUR = "#DDDDDD"
-
 
 class OverviewAcqDialogBase(wx.Dialog):
     """Provide the overview acquisition dialog layout."""
@@ -52,7 +47,7 @@ class OverviewAcqDialogBase(wx.Dialog):
             style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER,
         )
         self._theme = theme
-        self.SetBackgroundColour(_DIALOG_BACKGROUND)
+        self.SetBackgroundColour(self._theme.viewport_background)
         set_font(self, 9)
 
         root_sizer = wx.FlexGridSizer(cols=2, rows=2, vgap=0, hgap=0)
@@ -101,7 +96,7 @@ class OverviewAcqDialogBase(wx.Dialog):
 
         with vbox() as sizer:
             main_buttons = wx.Panel(panel, size=(400, -1))
-            main_buttons.SetForegroundColour(_LABEL_TEXT_COLOUR)
+            main_buttons.SetForegroundColour(self._theme.field_foreground)
             main_buttons.SetBackgroundColour(self._theme.field_background)
             sizer.Add(main_buttons, flag=wx.EXPAND)
 
@@ -353,7 +348,7 @@ class OverviewAcqDialogBase(wx.Dialog):
                 label="Estimated acquisition time is 9999 seconds",
                 style=wx.ALIGN_RIGHT,
             )
-            self.lbl_acqestimate.SetForegroundColour(_LABEL_TEXT_COLOUR)
+            self.lbl_acqestimate.SetForegroundColour(self._theme.field_foreground)
             set_font(self.lbl_acqestimate, self._theme.font_size_prominent_button)
             sizer.Add(self.lbl_acqestimate, flag=wx.ALL, border=23)
 
@@ -435,7 +430,7 @@ class OverviewAcqDialogBase(wx.Dialog):
         :returns: Styled static label.
         """
         label = wx.StaticText(parent, label=text)
-        label.SetForegroundColour(_LABEL_TEXT_COLOUR)
+        label.SetForegroundColour(self._theme.field_foreground)
         if font_size is not None:
             set_font(label, font_size)
         return label

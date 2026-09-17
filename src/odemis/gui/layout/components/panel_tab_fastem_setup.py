@@ -28,13 +28,6 @@ from odemis.gui.layout.constants.themes import DARK, Theme
 from odemis.gui.layout.util.fonts import set_font
 from odemis.gui.layout.util.sizers import hbox, vbox
 
-# Foreground colour of the acquisition and calibration status labels. Not yet
-# a shared semantic theme role: reused verbatim from the source XRC.
-_STATUS_TEXT_COLOUR = "#DDDDDD"
-
-# Foreground colour of the active-scintillator settings host panel.
-_SETTINGS_HOST_TEXT_COLOUR = "#999999"
-
 
 class PnlTabFastemSetup(wx.Panel):
     """Provide the FastEM setup tab layout.
@@ -103,9 +96,7 @@ class PnlTabFastemSetup(wx.Panel):
 
             self.pnl_active_scintillator = wx.Panel(panel, size=(400, 40))
             self.pnl_active_scintillator.SetBackgroundColour(self._theme.background)
-            self.pnl_active_scintillator.SetForegroundColour(
-                _SETTINGS_HOST_TEXT_COLOUR
-            )
+            self.pnl_active_scintillator.SetForegroundColour(self._theme.panel_foreground)
             sizer.Add(self.pnl_active_scintillator)
 
         panel.SetSizer(sizer)
@@ -324,7 +315,7 @@ class PnlTabFastemSetup(wx.Panel):
             sizer.Add(bmp_warn, flag=wx.RIGHT, border=5)
 
             label = wx.StaticText(panel, label=label_text)
-            label.SetForegroundColour(_STATUS_TEXT_COLOUR)
+            label.SetForegroundColour(self._theme.field_foreground)
             set_font(label, self._theme.font_size_checklist)
             sizer.Add(label)
 

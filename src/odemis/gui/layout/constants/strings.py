@@ -22,3 +22,4 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 DEFAULT_DESTINATION_FILE = "Select a destination file"
 TOOLTIP_OPEN_LOG_PANEL = "Open log panel"
+TOOLTIP_CLOSE_LOG_PANEL = "Close log panel"

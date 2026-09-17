@@ -27,14 +27,6 @@ from odemis.gui.layout.constants.themes import DARK, Theme
 from odemis.gui.layout.util.fonts import set_font
 from odemis.gui.layout.util.sizers import hbox, vbox
 
-# Background colour of the toolbar and project-manager header sections,
-# distinct from the theme's semantic panel background.
-_TOOLBAR_BACKGROUND = "#333333"
-# Background colour of the collapsed project-manager panel body.
-_PROJECT_MANAGER_BACKGROUND = "#1A1A1A"
-# Background colour behind the tab-switching buttons.
-_TAB_BAR_BACKGROUND = "#BFBFBF"
-
 
 class PnlTabFastemMain(wx.Panel):
     """Provide the FastEM main tab layout.
@@ -143,7 +135,7 @@ class PnlTabFastemMain(wx.Panel):
             )
             self.pnl_project_manager.SetMinSize((1108, 200))
             self.pnl_project_manager.SetBackgroundColour(
-                _PROJECT_MANAGER_BACKGROUND
+                self._theme.button_text
             )
             self.pnl_project_manager.Hide()
             sizer.Add(self.pnl_project_manager, flag=wx.EXPAND)
@@ -192,7 +184,7 @@ class PnlTabFastemMain(wx.Panel):
         """
         self.pnl_project_manager_header = wx.Panel(parent)
         self.pnl_project_manager_header.SetBackgroundColour(
-            _TOOLBAR_BACKGROUND
+            self._theme.background
         )
 
         with hbox() as sizer:
@@ -276,7 +268,7 @@ class PnlTabFastemMain(wx.Panel):
         """
         self.pnl_tabbuttons = wx.Panel(self, size=(400, 40))
         self.pnl_tabbuttons.SetMinSize((400, 40))
-        self.pnl_tabbuttons.SetBackgroundColour(_TAB_BAR_BACKGROUND)
+        self.pnl_tabbuttons.SetBackgroundColour(self._theme.text_secondary)
 
         with hbox() as sizer:
             self.btn_tab_setup = self._tab_button(

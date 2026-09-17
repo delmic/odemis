@@ -52,7 +52,7 @@ class TDCorrelationDialogBase(wx.Dialog):
             style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER,
         )
         self._theme = theme
-        self.SetBackgroundColour("#000000")
+        self.SetBackgroundColour(self._theme.viewport_background)
         set_font(self, 9)
 
         root_sizer = wx.FlexGridSizer(1, 3, 0, 0)
@@ -161,7 +161,7 @@ class TDCorrelationDialogBase(wx.Dialog):
         """
         with hbox() as sizer:
             label = wx.StaticText(parent, label="FM acquired at")
-            label.SetForegroundColour("#DDDDDD")
+            label.SetForegroundColour(self._theme.field_foreground)
             sizer.Add(
                 label,
                 flag=wx.RIGHT | wx.ALIGN_CENTER_VERTICAL,
@@ -175,7 +175,7 @@ class TDCorrelationDialogBase(wx.Dialog):
             sizer.Add(self.bmp_fm_posture)
 
             self.lbl_fm_posture = wx.StaticText(parent, label="posture")
-            self.lbl_fm_posture.SetForegroundColour("#777777")
+            self.lbl_fm_posture.SetForegroundColour(self._theme.text_disabled)
             sizer.Add(self.lbl_fm_posture, flag=wx.ALIGN_CENTER_VERTICAL)
 
         return sizer
@@ -219,7 +219,7 @@ class TDCorrelationDialogBase(wx.Dialog):
                 pnl_correlation,
                 label="Correlation RMS Deviation :",
             )
-            self.txt_correlation_rms.SetForegroundColour("#E5E5E5")
+            self.txt_correlation_rms.SetForegroundColour(self._theme.text_primary)
             self.txt_correlation_rms.Hide()
             sizer.Add(self.txt_correlation_rms, flag=wx.LEFT, border=10)
 
@@ -249,7 +249,7 @@ class TDCorrelationDialogBase(wx.Dialog):
             sizer.Add(self.btn_xyz_targeting)
 
             self.txt_refine_xyz_active = wx.StaticText(parent, label=" ")
-            self.txt_refine_xyz_active.SetForegroundColour("#E5E5E5")
+            self.txt_refine_xyz_active.SetForegroundColour(self._theme.text_primary)
             self.txt_refine_xyz_active.Hide()
             sizer.Add(
                 self.txt_refine_xyz_active,
@@ -305,7 +305,7 @@ class TDCorrelationDialogBase(wx.Dialog):
                 face_colour="def",
                 style=wx.ALIGN_CENTRE,
             )
-            set_font(self.btn_close, 14)
+            set_font(self.btn_close, self._theme.font_size_prominent_button)
             self.btn_close.SetForegroundColour(self._theme.button_text)
             sizer.Add(
                 self.btn_close,

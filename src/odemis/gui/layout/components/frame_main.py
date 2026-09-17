@@ -23,24 +23,13 @@ import wx
 from odemis.gui import img
 from odemis.gui.comp.buttons import ImageButton, TabButton
 from odemis.gui.layout.constants.themes import DARK, Theme
+from odemis.gui.layout.constants.strings import TOOLTIP_CLOSE_LOG_PANEL
 from odemis.gui.layout.util.fonts import set_font
 from odemis.gui.layout.util.sizers import hbox, vbox
 
-# Background colour of the frame chrome behind the tab-buttons/log panels.
-_FRAME_BACKGROUND = "#000000"
-# Background colour behind the tab-switching buttons.
-_TAB_BAR_BACKGROUND = "#BFBFBF"
 # Foreground colour of the hidden temperature readout, distinct from the
 # theme's text roles (dark grey against the light tab bar).
 _TEMPERATURE_TEXT = "#353535"
-# Background colour of the collapsible log panel and its text control.
-_LOG_BACKGROUND = "#1A1A1A"
-# Tooltip for the frame-level log toggle, distinct from
-# strings.TOOLTIP_OPEN_LOG_PANEL used by the per-tab toggles: this button
-# only ever appears while the log panel is already shown.
-_TOOLTIP_CLOSE_LOG_PANEL = "Close log panel"
-# Point size applied to the frame itself, matching the XRC default font.
-_DEFAULT_FONT_SIZE = 9
 
 
 class MainFrame(wx.Frame):
@@ -55,8 +44,8 @@ class MainFrame(wx.Frame):
     def __init__(self, parent: Optional[wx.Window], theme: Theme = DARK):
         super().__init__(parent, title="Odemis")
         self._theme = theme
-        self.SetBackgroundColour(_FRAME_BACKGROUND)
-        set_font(self, _DEFAULT_FONT_SIZE)
+        self.SetBackgroundColour(self._theme.viewport_background)
+        set_font(self, self._theme.font_size_default)
 
         self._build_menu_bar()
 
@@ -205,7 +194,7 @@ class MainFrame(wx.Frame):
         """
         self.pnl_tabbuttons = wx.Panel(self, size=(-1, 40))
         self.pnl_tabbuttons.SetMinSize((-1, 40))
-        self.pnl_tabbuttons.SetBackgroundColour(_TAB_BAR_BACKGROUND)
+        self.pnl_tabbuttons.SetBackgroundColour(self._theme.text_secondary)
 
         with hbox() as sizer:
             self.btn_tab_cryosecom_chamber = self._tab_button(
@@ -356,7 +345,7 @@ class MainFrame(wx.Frame):
         :returns: Log panel, initially hidden.
         """
         self.pnl_log = wx.Panel(self)
-        self.pnl_log.SetBackgroundColour(_LOG_BACKGROUND)
+        self.pnl_log.SetBackgroundColour(self._theme.button_text)
         self.pnl_log.Hide()
 
         with hbox() as sizer:
@@ -367,7 +356,7 @@ class MainFrame(wx.Frame):
                 face_colour="def",
                 style=wx.ALIGN_CENTRE,
             )
-            self.btn_log.SetToolTip(_TOOLTIP_CLOSE_LOG_PANEL)
+            self.btn_log.SetToolTip(TOOLTIP_CLOSE_LOG_PANEL)
             sizer.Add(
                 self.btn_log, flag=wx.ALL | wx.ALIGN_BOTTOM, border=10
             )
@@ -378,7 +367,7 @@ class MainFrame(wx.Frame):
                 size=(-1, 200),
                 style=wx.BORDER_NONE | wx.TE_MULTILINE | wx.TE_RICH,
             )
-            self.txt_log.SetBackgroundColour(_LOG_BACKGROUND)
+            self.txt_log.SetBackgroundColour(self._theme.button_text)
             # A monospace face (rather than just a point size) is required
             # so that log message columns stay aligned; set_font() only
             # changes size/weight and preserves the native font family.

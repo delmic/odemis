@@ -24,9 +24,6 @@ from odemis.gui.layout.constants.themes import DARK, Theme
 from odemis.gui.layout.util.fonts import set_font
 from odemis.gui.layout.util.sizers import hbox, vbox
 
-# Background colour behind the tab-switching buttons.
-_TAB_BAR_BACKGROUND = "#BFBFBF"
-
 
 class PnlTabFastemAcqui(wx.Panel):
     """Provide the FastEM acquisition tab layout.
@@ -83,7 +80,7 @@ class PnlTabFastemAcqui(wx.Panel):
         """
         self.pnl_tabbuttons = wx.Panel(parent, size=(400, 40))
         self.pnl_tabbuttons.SetMinSize((400, 40))
-        self.pnl_tabbuttons.SetBackgroundColour(_TAB_BAR_BACKGROUND)
+        self.pnl_tabbuttons.SetBackgroundColour(self._theme.text_secondary)
 
         with hbox() as sizer:
             self.btn_tab_single_beam = self._tab_button(

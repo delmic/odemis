@@ -459,7 +459,7 @@ class PnlTabSparcAcqui(wx.Panel):
             self.lbl_sparc_fold_acq = wx.StaticText(
                 panel, label="Some streams will be acquired simultaneously"
             )
-            self.lbl_sparc_fold_acq.SetForegroundColour("#DDDDDD")
+            self.lbl_sparc_fold_acq.SetForegroundColour(self._theme.field_foreground)
             set_font(self.lbl_sparc_fold_acq, self._theme.font_size_checklist)
             self.lbl_sparc_fold_acq.Hide()
             sizer.Add(self.lbl_sparc_fold_acq)
@@ -492,7 +492,7 @@ class PnlTabSparcAcqui(wx.Panel):
             self.lbl_sparc_acq_estimate = wx.StaticText(
                 panel, label="No region of interest selected."
             )
-            self.lbl_sparc_acq_estimate.SetForegroundColour("#DDDDDD")
+            self.lbl_sparc_acq_estimate.SetForegroundColour(self._theme.field_foreground)
             set_font(self.lbl_sparc_acq_estimate, self._theme.font_size_checklist)
             sizer.Add(self.lbl_sparc_acq_estimate)
 

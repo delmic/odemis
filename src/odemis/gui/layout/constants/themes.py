@@ -29,6 +29,8 @@ class Theme:
 
     background: str
     panel_background: str
+    panel_foreground: str
+    field_foreground: str
     field_background: str
     section_header: str
     viewport_background: str
@@ -39,6 +41,7 @@ class Theme:
     text_muted: str
     button_text: str
     button_text_contrast: str
+    font_size_default: int
     font_size_body: int
     font_size_section_heading: int
     font_size_button: int
@@ -54,7 +57,9 @@ class Theme:
 DARK = Theme(
     background="#333333",
     panel_background="#444444",
+    panel_foreground="#999999",
     field_background="#4D4D4D",
+    field_foreground="#DDDDDD",
     section_header="#555555",
     viewport_background="#000000",
     text_primary="#E5E5E5",
@@ -64,6 +69,7 @@ DARK = Theme(
     text_muted="#7F7F7F",
     button_text="#1A1A1A",
     button_text_contrast="#FFFFFF",
+    font_size_default=9,
     font_size_body=12,
     font_size_section_heading=16,
     font_size_button=11,

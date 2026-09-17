@@ -50,7 +50,7 @@ class SecomAcqDialogBase(wx.Dialog):
             style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER,
         )
         self._theme = theme
-        self.SetBackgroundColour("#000000")
+        self.SetBackgroundColour(self._theme.viewport_background)
         set_font(self, 9)
 
         root_sizer = wx.FlexGridSizer(2, 2, 0, 0)
@@ -322,7 +322,7 @@ class SecomAcqDialogBase(wx.Dialog):
             self.lbl_acqestimate.SetForegroundColour(
                 self._theme.text_primary
             )
-            set_font(self.lbl_acqestimate, 14)
+            set_font(self.lbl_acqestimate, self._theme.font_size_prominent_button)
             sizer.Add(self.lbl_acqestimate, flag=wx.ALL, border=23)
 
         panel.SetSizer(sizer)

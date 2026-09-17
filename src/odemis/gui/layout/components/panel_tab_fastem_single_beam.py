@@ -26,12 +26,6 @@ from odemis.gui.layout.constants.themes import DARK, Theme
 from odemis.gui.layout.util.fonts import set_font
 from odemis.gui.layout.util.sizers import hbox, vbox
 
-# Foreground colour of the section caption bars.
-_CAPTION_TEXT = "#1A1A1A"
-# Font point size of the acquisition status label, distinct from any
-# shared semantic role in the theme.
-_STATUS_LABEL_FONT_SIZE = 10
-
 
 class PnlTabFastemSingleBeam(wx.Panel):
     """Provide the FastEM single-beam acquisition tab layout.
@@ -103,7 +97,7 @@ class PnlTabFastemSingleBeam(wx.Panel):
 
         with vbox() as sizer:
             caption = CaptionBar(section, "PROJECTS", False)
-            caption.SetForegroundColour(_CAPTION_TEXT)
+            caption.SetForegroundColour(self._theme.button_text)
             sizer.Add(caption, flag=wx.EXPAND)
 
             self.pnl_projects = wx.Panel(section, size=(400, 700))
@@ -131,7 +125,7 @@ class PnlTabFastemSingleBeam(wx.Panel):
 
         with vbox() as sizer:
             caption = CaptionBar(section, "ACQUISITION", False)
-            caption.SetForegroundColour(_CAPTION_TEXT)
+            caption.SetForegroundColour(self._theme.button_text)
             sizer.Add(caption, flag=wx.EXPAND)
 
             sizer.Add(
@@ -250,8 +244,8 @@ class PnlTabFastemSingleBeam(wx.Panel):
             self.lbl_acq_estimate = wx.StaticText(
                 panel, label="No region of acquisition selected."
             )
-            self.lbl_acq_estimate.SetForegroundColour("#DDDDDD")
-            set_font(self.lbl_acq_estimate, _STATUS_LABEL_FONT_SIZE)
+            self.lbl_acq_estimate.SetForegroundColour(self._theme.field_foreground)
+            set_font(self.lbl_acq_estimate, self._theme.font_size_checklist)
             sizer.Add(self.lbl_acq_estimate)
 
         panel.SetSizer(sizer)
