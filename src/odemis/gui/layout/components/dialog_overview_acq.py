@@ -163,7 +163,7 @@ class OverviewAcqDialogBase(wx.Dialog):
             self.selected_grid_lbl = create_label(
                 scroll_window,
                 "Selected grid areas",
-                _LABEL_TEXT_COLOUR,
+                self._theme.text_primary,
                 9,
             )
             scroll_sizer.Add(
@@ -207,7 +207,7 @@ class OverviewAcqDialogBase(wx.Dialog):
         self.zstack_steps_label = create_label(
             parent,
             "ZStack steps",
-            _LABEL_TEXT_COLOUR,
+            self._theme.text_primary,
             9,
         )
         grid.Add(self.zstack_steps_label, pos=(0, 0), flag=wx.LEFT, border=13)
@@ -232,7 +232,7 @@ class OverviewAcqDialogBase(wx.Dialog):
         self.zstep_size_label = create_label(
             parent,
             "Zstep size",
-            _LABEL_TEXT_COLOUR,
+            self._theme.text_primary,
             9,
         )
         grid.Add(self.zstep_size_label, pos=(1, 0), flag=wx.LEFT, border=13)
@@ -264,7 +264,7 @@ class OverviewAcqDialogBase(wx.Dialog):
         tiles_number_x_lbl = create_label(
             parent,
             "Tiles number x",
-            _LABEL_TEXT_COLOUR,
+            self._theme.text_primary,
             9,
         )
         grid.Add(tiles_number_x_lbl, pos=(0, 0), flag=wx.LEFT, border=13)
@@ -280,7 +280,7 @@ class OverviewAcqDialogBase(wx.Dialog):
         tiles_number_y_lbl = create_label(
             parent,
             "Tiles number y",
-            _LABEL_TEXT_COLOUR,
+            self._theme.text_primary,
             9,
         )
         grid.Add(tiles_number_y_lbl, pos=(1, 0), flag=wx.LEFT, border=13)
@@ -306,7 +306,7 @@ class OverviewAcqDialogBase(wx.Dialog):
         area_size_lbl = create_label(
             parent,
             "Tiled area size",
-            _LABEL_TEXT_COLOUR,
+            self._theme.text_primary,
             9,
         )
         grid.Add(area_size_lbl, pos=(0, 0), flag=wx.LEFT, border=13)
@@ -328,7 +328,7 @@ class OverviewAcqDialogBase(wx.Dialog):
             self.focus_points_dist_lbl = create_label(
                 parent,
                 "Distance between Focus Points",
-                _LABEL_TEXT_COLOUR,
+                self._theme.text_primary,
                 9,
             )
             sizer.Add(
