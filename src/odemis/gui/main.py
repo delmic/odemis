@@ -193,6 +193,7 @@ class OdemisGUIApp(wx.App):
             # List of all possible tabs used in Odemis' main GUI, and only load the tabs depending on
             # the current microscope role.
             from odemis.gui.cont.tabs.analysis_tab import AnalysisTab
+            from odemis.gui.layout import PnlTabInspection
 
             tab_defs = [
                 # Analysis tab is common to almost all roles, so always load it.
@@ -201,7 +202,7 @@ class OdemisGUIApp(wx.App):
                     "name": TabName.ANALYSIS.value,
                     "controller": AnalysisTab,
                     "button": self.main_frame.btn_tab_inspection,
-                    "panel": main_xrc.xrcpnl_tab_inspection
+                    "panel": PnlTabInspection
                 }
             ]
             if self.main_data.role in ("secom", "delphi", "sem", "optical"):
