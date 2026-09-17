@@ -21,8 +21,8 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
 import wx
-from collections.abc import Generator
 from contextlib import contextmanager
+from typing import Generator
 
 
 @contextmanager
