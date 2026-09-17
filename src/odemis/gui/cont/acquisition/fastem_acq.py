@@ -539,7 +539,7 @@ class FastEMSingleBeamAcquiController(object):
 
         # Setup the controls
         self.acq_panel = SettingsPanel(
-            self._tab_panel.pnl_acq, size=(400, 140)
+            self._tab_panel.pnl_acq, size=(400, 200)
         )
 
         autostig_lbl, self.autostig_period = self.acq_panel.add_int_field(
@@ -1005,7 +1005,7 @@ class FastEMMultiBeamAcquiController(object):
 
         # Setup the controls
         self.acq_panel = SettingsPanel(
-            self._tab_panel.pnl_acq, size=(400, 140)
+            self._tab_panel.pnl_acq, size=(400, 200)
         )
         autostig_lbl, self.autostig_period = self.acq_panel.add_int_field(
             "Autostigmation period", value=0,

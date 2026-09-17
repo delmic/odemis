@@ -176,8 +176,8 @@ class PnlTabFastemSingleBeam(wx.Panel):
         panel.SetBackgroundColour(self._theme.background)
 
         with vbox() as sizer:
-            self.pnl_acq = wx.Panel(panel, size=(400, 140))
-            self.pnl_acq.SetMinSize((400, 140))
+            self.pnl_acq = wx.Panel(panel, size=(400, 200))
+            self.pnl_acq.SetMinSize((400, 200))
             self.pnl_acq.SetBackgroundColour(self._theme.background)
             self.pnl_acq.SetForegroundColour(self._theme.text_muted)
             sizer.Add(
