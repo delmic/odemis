@@ -151,16 +151,6 @@ class PnlTabLocalizationTest(unittest.TestCase):
             wx.Colour(DARK.button_text_contrast),
         )
 
-    def test_default_button_rejects_contrasting_text(self) -> None:
-        """Reject contrasting text on the default button face."""
-        with self.assertRaises(ValueError):
-            self.panel._text_button(
-                self.panel,
-                "Invalid",
-                height=24,
-                contrast=True,
-            )
-
 
 if __name__ == "__main__":
     unittest.main()

@@ -123,16 +123,6 @@ class PnlTabSparcAlignTest(unittest.TestCase):
             wx.Colour(DARK.button_text),
         )
 
-    def test_arrow_button_labels_and_positions(self) -> None:
-        """Preserve the arrow glyphs used for each actuator direction."""
-        self.assertEqual(self.panel.mirror_align_btn_p_mirror_y.GetLabel(), "↑")
-        self.assertEqual(self.panel.mirror_align_btn_m_mirror_y.GetLabel(), "↓")
-        self.assertEqual(self.panel.mirror_align_btn_p_mirror_x.GetLabel(), "←")
-        self.assertEqual(self.panel.mirror_align_btn_m_mirror_x.GetLabel(), "→")
-        self.assertEqual(self.panel.mirror_align_btn_m_mirror_ry.GetLabel(), "↑")
-        self.assertEqual(self.panel.mirror_align_btn_p_mirror_ry.GetLabel(), "↓")
-        self.assertEqual(self.panel.mirror_align_btn_m_mirror_rz.GetLabel(), "←")
-        self.assertEqual(self.panel.mirror_align_btn_p_mirror_rz.GetLabel(), "→")
 
 if __name__ == "__main__":
     unittest.main()

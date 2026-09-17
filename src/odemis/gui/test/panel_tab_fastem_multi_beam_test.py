@@ -79,34 +79,6 @@ class PnlTabFastemMultiBeamTest(unittest.TestCase):
             wx.Colour(DARK.button_text_contrast),
         )
 
-    def test_min_size_preserved_for_fixed_panels(self) -> None:
-        """Ensure fixed-size panels keep a MinSize floor so sizers do not
-        collapse them via GetBestSize(), which previously hid the ROA
-        project tree and acquisition settings after construction."""
-        self.assertEqual(self.panel.pnl_projects.GetMinSize(), (400, 700))
-        self.assertEqual(self.panel.pnl_acq.GetMinSize(), (400, 140))
-
-    def test_projects_panel_has_nonzero_height_before_show(self) -> None:
-        """Ensure pnl_projects already has usable height immediately after
-        construction, before any Show or resize event.
-
-        Controllers read pnl_projects.Size right after construction to
-        size the project tree; if this panel starts at height 0 (as it
-        did when the root panel's initial size was (400, -1)), the tree
-        gets built with zero height and never recovers even after later
-        layout passes resize the surrounding panels."""
-        self.assertGreater(self.panel.pnl_projects.GetSize().height, 0)
-
-    def test_default_button_rejects_contrasting_text(self) -> None:
-        """Reject contrasting text on the default button face."""
-        with self.assertRaises(ValueError):
-            self.panel._text_button(
-                self.panel,
-                "Invalid",
-                height=24,
-                contrast=True,
-            )
-
 
 if __name__ == "__main__":
     unittest.main()

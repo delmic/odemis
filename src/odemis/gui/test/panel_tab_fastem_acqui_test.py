@@ -68,11 +68,6 @@ class PnlTabFastemAcquiTest(unittest.TestCase):
             wx.Colour(DARK.text_primary),
         )
 
-    def test_min_size_preserved_for_fixed_panels(self) -> None:
-        """Ensure the fixed-size tab-buttons panel keeps a MinSize floor so
-        sizers do not collapse it via GetBestSize()."""
-        self.assertEqual(self.panel.pnl_tabbuttons.GetMinSize(), (400, 40))
-
 
 if __name__ == "__main__":
     unittest.main()

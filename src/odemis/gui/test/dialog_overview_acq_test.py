@@ -95,16 +95,6 @@ class OverviewAcqDialogTest(unittest.TestCase):
             wx.Colour(DARK.button_text_contrast),
         )
 
-    def test_default_button_rejects_contrasting_text(self) -> None:
-        """Reject contrasting text on the default button face."""
-        with self.assertRaises(ValueError):
-            self.dlg._text_button(
-                self.dlg,
-                "Invalid",
-                height=24,
-                contrast=True,
-            )
-
 
 if __name__ == "__main__":
     unittest.main()

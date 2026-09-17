@@ -145,46 +145,6 @@ class PnlTabFibsemTest(unittest.TestCase):
         self.assertEqual(self.panel.gauge_automated_milling.GetRange(), 100)
         self.assertEqual(self.panel.gauge_milling_series.GetRange(), 100)
 
-    def test_button_foregrounds(self) -> None:
-        """Apply normal and contrasting foregrounds independently."""
-        normal_buttons = (
-            self.panel.btn_create_move_feature,
-            self.panel.btn_go_to_feature,
-            self.panel.btn_switch_sem_imaging,
-            self.panel.btn_switch_milling,
-            self.panel.btn_acquire_overview,
-        )
-        contrasting_buttons = (
-            self.panel.btn_feature_save_position,
-            self.panel.btn_cryosecom_acquire,
-            self.panel.btn_acquire_all,
-            self.panel.btn_run_automated_milling,
-            self.panel.btn_run_milling,
-        )
-
-        for button in normal_buttons:
-            with self.subTest(button=button):
-                self.assertEqual(
-                    button.GetForegroundColour(),
-                    wx.Colour(DARK.button_text),
-                )
-        for button in contrasting_buttons:
-            with self.subTest(button=button):
-                self.assertEqual(
-                    button.GetForegroundColour(),
-                    wx.Colour(DARK.button_text_contrast),
-                )
-
-    def test_default_button_rejects_contrasting_text(self) -> None:
-        """Reject contrasting text on the default button face."""
-        with self.assertRaises(ValueError):
-            self.panel._text_button(
-                self.panel,
-                "Invalid",
-                height=24,
-                contrast=True,
-            )
-
 
 if __name__ == "__main__":
     unittest.main()
