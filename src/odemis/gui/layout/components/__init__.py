@@ -8,6 +8,7 @@ from .panel_tab_inspection import PnlTabInspection
 from .panel_tab_localization import PnlTabLocalization
 from .panel_tab_secom_align import PnlTabSecomAlign
 from .panel_tab_secom_streams import PnlTabSecomStreams
+from .panel_tab_sparc_chamber import PnlTabSparcChamber
 
 __all__ = [
     "PnlFastemProjectManager",
@@ -20,4 +21,5 @@ __all__ = [
     "PnlTabLocalization",
     "PnlTabSecomAlign",
     "PnlTabSecomStreams",
+    "PnlTabSparcChamber",
 ]
