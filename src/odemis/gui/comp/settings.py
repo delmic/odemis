@@ -347,7 +347,7 @@ class SettingsPanel(wx.Panel):
             conf = {}
 
         lbl_ctrl = self._add_side_label(label_text)
-        value_ctrl = wx.CheckBox(self, wx.ID_ANY, style=wx.ALIGN_RIGHT | wx.NO_BORDER, **conf)
+        value_ctrl = wx.CheckBox(self, wx.ID_ANY, style=wx.ALIGN_LEFT | wx.NO_BORDER, **conf)
         self.gb_sizer.Add(value_ctrl, (self.num_rows, pos_col), span=span,
                           flag=wx.EXPAND | wx.TOP | wx.BOTTOM, border=5)
         value_ctrl.SetValue(value)
