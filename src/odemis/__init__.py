@@ -34,7 +34,7 @@ def _get_version_git():
     # change directory to root
     rootdir = os.path.join(os.path.dirname(__file__), "..", "..") # odemis/src/odemis/../..
 
-    if not os.path.isdir(rootdir) or not os.path.isdir(os.path.join(rootdir, ".git")):
+    if not os.path.isdir(rootdir) or not os.path.exists(os.path.join(rootdir, ".git")):
         raise LookupError("Not in a git directory")
 
     try:
