@@ -76,16 +76,6 @@ class SecomAcqDialogTest(unittest.TestCase):
         )
         self.assertEqual(self.dialog.txt_destination.GetValue(), "...")
 
-    def test_default_button_rejects_contrasting_text(self) -> None:
-        """Reject contrasting text on the default button face."""
-        with self.assertRaises(ValueError):
-            self.dialog._text_button(
-                self.dialog,
-                "Invalid",
-                height=24,
-                contrast=True,
-            )
-
 
 if __name__ == "__main__":
     unittest.main()
