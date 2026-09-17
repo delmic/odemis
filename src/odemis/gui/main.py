@@ -272,6 +272,7 @@ class OdemisGUIApp(wx.App):
                 from odemis.gui.layout import (
                     PnlTabCorrelation,
                     PnlTabCryosecomChamber,
+                    PnlTabFibsem,
                     PnlTabLocalization,
                 )
 
@@ -300,7 +301,7 @@ class OdemisGUIApp(wx.App):
                         "name": TabName.METEOR_FIBSEM.value,
                         "controller": FibsemTab,
                         "button": self.main_frame.btn_tab_fibsem,
-                        "panel": main_xrc.xrcpnl_tab_fibsem
+                        "panel": PnlTabFibsem
                     },
                 ])
 
