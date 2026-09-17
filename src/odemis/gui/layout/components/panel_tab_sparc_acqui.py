@@ -34,7 +34,15 @@ from odemis.gui.comp.viewport import (
     TemporalSpectrumViewport,
 )
 from odemis.gui.cont.tools import ToolBar
-from odemis.gui.layout.constants import strings
+from odemis.gui.layout.constants.strings import (
+    DEFAULT_DESTINATION_FILE,
+    LABEL_ACQUISITION,
+    LABEL_CANCEL,
+    LABEL_FILENAME,
+    LABEL_START,
+    LABEL_STREAMS,
+    TOOLTIP_OPEN_LOG_PANEL,
+)
 from odemis.gui.layout.constants.themes import DARK, Theme
 from odemis.gui.layout.util.fonts import set_font
 from odemis.gui.layout.util.sizers import hbox, vbox
@@ -172,7 +180,7 @@ class PnlTabSparcAcqui(wx.Panel):
             face_colour="def",
             style=wx.ALIGN_CENTRE,
         )
-        self.btn_log.SetToolTip(strings.TOOLTIP_OPEN_LOG_PANEL)
+        self.btn_log.SetToolTip(TOOLTIP_OPEN_LOG_PANEL)
         return self.btn_log
 
     def _view_button(self, parent: wx.Window) -> ViewButton:
@@ -258,7 +266,7 @@ class PnlTabSparcAcqui(wx.Panel):
             )
             self.fp_settings_ebeam_blanker.Hide()
 
-            streams_item = self._fold_item(self.fpb_settings, "STREAMS")
+            streams_item = self._fold_item(self.fpb_settings, LABEL_STREAMS)
             self.pnl_sparc_streams = self._stream_bar(
                 streams_item,
                 size=(300, -1),
@@ -328,7 +336,7 @@ class PnlTabSparcAcqui(wx.Panel):
             self.pnl_acq_recipes.Hide()
             sizer.Add(self.pnl_acq_recipes, flag=wx.EXPAND)
 
-            acquisition_caption = CaptionBar(panel, "ACQUISITION", collapsed=False)
+            acquisition_caption = CaptionBar(panel, LABEL_ACQUISITION, collapsed=False)
             acquisition_caption.SetForegroundColour(self._theme.button_text)
             sizer.Add(acquisition_caption, flag=wx.EXPAND)
 
@@ -339,7 +347,7 @@ class PnlTabSparcAcqui(wx.Panel):
 
             self.btn_sparc_acquire = create_text_button(
                 panel,
-                "START",
+                LABEL_START,
                 height=48,
                 text_colour=self._theme.button_text,
                 contrast_text_colour=self._theme.button_text_contrast,
@@ -397,14 +405,14 @@ class PnlTabSparcAcqui(wx.Panel):
         grid = wx.FlexGridSizer(rows=3, cols=2, vgap=5, hgap=10)
         grid.AddGrowableCol(1)
 
-        lbl_filename = wx.StaticText(parent, label="Filename")
+        lbl_filename = wx.StaticText(parent, label=LABEL_FILENAME)
         lbl_filename.SetForegroundColour(self._theme.text_primary)
         grid.Add(lbl_filename, flag=wx.TOP, border=4)
 
         with hbox() as filename_sizer:
             self.txt_filename = wx.TextCtrl(
                 parent,
-                value=strings.DEFAULT_DESTINATION_FILE,
+                value=DEFAULT_DESTINATION_FILE,
                 size=(-1, 20),
                 style=wx.BORDER_NONE | wx.TE_READONLY,
             )
@@ -522,7 +530,7 @@ class PnlTabSparcAcqui(wx.Panel):
 
             self.btn_sparc_cancel = create_text_button(
                 parent,
-                "Cancel",
+                LABEL_CANCEL,
                 height=24,
                 text_colour=self._theme.button_text,
                 contrast_text_colour=self._theme.button_text_contrast,

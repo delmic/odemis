@@ -21,6 +21,7 @@ import unittest
 import wx
 
 from odemis.gui.layout import MainFrame
+from odemis.gui.layout.constants.strings import TOOLTIP_CLOSE_LOG_PANEL
 
 
 class FrMainTest(unittest.TestCase):
@@ -157,7 +158,7 @@ class FrMainTest(unittest.TestCase):
             self.frame.txt_log.GetValue(), "Log message panel"
         )
         self.assertEqual(
-            self.frame.btn_log.GetToolTipText(), "Close log panel"
+            self.frame.btn_log.GetToolTipText(), TOOLTIP_CLOSE_LOG_PANEL
         )
 
 

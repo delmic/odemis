@@ -40,7 +40,11 @@ from odemis.gui.comp.viewport import (
     LiveViewport,
     TemporalSpectrumViewport,
 )
-from odemis.gui.layout.constants import strings
+from odemis.gui.layout.constants.strings import (
+    LABEL_MIRROR,
+    LABEL_STEP_SIZE,
+    TOOLTIP_OPEN_LOG_PANEL,
+)
 from odemis.gui.layout.constants.themes import DARK, Theme
 from odemis.gui.layout.util.fonts import set_font
 from odemis.gui.layout.util.sizers import hbox, vbox
@@ -49,7 +53,7 @@ from odemis.gui.layout.util.widgets import create_text_button
 # (attribute name, label, icon file name, active icon file name, cellpos column)
 _MODE_BUTTONS: Tuple[Tuple[str, str, str, str, int], ...] = (
     ("btn_align_lens", "LENS", "ico_lens.png", "ico_lens_green.png", 0),
-    ("btn_align_mirror", "MIRROR", "ico_mirror.png", "ico_mirror_green.png", 1),
+    ("btn_align_mirror", LABEL_MIRROR, "ico_mirror.png", "ico_mirror_green.png", 1),
     ("btn_align_centering", "CENTERING", "ico_ang.png", "ico_ang_green.png", 2),
     ("btn_align_lens2", "EK LENS", "ico_lens_ek.png", "ico_lens_green_ek.png", 3),
     ("btn_align_ek", "EK CENTERING", "ico_ang_ek.png", "ico_ang_green_ek.png", 4),
@@ -182,7 +186,7 @@ class PnlTabSparc2Align(wx.Panel):
                 face_colour="def",
                 style=wx.ALIGN_CENTRE,
             )
-            self.btn_log.SetToolTip(strings.TOOLTIP_OPEN_LOG_PANEL)
+            self.btn_log.SetToolTip(TOOLTIP_OPEN_LOG_PANEL)
             sizer.Add(self.btn_log, flag=wx.ALL, border=10)
 
         panel.SetSizer(sizer)
@@ -475,7 +479,7 @@ class PnlTabSparc2Align(wx.Panel):
                 flag=wx.ALIGN_CENTRE,
             )
 
-            self.lbl_ss_spec_ded_aligner_z = self._label(panel, "Step size")
+            self.lbl_ss_spec_ded_aligner_z = self._label(panel, LABEL_STEP_SIZE)
             sizer.Add(
                 self.lbl_ss_spec_ded_aligner_z, flag=wx.LEFT, border=5
             )
@@ -1261,7 +1265,7 @@ class PnlTabSparc2Align(wx.Panel):
         """
         with hbox() as sizer:
             if label is None:
-                label = self._label(parent, "Step size")
+                label = self._label(parent, LABEL_STEP_SIZE)
             sizer.Add(label, flag=wx.RIGHT, border=5)
 
             if slider is None:

@@ -36,7 +36,16 @@ from odemis.gui.comp.viewport import (
     MicroscopeViewport,
 )
 from odemis.gui.cont.tools import ToolBar
-from odemis.gui.layout.constants import strings
+from odemis.gui.layout.constants.strings import (
+    DEFAULT_DESTINATION_FILE,
+    LABEL_ACQUIRE_OVERVIEW,
+    LABEL_ESTIMATED_TIME,
+    LABEL_FILENAME,
+    LABEL_OPTICAL_SETTINGS,
+    LABEL_STATUS,
+    LABEL_STREAMS,
+    TOOLTIP_OPEN_LOG_PANEL,
+)
 from odemis.gui.layout.constants.themes import DARK, Theme
 from odemis.gui.layout.util.fonts import set_font
 from odemis.gui.layout.util.sizers import hbox, vbox
@@ -141,7 +150,7 @@ class PnlTabLocalization(wx.Panel):
                 face_colour="def",
                 style=wx.ALIGN_CENTRE,
             )
-            self.btn_log.SetToolTip(strings.TOOLTIP_OPEN_LOG_PANEL)
+            self.btn_log.SetToolTip(TOOLTIP_OPEN_LOG_PANEL)
             outer_sizer.Add(
                 self.btn_log,
                 flag=wx.BOTTOM | wx.LEFT | wx.RIGHT,
@@ -350,7 +359,7 @@ class PnlTabLocalization(wx.Panel):
         :returns: Feature status row.
         """
         with hbox() as sizer:
-            sizer.Add(create_label(parent, "Status", self._theme.text_primary))
+            sizer.Add(create_label(parent, LABEL_STATUS, self._theme.text_primary))
             self.cmb_feature_status = create_combo(parent, (122, 16), readonly=True, text_colour=self._theme.text_edit, background_colour=self._theme.background)
             sizer.Add(self.cmb_feature_status, flag=wx.LEFT, border=self._theme.spacing_standard)
             self.btn_go_to_feature = create_text_button(parent, label="Go to Feature", height=24, text_colour=self._theme.button_text, contrast_text_colour=self._theme.button_text_contrast, size=(120, 24))
@@ -508,7 +517,7 @@ class PnlTabLocalization(wx.Panel):
         """
         self.fp_settings_secom_optical = self._fold_item(
             fold_bar,
-            "OPTICAL SETTINGS",
+            LABEL_OPTICAL_SETTINGS,
         )
 
     def _build_streams_section(self, fold_bar: FoldPanelBar) -> None:
@@ -516,7 +525,7 @@ class PnlTabLocalization(wx.Panel):
 
         :param fold_bar: Parent fold-panel bar.
         """
-        self.fp_secom_streams = self._fold_item(fold_bar, "STREAMS")
+        self.fp_secom_streams = self._fold_item(fold_bar, LABEL_STREAMS)
         self.pnl_secom_streams = StreamBar(
             self.fp_secom_streams,
             size=(300, -1),
@@ -581,7 +590,7 @@ class PnlTabLocalization(wx.Panel):
                 border=self._theme.spacing_standard,
             )
 
-            self.btn_acquire_overview = create_text_button(panel, label="ACQUIRE OVERVIEW", height=48, text_colour=self._theme.button_text, contrast_text_colour=self._theme.button_text_contrast, font_size=self._theme.font_size_prominent_button)
+            self.btn_acquire_overview = create_text_button(panel, label=LABEL_ACQUIRE_OVERVIEW, height=48, text_colour=self._theme.button_text, contrast_text_colour=self._theme.button_text_contrast, font_size=self._theme.font_size_prominent_button)
             sizer.Add(
                 self.btn_acquire_overview,
                 flag=wx.TOP | wx.BOTTOM | wx.LEFT,
@@ -630,12 +639,12 @@ class PnlTabLocalization(wx.Panel):
         """
         with hbox() as sizer:
             sizer.Add(
-                create_label(parent, "Filename", self._theme.text_primary),
+                create_label(parent, LABEL_FILENAME, self._theme.text_primary),
                 flag=wx.ALIGN_CENTER_VERTICAL,
             )
             self.txt_filename = wx.TextCtrl(
                 parent,
-                value=strings.DEFAULT_DESTINATION_FILE,
+                value=DEFAULT_DESTINATION_FILE,
                 size=(-1, 20),
                 style=wx.BORDER_NONE | wx.TE_READONLY,
             )
@@ -669,7 +678,7 @@ class PnlTabLocalization(wx.Panel):
             border=2,
         )
 
-        self.txt_cryosecom_est_time = create_label(parent, "Estimated time ...", self._theme.text_primary)
+        self.txt_cryosecom_est_time = create_label(parent, LABEL_ESTIMATED_TIME, self._theme.text_primary)
         self.txt_cryosecom_est_time.Hide()
         grid.Add(self.txt_cryosecom_est_time, flag=wx.TOP, border=17)
 
@@ -751,7 +760,7 @@ class PnlTabLocalization(wx.Panel):
                 border=self._theme.spacing_standard,
             )
 
-            self.txt_acquire_features_est_time = create_label(self.pnl_automation, "Estimated time ...", self._theme.text_primary)
+            self.txt_acquire_features_est_time = create_label(self.pnl_automation, LABEL_ESTIMATED_TIME, self._theme.text_primary)
             self.txt_acquire_features_est_time.Hide()
             self.automation_sizer.Add(
                 self.txt_acquire_features_est_time,

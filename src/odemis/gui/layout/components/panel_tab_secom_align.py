@@ -32,7 +32,13 @@ from odemis.gui.comp.slider import UnitFloatSlider
 from odemis.gui.comp.stream_bar import StreamBar
 from odemis.gui.comp.viewport import LiveViewport
 from odemis.gui.cont.tools import ToolBar
-from odemis.gui.layout.constants import strings
+from odemis.gui.layout.constants.strings import (
+    LABEL_OPTICAL_SETTINGS,
+    LABEL_PRESETS,
+    LABEL_SEM_SETTINGS,
+    LABEL_STEP_SIZE,
+    TOOLTIP_OPEN_LOG_PANEL,
+)
 from odemis.gui.layout.constants.themes import DARK, Theme
 from odemis.gui.layout.util.fonts import set_font
 from odemis.gui.layout.util.sizers import hbox, vbox
@@ -84,7 +90,7 @@ class PnlTabSecomAlign(wx.Panel):
         panel.SetBackgroundColour(self._theme.background)
 
         with vbox() as sizer:
-            step_label = wx.StaticText(panel, label="Step size")
+            step_label = wx.StaticText(panel, label=LABEL_STEP_SIZE)
             sizer.Add(
                 step_label,
                 flag=wx.BOTTOM,
@@ -141,7 +147,7 @@ class PnlTabSecomAlign(wx.Panel):
                 face_colour="def",
                 style=wx.ALIGN_CENTRE,
             )
-            self.btn_log.SetToolTip(strings.TOOLTIP_OPEN_LOG_PANEL)
+            self.btn_log.SetToolTip(TOOLTIP_OPEN_LOG_PANEL)
             sizer.Add(self.btn_log)
 
         panel.SetSizer(sizer)
@@ -459,7 +465,7 @@ class PnlTabSecomAlign(wx.Panel):
         :returns: Preset control sizer.
         """
         with vbox() as sizer:
-            label = wx.StaticText(parent, label="Presets")
+            label = wx.StaticText(parent, label=LABEL_PRESETS)
             label.SetForegroundColour(self._theme.button_text_contrast)
             label.Hide()
             sizer.Add(
@@ -523,11 +529,11 @@ class PnlTabSecomAlign(wx.Panel):
 
         :param fold_bar: Parent fold-panel bar.
         """
-        optical_item = self._fold_item(fold_bar, "OPTICAL SETTINGS")
+        optical_item = self._fold_item(fold_bar, LABEL_OPTICAL_SETTINGS)
         self.pnl_opt_streams = self._stream_bar(optical_item)
         optical_item.add_item(self.pnl_opt_streams)
 
-        sem_item = self._fold_item(fold_bar, "SEM SETTINGS")
+        sem_item = self._fold_item(fold_bar, LABEL_SEM_SETTINGS)
         self.pnl_sem_streams = self._stream_bar(sem_item)
         sem_item.add_item(self.pnl_sem_streams)
 

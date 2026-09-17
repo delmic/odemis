@@ -21,6 +21,7 @@ import unittest
 import wx
 
 from odemis.gui.layout import SecomAcqDialogBase
+from odemis.gui.layout.constants.strings import DEFAULT_DESTINATION_FILE
 
 
 class SecomAcqDialogTest(unittest.TestCase):
@@ -72,7 +73,7 @@ class SecomAcqDialogTest(unittest.TestCase):
         self.assertEqual(self.dialog.GetTitle(), "Image Acquisition")
         self.assertEqual(
             self.dialog.txt_filename.GetValue(),
-            "Select a destination file",
+            DEFAULT_DESTINATION_FILE,
         )
         self.assertEqual(self.dialog.txt_destination.GetValue(), "...")
 

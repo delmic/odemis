@@ -29,7 +29,20 @@ from odemis.gui.comp.stream_bar import StreamBar
 from odemis.gui.comp.text import UnitFloatCtrl
 from odemis.gui.comp.viewport import FeatureOverviewViewport, LiveViewport
 from odemis.gui.cont.tools import ToolBar
-from odemis.gui.layout.constants import strings
+from odemis.gui.layout.constants.strings import (
+    DEFAULT_DESTINATION_FILE,
+    LABEL_ACQUIRE_OVERVIEW,
+    LABEL_CANCEL,
+    LABEL_ESTIMATED_TIME,
+    LABEL_FILENAME,
+    LABEL_MILL,
+    LABEL_MILLING,
+    LABEL_OPTICAL_SETTINGS,
+    LABEL_SEM_IMAGING,
+    LABEL_STATUS,
+    LABEL_STREAMS,
+    TOOLTIP_OPEN_LOG_PANEL,
+)
 from odemis.gui.layout.constants.themes import DARK, Theme
 from odemis.gui.layout.util.fonts import set_font
 from odemis.gui.layout.util.sizers import hbox, vbox
@@ -139,7 +152,7 @@ class PnlTabFibsem(wx.Panel):
                 face_colour="def",
                 style=wx.ALIGN_CENTRE,
             )
-            self.btn_log.SetToolTip(strings.TOOLTIP_OPEN_LOG_PANEL)
+            self.btn_log.SetToolTip(TOOLTIP_OPEN_LOG_PANEL)
             outer_sizer.Add(
                 self.btn_log,
                 flag=wx.BOTTOM | wx.LEFT | wx.RIGHT,
@@ -296,7 +309,7 @@ class PnlTabFibsem(wx.Panel):
         :returns: Feature status row.
         """
         with hbox() as sizer:
-            sizer.Add(create_label(parent, "Status", self._theme.text_primary))
+            sizer.Add(create_label(parent, LABEL_STATUS, self._theme.text_primary))
             self.cmb_feature_status = create_combo(
                 parent,
                 (133, 16),
@@ -392,7 +405,7 @@ class PnlTabFibsem(wx.Panel):
         with hbox() as sizer:
             self.btn_switch_sem_imaging = create_progress_button(
                 parent,
-                "SEM IMAGING",
+                LABEL_SEM_IMAGING,
                 "ico_sem.png",
                 "ico_sem_orange.png",
                 "ico_sem_green.png",
@@ -408,7 +421,7 @@ class PnlTabFibsem(wx.Panel):
 
             self.btn_switch_milling = create_progress_button(
                 parent,
-                "MILLING",
+                LABEL_MILLING,
                 "ico_milling.png",
                 "ico_milling_orange.png",
                 "ico_milling_green.png",
@@ -477,7 +490,7 @@ class PnlTabFibsem(wx.Panel):
         """
         self.fp_settings_secom_optical = self._fold_item(
             fold_bar,
-            "OPTICAL SETTINGS",
+            LABEL_OPTICAL_SETTINGS,
         )
 
     def _build_streams_section(self, fold_bar: FoldPanelBar) -> None:
@@ -485,7 +498,7 @@ class PnlTabFibsem(wx.Panel):
 
         :param fold_bar: Parent fold-panel bar.
         """
-        self.fp_secom_streams = self._fold_item(fold_bar, "STREAMS")
+        self.fp_secom_streams = self._fold_item(fold_bar, LABEL_STREAMS)
         self.pnl_secom_streams = StreamBar(
             self.fp_secom_streams,
             size=(300, -1),
@@ -564,7 +577,7 @@ class PnlTabFibsem(wx.Panel):
 
             self.btn_acquire_overview = create_text_button(
                 panel,
-                "ACQUIRE OVERVIEW",
+                LABEL_ACQUIRE_OVERVIEW,
                 height=48,
                 text_colour=self._theme.button_text,
                 contrast_text_colour=self._theme.button_text_contrast,
@@ -592,12 +605,12 @@ class PnlTabFibsem(wx.Panel):
         """
         with hbox() as sizer:
             sizer.Add(
-                create_label(parent, "Filename", self._theme.text_primary),
+                create_label(parent, LABEL_FILENAME, self._theme.text_primary),
                 flag=wx.ALIGN_CENTER_VERTICAL,
             )
             self.txt_filename = wx.TextCtrl(
                 parent,
-                value=strings.DEFAULT_DESTINATION_FILE,
+                value=DEFAULT_DESTINATION_FILE,
                 size=(-1, 20),
                 style=wx.BORDER_NONE | wx.TE_READONLY,
             )
@@ -659,7 +672,7 @@ class PnlTabFibsem(wx.Panel):
 
         self.txt_cryosecom_est_time = create_label(
             parent,
-            "Estimated time ...",
+            LABEL_ESTIMATED_TIME,
             self._theme.text_primary,
         )
         self.txt_cryosecom_est_time.Hide()
@@ -693,7 +706,7 @@ class PnlTabFibsem(wx.Panel):
 
             self.btn_cryosecom_acqui_cancel = create_text_button(
                 parent,
-                "Cancel",
+                LABEL_CANCEL,
                 height=24,
                 text_colour=self._theme.button_text,
                 contrast_text_colour=self._theme.button_text_contrast,
@@ -749,7 +762,7 @@ class PnlTabFibsem(wx.Panel):
 
         :param fold_bar: Parent fold-panel bar.
         """
-        self.fp_automation = self._fold_item(fold_bar, "MILLING")
+        self.fp_automation = self._fold_item(fold_bar, LABEL_MILLING)
         panel = wx.Panel(self.fp_automation)
         panel.SetForegroundColour(self._theme.button_text)
         panel.SetBackgroundColour(self._theme.section_header)
@@ -781,7 +794,7 @@ class PnlTabFibsem(wx.Panel):
 
             self.btn_run_automated_milling = create_text_button(
                 panel,
-                "MILL",
+                LABEL_MILL,
                 height=48,
                 text_colour=self._theme.button_text,
                 contrast_text_colour=self._theme.button_text_contrast,
@@ -798,7 +811,7 @@ class PnlTabFibsem(wx.Panel):
 
             self.txt_automated_milling_est_time = create_label(
                 panel,
-                "Estimated time ...",
+                LABEL_ESTIMATED_TIME,
                 self._theme.text_primary,
             )
             sizer.Add(
@@ -879,7 +892,7 @@ class PnlTabFibsem(wx.Panel):
 
             self.btn_automated_milling_cancel = create_text_button(
                 parent,
-                "Cancel",
+                LABEL_CANCEL,
                 height=24,
                 text_colour=self._theme.button_text,
                 contrast_text_colour=self._theme.button_text_contrast,
@@ -922,7 +935,7 @@ class PnlTabFibsem(wx.Panel):
 
             self.btn_run_milling = create_text_button(
                 controls_panel,
-                "MILL",
+                LABEL_MILL,
                 height=48,
                 text_colour=self._theme.button_text,
                 contrast_text_colour=self._theme.button_text_contrast,
@@ -940,7 +953,7 @@ class PnlTabFibsem(wx.Panel):
 
             self.txt_milling_est_time = create_label(
                 controls_panel,
-                "Estimated time ...",
+                LABEL_ESTIMATED_TIME,
                 self._theme.text_primary,
             )
             self.txt_milling_est_time.Hide()
@@ -956,7 +969,7 @@ class PnlTabFibsem(wx.Panel):
 
             self.btn_milling_cancel = create_text_button(
                 controls_panel,
-                "Cancel",
+                LABEL_CANCEL,
                 height=24,
                 text_colour=self._theme.button_text,
                 contrast_text_colour=self._theme.button_text_contrast,

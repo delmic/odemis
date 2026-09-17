@@ -24,6 +24,10 @@ from odemis.gui import img
 from odemis.gui.comp.buttons import ImageTextButton
 from odemis.gui.comp.foldpanelbar import CaptionBar, FoldPanelBar, FoldPanelItem
 from odemis.gui.comp.stream_bar import StreamBar
+from odemis.gui.layout.constants.strings import (
+    LABEL_CANCEL,
+    LABEL_START,
+)
 from odemis.gui.layout.constants.themes import DARK, Theme
 from odemis.gui.layout.util.fonts import set_font
 from odemis.gui.layout.util.sizers import hbox, vbox
@@ -220,7 +224,7 @@ class PnlTabFastemSetup(wx.Panel):
 
             self.btn_acq = create_text_button(
                 panel,
-                "START",
+                LABEL_START,
                 height=48,
                 text_colour=self._theme.button_text,
                 contrast_text_colour=self._theme.button_text_contrast,
@@ -351,7 +355,7 @@ class PnlTabFastemSetup(wx.Panel):
 
             cancel_button = create_text_button(
                 parent,
-                "Cancel",
+                LABEL_CANCEL,
                 height=24,
                 text_colour=self._theme.button_text,
                 contrast_text_colour=self._theme.button_text_contrast,

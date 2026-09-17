@@ -25,7 +25,15 @@ from odemis.gui.comp.buttons import (
 from odemis.gui.comp.slider import UnitFloatSlider
 from odemis.gui.comp.text import UnitFloatCtrl
 from odemis.gui.comp.viewport import FeatureOverviewViewport
-from odemis.gui.layout.constants import strings
+from odemis.gui.layout.constants.strings import (
+    DEFAULT_DESTINATION_FILE,
+    LABEL_CANCEL,
+    LABEL_LOADING,
+    LABEL_MILLING,
+    LABEL_SEM_IMAGING,
+    LABEL_STEP_SIZE,
+    TOOLTIP_OPEN_LOG_PANEL,
+)
 from odemis.gui.layout.constants.themes import DARK, Theme
 from odemis.gui.layout.util.fonts import set_font
 from odemis.gui.layout.util.sizers import hbox, vbox
@@ -97,7 +105,7 @@ class PnlTabCryosecomChamber(wx.Panel):
             sizer.AddStretchSpacer()
 
             self.btn_log = create_chevron_button(
-                panel, "up", tooltip=strings.TOOLTIP_OPEN_LOG_PANEL
+                panel, "up", tooltip=TOOLTIP_OPEN_LOG_PANEL
             )
             sizer.Add(self.btn_log)
 
@@ -141,7 +149,7 @@ class PnlTabCryosecomChamber(wx.Panel):
 
         self.txt_projectpath = wx.TextCtrl(
             panel,
-            value=strings.DEFAULT_DESTINATION_FILE,
+            value=DEFAULT_DESTINATION_FILE,
             style=wx.BORDER_NONE | wx.TE_READONLY,
         )
         self.txt_projectpath.SetForegroundColour(self._theme.text_edit)
@@ -264,9 +272,9 @@ class PnlTabCryosecomChamber(wx.Panel):
         """
         grid = wx.GridBagSizer(vgap=5, hgap=20)
         specs = (
-            ("btn_switch_sem_imaging", "SEM IMAGING", "ico_sem", (0, 0)),
+            ("btn_switch_sem_imaging", LABEL_SEM_IMAGING, "ico_sem", (0, 0)),
             ("btn_switch_fm_imaging", "FM IMAGING", "ico_meteorimaging", (0, 1)),
-            ("btn_switch_milling", "MILLING", "ico_milling", (1, 0)),
+            ("btn_switch_milling", LABEL_MILLING, "ico_milling", (1, 0)),
             (
                 "btn_switch_fib_view_fm",
                 "FIB-VIEW FM",
@@ -305,9 +313,9 @@ class PnlTabCryosecomChamber(wx.Panel):
         """
         grid = wx.GridBagSizer(vgap=5, hgap=20)
         specs = (
-            ("LOADING", "ico_eject", (0, 0)),
+            (LABEL_LOADING, "ico_eject", (0, 0)),
             ("3 BEAMS", "ico_imaging", (0, 1)),
-            ("SEM IMAGING", "ico_sem", (1, 0)),
+            (LABEL_SEM_IMAGING, "ico_sem", (1, 0)),
             ("COATING", "ico_coating", (1, 1)),
         )
         for label, icon_name, position in specs:
@@ -337,7 +345,7 @@ class PnlTabCryosecomChamber(wx.Panel):
         """
         grid = wx.GridBagSizer(vgap=5, hgap=20)
         specs = (
-            ("LOADING", "ico_eject", (0, 0)),
+            (LABEL_LOADING, "ico_eject", (0, 0)),
             ("OPTICAL", "ico_optical", (0, 1)),
             ("FIB", "ico_sem", (1, 0)),
             ("COATING", "ico_coating", (1, 1)),
@@ -385,7 +393,7 @@ class PnlTabCryosecomChamber(wx.Panel):
 
             self.btn_cancel = create_text_button(
                 parent,
-                label="Cancel",
+                label=LABEL_CANCEL,
                 height=24,
                 text_colour=self._theme.button_text,
                 face_colour="def",
@@ -498,7 +506,7 @@ class PnlTabCryosecomChamber(wx.Panel):
         with hbox() as sizer:
             label = create_label(
                 parent,
-                "Step size",
+                LABEL_STEP_SIZE,
                 self._theme.text_primary,
                 self._theme.font_size_body,
             )

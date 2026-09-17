@@ -25,6 +25,12 @@ from odemis.gui.comp.slider import UnitIntegerSlider
 from odemis.gui.comp.stream_bar import StreamBar
 from odemis.gui.comp.text import UnitFloatCtrl, UnitIntegerCtrl
 from odemis.gui.comp.viewport import LiveViewport
+from odemis.gui.layout.constants.strings import (
+    LABEL_ACQUIRE_OVERVIEW,
+    LABEL_CLOSE,
+    LABEL_OPTICAL_SETTINGS,
+    LABEL_STREAMS,
+)
 from odemis.gui.layout.constants.themes import DARK, Theme
 from odemis.gui.layout.util.fonts import set_font
 from odemis.gui.layout.util.sizers import hbox, vbox
@@ -131,10 +137,10 @@ class OverviewAcqDialogBase(wx.Dialog):
             scroll_sizer.Add(fold_bar, flag=wx.EXPAND)
 
             self.fp_settings_secom_optical = self._fold_item(
-                fold_bar, "OPTICAL SETTINGS"
+                fold_bar, LABEL_OPTICAL_SETTINGS
             )
 
-            streams_item = self._fold_item(fold_bar, "STREAMS")
+            streams_item = self._fold_item(fold_bar, LABEL_STREAMS)
             self.pnl_secom_streams = self._stream_bar(
                 streams_item, size=(300, -1)
             )
@@ -396,7 +402,7 @@ class OverviewAcqDialogBase(wx.Dialog):
         with hbox() as sizer:
             self.btn_cancel = create_text_button(
                 panel,
-                "Close",
+                LABEL_CLOSE,
                 height=48,
                 text_colour=self._theme.button_text,
                 contrast_text_colour=self._theme.button_text_contrast,
@@ -411,7 +417,7 @@ class OverviewAcqDialogBase(wx.Dialog):
 
             self.btn_secom_acquire = create_text_button(
                 panel,
-                "ACQUIRE OVERVIEW",
+                LABEL_ACQUIRE_OVERVIEW,
                 height=48,
                 text_colour=self._theme.button_text,
                 contrast_text_colour=self._theme.button_text_contrast,

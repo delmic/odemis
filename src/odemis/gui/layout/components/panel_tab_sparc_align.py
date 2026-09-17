@@ -26,7 +26,12 @@ from odemis.gui.comp.foldpanelbar import FoldPanelBar, FoldPanelItem
 from odemis.gui.comp.slider import UnitFloatSlider
 from odemis.gui.comp.stream_bar import StreamBar
 from odemis.gui.comp.viewport import ARLiveViewport
-from odemis.gui.layout.constants import strings
+from odemis.gui.layout.constants.strings import (
+    LABEL_CHAMBER,
+    LABEL_MIRROR,
+    LABEL_STEP_SIZE,
+    TOOLTIP_OPEN_LOG_PANEL,
+)
 from odemis.gui.layout.constants.themes import DARK, Theme
 from odemis.gui.layout.util.fonts import set_font
 from odemis.gui.layout.util.sizers import hbox, vbox
@@ -107,7 +112,7 @@ class PnlTabSparcAlign(wx.Panel):
                 face_colour="def",
                 style=wx.ALIGN_CENTRE,
             )
-            self.btn_log.SetToolTip(strings.TOOLTIP_OPEN_LOG_PANEL)
+            self.btn_log.SetToolTip(TOOLTIP_OPEN_LOG_PANEL)
             sizer.Add(self.btn_log, flag=wx.ALL, border=10)
 
         panel.SetSizer(sizer)
@@ -125,12 +130,12 @@ class PnlTabSparcAlign(wx.Panel):
 
         with hbox() as sizer:
             self.btn_align_chamber = self._radio_button(
-                panel, "CHAMBER", "ico_cam.png", "ico_cam_green.png"
+                panel, LABEL_CHAMBER, "ico_cam.png", "ico_cam_green.png"
             )
             sizer.Add(self.btn_align_chamber, flag=wx.ALL, border=10)
 
             self.btn_align_mirror = self._radio_button(
-                panel, "MIRROR", "ico_ang.png", "ico_ang_green.png"
+                panel, LABEL_MIRROR, "ico_ang.png", "ico_ang_green.png"
             )
             sizer.Add(self.btn_align_mirror, flag=wx.ALL, border=10)
 
@@ -251,7 +256,7 @@ class PnlTabSparcAlign(wx.Panel):
             set_font(heading, self._theme.font_size_section_heading)
             sizer.Add(heading, flag=wx.BOTTOM | wx.ALL, border=5)
 
-            label = wx.StaticText(panel, label="Step size")
+            label = wx.StaticText(panel, label=LABEL_STEP_SIZE)
             sizer.Add(label, flag=wx.LEFT, border=5)
 
             self.mirror_align_slider_mirror_r = UnitFloatSlider(
@@ -325,7 +330,7 @@ class PnlTabSparcAlign(wx.Panel):
             set_font(heading, self._theme.font_size_section_heading)
             sizer.Add(heading, flag=wx.BOTTOM | wx.ALL, border=5)
 
-            label = wx.StaticText(panel, label="Step size")
+            label = wx.StaticText(panel, label=LABEL_STEP_SIZE)
             sizer.Add(label, flag=wx.LEFT, border=5)
 
             self.mirror_align_slider_fibaligner = UnitFloatSlider(

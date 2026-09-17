@@ -22,8 +22,13 @@ import wx
 
 from odemis.gui import img
 from odemis.gui.comp.buttons import TabButton
+from odemis.gui.layout.constants.strings import (
+    LABEL_ACQUISITION,
+    LABEL_CHAMBER,
+    LABEL_STREAMS,
+    TOOLTIP_CLOSE_LOG_PANEL,
+)
 from odemis.gui.layout.constants.themes import DARK, Theme
-from odemis.gui.layout.constants.strings import TOOLTIP_CLOSE_LOG_PANEL
 from odemis.gui.layout.util.fonts import set_font
 from odemis.gui.layout.util.sizers import hbox, vbox
 from odemis.gui.layout.util.widgets import create_chevron_button
@@ -199,7 +204,7 @@ class MainFrame(wx.Frame):
 
         with hbox() as sizer:
             self.btn_tab_cryosecom_chamber = self._tab_button(
-                self.pnl_tabbuttons, "CHAMBER"
+                self.pnl_tabbuttons, LABEL_CHAMBER
             )
             sizer.Add(
                 self.btn_tab_cryosecom_chamber,
@@ -208,7 +213,7 @@ class MainFrame(wx.Frame):
             )
 
             self.btn_tab_secom_streams = self._tab_button(
-                self.pnl_tabbuttons, "STREAMS"
+                self.pnl_tabbuttons, LABEL_STREAMS
             )
             sizer.Add(
                 self.btn_tab_secom_streams,
@@ -244,7 +249,7 @@ class MainFrame(wx.Frame):
             )
 
             self.btn_tab_sparc_acqui = self._tab_button(
-                self.pnl_tabbuttons, "ACQUISITION"
+                self.pnl_tabbuttons, LABEL_ACQUISITION
             )
             sizer.Add(
                 self.btn_tab_sparc_acqui,
@@ -273,7 +278,7 @@ class MainFrame(wx.Frame):
             sizer.AddStretchSpacer()
 
             self.btn_tab_sparc_chamber = self._tab_button(
-                self.pnl_tabbuttons, "CHAMBER"
+                self.pnl_tabbuttons, LABEL_CHAMBER
             )
             sizer.Add(
                 self.btn_tab_sparc_chamber,

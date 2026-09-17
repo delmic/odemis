@@ -27,7 +27,10 @@ from odemis.gui.comp.buttons import (
 from odemis.gui.comp.foldpanelbar import FoldPanelBar, FoldPanelItem
 from odemis.gui.comp.stream_bar import StreamBar
 from odemis.gui.comp.viewport import ARAcquiViewport
-from odemis.gui.layout.constants import strings
+from odemis.gui.layout.constants.strings import (
+    LABEL_CANCEL,
+    TOOLTIP_OPEN_LOG_PANEL,
+)
 from odemis.gui.layout.constants.themes import DARK, Theme
 from odemis.gui.layout.util.fonts import set_font
 from odemis.gui.layout.util.sizers import hbox, vbox
@@ -110,7 +113,7 @@ class PnlTabSparcChamber(wx.Panel):
                 face_colour="def",
                 style=wx.ALIGN_CENTRE,
             )
-            self.btn_log.SetToolTip(strings.TOOLTIP_OPEN_LOG_PANEL)
+            self.btn_log.SetToolTip(TOOLTIP_OPEN_LOG_PANEL)
             sizer.Add(self.btn_log)
 
         panel.SetSizer(sizer)
@@ -142,7 +145,7 @@ class PnlTabSparcChamber(wx.Panel):
 
             self.btn_cancel = create_text_button(
                 panel,
-                "Cancel",
+                LABEL_CANCEL,
                 height=24,
                 text_colour=self._theme.button_text,
                 contrast_text_colour=self._theme.button_text_contrast,

@@ -25,7 +25,10 @@ from odemis.gui.comp.stream_bar import StreamBar
 from odemis.gui.comp.text import UnitFloatCtrl
 from odemis.gui.comp.viewport import MicroscopeViewport
 from odemis.gui.cont.tools import ToolBar
-from odemis.gui.layout.constants import strings
+from odemis.gui.layout.constants.strings import (
+    LABEL_STREAMS,
+    TOOLTIP_OPEN_LOG_PANEL,
+)
 from odemis.gui.layout.constants.themes import DARK, Theme
 from odemis.gui.layout.util.fonts import set_font
 from odemis.gui.layout.util.sizers import hbox, vbox
@@ -133,7 +136,7 @@ class PnlTabCorrelation(wx.Panel):
             )
 
             self.btn_log = create_chevron_button(
-                panel, "up", tooltip=strings.TOOLTIP_OPEN_LOG_PANEL
+                panel, "up", tooltip=TOOLTIP_OPEN_LOG_PANEL
             )
             outer_sizer.Add(
                 self.btn_log,
@@ -217,7 +220,7 @@ class PnlTabCorrelation(wx.Panel):
 
         :param fold_bar: Parent fold-panel bar.
         """
-        self.fp_correlation_streams = self._fold_item(fold_bar, "STREAMS")
+        self.fp_correlation_streams = self._fold_item(fold_bar, LABEL_STREAMS)
         self.pnl_correlation_streams = StreamBar(
             self.fp_correlation_streams,
             size=(300, -1),

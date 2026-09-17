@@ -28,6 +28,10 @@ from odemis.gui.comp.grid import ViewportGrid
 from odemis.gui.comp.stream_bar import StreamBar
 from odemis.gui.comp.viewport import MicroscopeViewport
 from odemis.gui.cont.tools import ToolBar
+from odemis.gui.layout.constants.strings import (
+    LABEL_CLOSE,
+    LABEL_STREAMS,
+)
 from odemis.gui.layout.constants.themes import DARK, Theme
 from odemis.gui.layout.util.fonts import set_font
 from odemis.gui.layout.util.sizers import hbox, vbox
@@ -266,7 +270,7 @@ class TDCorrelationDialogBase(wx.Dialog):
         """
         self.fp_correlation_streams = FoldPanelItem(
             fold_bar,
-            label="STREAMS",
+            label=LABEL_STREAMS,
         )
         self.fp_correlation_streams.SetForegroundColour(
             self._theme.button_text
@@ -300,7 +304,7 @@ class TDCorrelationDialogBase(wx.Dialog):
         with hbox() as sizer:
             self.btn_close = ImageTextButton(
                 panel,
-                label="Close",
+                label=LABEL_CLOSE,
                 height=48,
                 face_colour="def",
                 style=wx.ALIGN_CENTRE,

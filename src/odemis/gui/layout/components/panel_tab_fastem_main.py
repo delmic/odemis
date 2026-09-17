@@ -22,7 +22,10 @@ from odemis.gui import img
 from odemis.gui.comp.buttons import ImageButton, TabButton
 from odemis.gui.comp.grid import ViewportGrid
 from odemis.gui.cont.tools import ToolBar
-from odemis.gui.layout.constants import strings
+from odemis.gui.layout.constants.strings import (
+    LABEL_ACQUISITION,
+    TOOLTIP_OPEN_LOG_PANEL,
+)
 from odemis.gui.layout.constants.themes import DARK, Theme
 from odemis.gui.layout.util.fonts import set_font
 from odemis.gui.layout.util.sizers import hbox, vbox
@@ -104,7 +107,7 @@ class PnlTabFastemMain(wx.Panel):
             sizer.AddStretchSpacer(8)
 
             self.btn_log = create_chevron_button(self.pnl_toolbar, "up")
-            self.btn_log.SetToolTip(strings.TOOLTIP_OPEN_LOG_PANEL)
+            self.btn_log.SetToolTip(TOOLTIP_OPEN_LOG_PANEL)
             sizer.Add(self.btn_log)
 
         self.pnl_toolbar.SetSizer(sizer)
@@ -284,7 +287,7 @@ class PnlTabFastemMain(wx.Panel):
             )
 
             self.btn_tab_acqui = self._tab_button(
-                self.pnl_tabbuttons, "ACQUISITION"
+                self.pnl_tabbuttons, LABEL_ACQUISITION
             )
             sizer.Add(
                 self.btn_tab_acqui,

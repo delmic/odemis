@@ -21,6 +21,7 @@ import unittest
 import wx
 
 from odemis.gui.layout import PnlTabCryosecomChamber
+from odemis.gui.layout.constants.strings import DEFAULT_DESTINATION_FILE
 
 
 class PnlTabCryosecomChamberTest(unittest.TestCase):
@@ -90,7 +91,7 @@ class PnlTabCryosecomChamberTest(unittest.TestCase):
         self.assertEqual(self.panel.gauge_move.GetRange(), 100)
         self.assertEqual(
             self.panel.txt_projectpath.GetValue(),
-            "Select a destination file",
+            DEFAULT_DESTINATION_FILE,
         )
 
 

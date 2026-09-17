@@ -35,7 +35,13 @@ from odemis.gui.comp.viewport import (
     LiveViewport,
 )
 from odemis.gui.cont.tools import ToolBar
-from odemis.gui.layout.constants import strings
+from odemis.gui.layout.constants.strings import (
+    LABEL_CHAMBER,
+    LABEL_OPTICAL_SETTINGS,
+    LABEL_SEM_SETTINGS,
+    LABEL_STREAMS,
+    TOOLTIP_OPEN_LOG_PANEL,
+)
 from odemis.gui.layout.constants.themes import DARK, Theme
 from odemis.gui.layout.util.fonts import set_font
 from odemis.gui.layout.util.sizers import hbox, vbox
@@ -193,7 +199,7 @@ class PnlTabSecomStreams(wx.Panel):
             face_colour="def",
             style=wx.ALIGN_CENTRE,
         )
-        self.btn_log.SetToolTip(strings.TOOLTIP_OPEN_LOG_PANEL)
+        self.btn_log.SetToolTip(TOOLTIP_OPEN_LOG_PANEL)
         return self.btn_log
 
     def _build_viewport_grid(self) -> ViewportGrid:
@@ -279,7 +285,7 @@ class PnlTabSecomStreams(wx.Panel):
         with hbox() as sizer:
             self.btn_press = self._toggle_button(
                 parent,
-                label="CHAMBER",
+                label=LABEL_CHAMBER,
                 icon="ico_press.png",
                 size=(130, -1),
                 style=wx.ALIGN_LEFT,
@@ -457,7 +463,7 @@ class PnlTabSecomStreams(wx.Panel):
         """
         self.fp_settings_secom_optical = self._fold_item(
             fold_bar,
-            "OPTICAL SETTINGS",
+            LABEL_OPTICAL_SETTINGS,
         )
 
         opt_streams_item = self._fold_item(fold_bar, nocaption=True)
@@ -469,10 +475,10 @@ class PnlTabSecomStreams(wx.Panel):
 
         self.fp_settings_secom_sem = self._fold_item(
             fold_bar,
-            "SEM SETTINGS",
+            LABEL_SEM_SETTINGS,
         )
 
-        streams_item = self._fold_item(fold_bar, "STREAMS")
+        streams_item = self._fold_item(fold_bar, LABEL_STREAMS)
         self.pnl_secom_streams = self._stream_bar(
             streams_item,
             size=(300, -1),

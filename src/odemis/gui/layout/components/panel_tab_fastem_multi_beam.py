@@ -20,6 +20,14 @@ import wx
 
 from odemis.gui import img
 from odemis.gui.comp.foldpanelbar import CaptionBar
+from odemis.gui.layout.constants.strings import (
+    LABEL_ACQUISITION,
+    LABEL_CANCEL,
+    LABEL_NO_REGION_OF_ACQUISITION_SELECTED,
+    LABEL_PROJECTS,
+    LABEL_START,
+    LABEL_TOTAL_NUMBER,
+)
 from odemis.gui.layout.constants.themes import DARK, Theme
 from odemis.gui.layout.util.fonts import set_font
 from odemis.gui.layout.util.sizers import hbox, vbox
@@ -95,7 +103,7 @@ class PnlTabFastemMultiBeam(wx.Panel):
         section.SetBackgroundColour(self._theme.panel_background)
 
         with vbox() as sizer:
-            caption = CaptionBar(section, "PROJECTS", False)
+            caption = CaptionBar(section, LABEL_PROJECTS, False)
             caption.SetForegroundColour(self._theme.button_text)
             sizer.Add(caption, flag=wx.EXPAND)
 
@@ -123,7 +131,7 @@ class PnlTabFastemMultiBeam(wx.Panel):
         section.SetBackgroundColour(self._theme.panel_background)
 
         with vbox() as sizer:
-            caption = CaptionBar(section, "ACQUISITION", False)
+            caption = CaptionBar(section, LABEL_ACQUISITION, False)
             caption.SetForegroundColour(self._theme.button_text)
             sizer.Add(caption, flag=wx.EXPAND)
 
@@ -134,7 +142,7 @@ class PnlTabFastemMultiBeam(wx.Panel):
 
             self.btn_acquire = create_text_button(
                 section,
-                "START",
+                LABEL_START,
                 height=48,
                 text_colour=self._theme.button_text,
                 contrast_text_colour=self._theme.button_text_contrast,
@@ -203,7 +211,7 @@ class PnlTabFastemMultiBeam(wx.Panel):
         grid = wx.FlexGridSizer(rows=2, cols=2, vgap=5, hgap=10)
         grid.AddGrowableCol(1)
 
-        label = wx.StaticText(parent, label="Total number:")
+        label = wx.StaticText(parent, label=LABEL_TOTAL_NUMBER)
         label.SetForegroundColour(self._theme.text_primary)
         grid.Add(label, flag=wx.TOP, border=2)
 
@@ -243,7 +251,7 @@ class PnlTabFastemMultiBeam(wx.Panel):
             sizer.Add(self.bmp_acq_status_warn, flag=wx.RIGHT, border=5)
 
             self.lbl_acq_estimate = wx.StaticText(
-                panel, label="No region of acquisition selected."
+                panel, label=LABEL_NO_REGION_OF_ACQUISITION_SELECTED
             )
             self.lbl_acq_estimate.SetForegroundColour(self._theme.field_foreground)
             set_font(self.lbl_acq_estimate, self._theme.font_size_checklist)
@@ -272,7 +280,7 @@ class PnlTabFastemMultiBeam(wx.Panel):
 
             self.btn_cancel = create_text_button(
                 parent,
-                "Cancel",
+                LABEL_CANCEL,
                 height=24,
                 text_colour=self._theme.button_text,
                 contrast_text_colour=self._theme.button_text_contrast,

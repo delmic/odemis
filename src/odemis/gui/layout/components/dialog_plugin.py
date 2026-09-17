@@ -22,6 +22,7 @@ from odemis.gui.comp.buttons import ImageTextButton
 from odemis.gui.comp.foldpanelbar import FoldPanelBar, FoldPanelItem
 from odemis.gui.comp.stream_bar import StreamBar
 from odemis.gui.comp.viewport import LiveViewport, PointSpectrumViewport
+from odemis.gui.layout.constants.strings import LABEL_STREAMS
 from odemis.gui.layout.constants.themes import DARK, Theme
 from odemis.gui.layout.util.fonts import set_font
 from odemis.gui.layout.util.sizers import hbox, vbox
@@ -176,7 +177,7 @@ class PluginDialogBase(wx.Dialog):
         self.fp_settings.SetBackgroundColour(self._theme.section_header)
         fold_bar.add_item(self.fp_settings)
 
-        self.fp_streams = FoldPanelItem(fold_bar, label="STREAMS")
+        self.fp_streams = FoldPanelItem(fold_bar, label=LABEL_STREAMS)
         self.fp_streams.SetForegroundColour(self._theme.button_text)
         self.fp_streams.SetBackgroundColour(self._theme.section_header)
         self.pnl_streams = StreamBar(self.fp_streams, size=(300, -1))

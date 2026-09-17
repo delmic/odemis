@@ -23,6 +23,7 @@ import wx
 from odemis.gui import img
 from odemis.gui.comp.buttons import ImageButton, TabButton
 from odemis.gui.comp.foldpanelbar import CaptionBar
+from odemis.gui.layout.constants.strings import LABEL_PROJECTS
 from odemis.gui.layout.constants.themes import DARK, Theme
 from odemis.gui.layout.util.fonts import set_font
 from odemis.gui.layout.util.sizers import hbox, vbox
@@ -84,7 +85,7 @@ class PnlFastemProjectManager(wx.Panel):
         self.pnl_active_project.SetBackgroundColour(self._theme.field_background)
 
         with vbox() as sizer:
-            caption_bar = CaptionBar(self.pnl_active_project, "PROJECTS", False)
+            caption_bar = CaptionBar(self.pnl_active_project, LABEL_PROJECTS, False)
             caption_bar.SetForegroundColour(self._theme.button_text)
             sizer.Add(caption_bar, flag=wx.EXPAND)
 

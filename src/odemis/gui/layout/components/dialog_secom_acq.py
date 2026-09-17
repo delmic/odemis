@@ -24,6 +24,16 @@ from odemis.gui.comp.buttons import ImageTextButton
 from odemis.gui.comp.foldpanelbar import FoldPanelBar, FoldPanelItem
 from odemis.gui.comp.stream_bar import StreamBar
 from odemis.gui.comp.viewport import LiveViewport
+from odemis.gui.layout.constants.strings import (
+    DEFAULT_DESTINATION_FILE,
+    LABEL_CLOSE,
+    LABEL_FILENAME,
+    LABEL_OPTICAL_SETTINGS,
+    LABEL_PRESETS,
+    LABEL_SEM_SETTINGS,
+    LABEL_START,
+    LABEL_STREAMS,
+)
 from odemis.gui.layout.constants.themes import DARK, Theme
 from odemis.gui.layout.util.fonts import set_font
 from odemis.gui.layout.util.sizers import hbox, vbox
@@ -98,7 +108,7 @@ class SecomAcqDialogBase(wx.Dialog):
             grid = wx.FlexGridSizer(3, 2, 5, 10)
             grid.AddGrowableCol(1)
 
-            lbl_presets = wx.StaticText(panel, label="Presets")
+            lbl_presets = wx.StaticText(panel, label=LABEL_PRESETS)
             grid.Add(lbl_presets)
             self.cmb_presets = create_combo(
                 panel,
@@ -109,7 +119,7 @@ class SecomAcqDialogBase(wx.Dialog):
             )
             grid.Add(self.cmb_presets, flag=wx.EXPAND)
 
-            lbl_filename = wx.StaticText(panel, label="Filename")
+            lbl_filename = wx.StaticText(panel, label=LABEL_FILENAME)
             grid.Add(lbl_filename, flag=wx.TOP, border=4)
             grid.Add(self._build_filename_row(panel), flag=wx.EXPAND)
 
@@ -145,7 +155,7 @@ class SecomAcqDialogBase(wx.Dialog):
             self.txt_filename = wx.TextCtrl(
                 parent,
                 size=(-1, 20),
-                value="Select a destination file",
+                value=DEFAULT_DESTINATION_FILE,
                 style=wx.BORDER_NONE | wx.TE_READONLY,
             )
             self.txt_filename.SetForegroundColour(self._theme.text_edit)
@@ -201,7 +211,7 @@ class SecomAcqDialogBase(wx.Dialog):
         """
         self.fp_settings_secom_optical = self._fold_item(
             fold_bar,
-            "OPTICAL SETTINGS",
+            LABEL_OPTICAL_SETTINGS,
         )
 
         opt_streams_item = self._fold_item(fold_bar, nocaption=True)
@@ -210,10 +220,10 @@ class SecomAcqDialogBase(wx.Dialog):
 
         self.fp_settings_secom_sem = self._fold_item(
             fold_bar,
-            "SEM SETTINGS",
+            LABEL_SEM_SETTINGS,
         )
 
-        streams_item = self._fold_item(fold_bar, "STREAMS")
+        streams_item = self._fold_item(fold_bar, LABEL_STREAMS)
         self.pnl_secom_streams = self._stream_bar(
             streams_item,
             size=(300, -1),
@@ -315,7 +325,7 @@ class SecomAcqDialogBase(wx.Dialog):
         with hbox() as sizer:
             self.btn_cancel = create_text_button(
                 panel,
-                label="Close",
+                label=LABEL_CLOSE,
                 height=48,
                 text_colour=self._theme.button_text,
                 contrast_text_colour=self._theme.button_text_contrast,
@@ -329,7 +339,7 @@ class SecomAcqDialogBase(wx.Dialog):
 
             self.btn_secom_acquire = create_text_button(
                 panel,
-                label="START",
+                label=LABEL_START,
                 height=48,
                 text_colour=self._theme.button_text,
                 contrast_text_colour=self._theme.button_text_contrast,

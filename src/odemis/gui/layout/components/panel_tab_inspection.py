@@ -37,7 +37,10 @@ from odemis.gui.comp.viewport import (
     ViewPort,
 )
 from odemis.gui.cont.tools import ToolBar
-from odemis.gui.layout.constants import strings
+from odemis.gui.layout.constants.strings import (
+    LABEL_STREAMS,
+    TOOLTIP_OPEN_LOG_PANEL,
+)
 from odemis.gui.layout.constants.themes import DARK, Theme
 from odemis.gui.layout.util.sizers import hbox, vbox
 from odemis.gui.layout.util.widgets import (
@@ -190,7 +193,7 @@ class PnlTabInspection(wx.Panel):
             face_colour="def",
             style=wx.ALIGN_CENTRE,
         )
-        self.btn_log.SetToolTip(strings.TOOLTIP_OPEN_LOG_PANEL)
+        self.btn_log.SetToolTip(TOOLTIP_OPEN_LOG_PANEL)
         return self.btn_log
 
     def _build_viewport_grid(self) -> ViewportGrid:
@@ -327,7 +330,7 @@ class PnlTabInspection(wx.Panel):
 
         :param fold_bar: Parent fold-panel bar.
         """
-        streams_item = self._fold_item(fold_bar, "STREAMS")
+        streams_item = self._fold_item(fold_bar, LABEL_STREAMS)
         self.pnl_inspection_streams = StreamBar(
             streams_item,
             size=(300, -1),
