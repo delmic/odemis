@@ -134,7 +134,7 @@ class SecomAcquiController(object):
         # create the dialog
         try:
             acq_dialog = AcquisitionDialog(self._tab_panel.Parent, self._tab_data_model)
-            parent_size = [v * 0.77 for v in self._tab_panel.Parent.GetSize()]
+            parent_size = [int(v * 0.9) for v in self._tab_panel.Parent.GetSize()]
 
             acq_dialog.SetSize(parent_size)
             acq_dialog.Center()
