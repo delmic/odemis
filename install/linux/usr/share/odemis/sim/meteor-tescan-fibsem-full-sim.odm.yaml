@@ -199,7 +199,7 @@
         address: null,
         axes: ["fw", "stig"],
         ustepsize: [3.2724923e-4, 3.2724923e-4],  # [rad/µstep]
-        rng: [[-14.0, 7.0], [-7.0, 14.0]],  # rad, more than 0->2 Pi, in order to allow one extra rotation in both direction, when quickly switching
+        rng: [[-28.0, 28.0], [-28.0, 28.0]],  # rad, more than 0->2 Pi, in order to allow one extra rotation in both direction, when quickly switching
         unit: ["rad", "rad"],
         refproc: "Standard",
         refswitch: {"fw": 0, "stig": 4}, # digital output used to switch on/off sensor
