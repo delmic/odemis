@@ -24,7 +24,6 @@ import wx
 import odemis.gui.layout as layout
 from odemis.gui.comp.viewport import FeatureOverviewViewport, LiveViewport
 from odemis.gui.layout.components.panel_tab_fibsem import PnlTabFibsem
-from odemis.gui.layout import theme
 
 
 class PnlTabFibsemTest(unittest.TestCase):
@@ -175,13 +174,13 @@ class PnlTabFibsemTest(unittest.TestCase):
             with self.subTest(button=button):
                 self.assertEqual(
                     button.GetForegroundColour(),
-                    wx.Colour(theme.button_text),
+                    wx.Colour(layout.theme.button_text),
                 )
         for button in contrasting_buttons:
             with self.subTest(button=button):
                 self.assertEqual(
                     button.GetForegroundColour(),
-                    wx.Colour(theme.button_text_contrast),
+                    wx.Colour(layout.theme.button_text_contrast),
                 )
 
     def test_uses_current_layout_theme_at_construction(self) -> None:

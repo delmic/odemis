@@ -112,7 +112,8 @@ def _collect_mtimes(pkg_root: Path) -> dict:
         try:
             mtimes[fpath] = fpath.stat().st_mtime
         except OSError:
-            pass
+            logging.debug("Failed to stat %s, will skip", fpath)
+
     return mtimes
 
 
@@ -294,7 +295,7 @@ def run_preview(cls: type, **kwargs) -> None:
             try:
                 self._init_size = self._container.GetSize()
                 self._init_position = self._container.GetPosition()
-            except:
+            except Exception:
                 # If we cannot render due to an error, just not save anything and use the previous value next time
                 pass
             self._close_widget()
@@ -330,7 +331,7 @@ def run_preview(cls: type, **kwargs) -> None:
             try:
                 self._container.SetSize(self._init_size)
                 self._container.SetPosition(self._init_position)
-            except:
+            except Exception:
                 pass
 
     host = _Host()
