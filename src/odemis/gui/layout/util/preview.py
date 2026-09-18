@@ -120,8 +120,9 @@ def _reload_layout_modules(pkg_name: str = "odemis.gui.layout") -> None:
     """
     Reload all currently-imported modules inside the layout package.
 
-    Modules are reloaded shallowest-first (fewest dots in name) so that
-    dependencies are fresh before the modules that import them are reloaded.
+    The theme constants are reloaded first because the layout package copies
+    the selected theme into its public theme alias. Remaining modules are
+    reloaded shallowest-first (fewest dots in name).
 
     :param pkg_name: Dotted name of the layout package root.
     """
@@ -131,8 +132,13 @@ def _reload_layout_modules(pkg_name: str = "odemis.gui.layout") -> None:
         if name == pkg_name or name.startswith(pkg_name + ".")
         if mod is not None and hasattr(mod, "__file__") and mod.__file__
     ]
-    # Shallowest first = fewest dots = dependencies before dependents.
-    candidates.sort(key=lambda nm: nm[0].count("."))
+    theme_module_name = f"{pkg_name}.constants.themes"
+    candidates.sort(
+        key=lambda nm: (
+            nm[0] != theme_module_name,
+            nm[0].count("."),
+        )
+    )
     for name, mod in candidates:
         try:
             importlib.reload(mod)
