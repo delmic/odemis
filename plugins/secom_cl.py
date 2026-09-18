@@ -961,7 +961,7 @@ class CLAcqPlugin(Plugin):
         """
         Starts the synchronized acquisition, pauses the currently playing streams and exports the
         acquired SEM data. Opens the survey, concurrent and first optical image in the analysis tab.
-        :param dlg: (SecomAcquisitionDialog) The plugin window.
+        :param dlg: (AcquisitionDialog) The plugin window.
         """
         self._dlg.streambar_controller.pauseStreams()
         self.save_hw_settings()
