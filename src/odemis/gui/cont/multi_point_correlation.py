@@ -543,9 +543,15 @@ class CorrelationPointsController:
         else:
             self._do_3d_correlation()
 
-        rms = self.correlation_target.correlation_result["output"]["error"]["rms_error"]
+        # rms_error, as computed by both _do_2d_correlation() and the 3DCT package (in
+        # _do_3d_correlation()), is a distance expressed in FIB pixels, not physical units.
+        # Convert it to metres using the FIB pixel size, so it can be displayed in a readable unit
+        # (e.g. µm) instead of a meaningless pixel count.
+        rms_px = self.correlation_target.correlation_result["output"]["error"]["rms_error"]
+        fib_pixel_size = self.correlation_target.fib_stream.getRawMetadata()[0][model.MD_PIXEL_SIZE][0]
+        rms_m = rms_px * fib_pixel_size
         wx.CallAfter(self.correlation_txt.SetLabel,
-                     f"Correlation RMS Deviation : {readable_str(rms, sig=3)}")
+                     f"Correlation RMS Deviation : {readable_str(rms_m, unit='m', sig=3)}")
 
         # Display the output in the relevant views
         self._viewports[1].canvas.Refresh()
