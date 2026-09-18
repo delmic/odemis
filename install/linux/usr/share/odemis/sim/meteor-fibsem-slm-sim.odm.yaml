@@ -1,7 +1,3 @@
-# Simulates a METEOR on TFS SEM, with control of the FIB (milling)
-# It requires the separate xtadapter-autoscript simulator. To start it, do:
-# python3 path/to/xtlib-adapter/xtadapter/server_sim.py --type autoscript --port 4243
-
 "METEOR TFSv3 FIB Sim": {
     class: Microscope,
     role: meteor,
@@ -475,11 +471,31 @@
     },
 }
 
+# The lens-arm (l) and objective focus (z) are mechanically linked: moving the
+# "Linked LZ"/"SLM Alignment Stage" y axis always shifts l and z in opposite
+# directions. To always approach a target from the same mechanical side (and
+# so avoid a collision/backlash issue), whichever of l/z would move in the
+# positive direction is moved first, and the one moving in the negative
+# direction is moved last.
+# direction is moved last.
+"SLM LZ Forced Order": {
+    class: actuator.ForcedOrderActuator,
+    role: null,
+    dependencies: {"slave": "SLM LZ Axes"},
+    init: {
+        backlash: {
+            # Only the sign matters: positive direction moves first.
+            "l": -1,
+            "z": -1,
+        },
+    },
+}
+
 "Linked LZ": {
     class: actuator.ConvertStage,
     role: null,
     dependencies: {
-        "under": "SLM LZ Axes",
+        "under": "SLM LZ Forced Order",
     },
     init: {
       axes: [ "l", "z" ], # combines lens-arm l and objective z into linked Y transform
@@ -509,7 +525,7 @@
 #        POS_ACTIVE_RANGE: {"x": [-2.1.e-3, 2.1.e-3], "y": [-30.e-3, 25.e-3], "z": [-11.e-3, 15.e-3]}
 #    },
     metadata: {
-        POS_ACTIVE_RANGE: {"x": [-2.1e-3, 2.1e-3], "y": [-30.e-3, 25.e-3], "z": [-11.e-3, 15.e-3]}
+        POS_ACTIVE_RANGE: {"x": [-2.1e-3, 2.1e-3], "y": [-30, 25], "z": [-11.e-3, 15.e-3]}
     },
 }
 
