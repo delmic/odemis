@@ -36,7 +36,7 @@ import wx
 
 from odemis import model, util
 from odemis.acq.align.tdct import _convert_das_to_numpy_stack, run_tdct_correlation
-from odemis.acq.feature import FIBFMCorrelationData, Target, TargetType
+from odemis.acq.feature import FIBFMCorrelationData, Target, TargetType, get_fiducial_colour
 from odemis.acq.move import Posture
 from odemis.acq.stream import StaticFluoStream, StaticSEMStream, StaticFIBStream, FluoStream
 from odemis.gui.cont.features import save_project
@@ -58,6 +58,10 @@ class GridColumns(Enum):
     Index = 4  # Column for "index"
 
 GRID_PRECISION = 2  # Number of decimal places to display in the grid
+
+# Target types whose fiducial-index colour should be shown in the grid and the viewports, so that
+# a fiducial pair (FM + FIB, sharing the same index) can be visually matched across both.
+FIDUCIAL_INDEX_TARGET_TYPES = (TargetType.Fiducial, TargetType.FibFiducial)
 
 # Regex search pattern to distinguish between FIB and FM target. These targets can
 # have the same type of Fiducials but there is a prefix in the name to distinguish them.
@@ -875,6 +879,7 @@ class CorrelationPointsController:
         col_name = self.grid.GetColLabelValue(col)
         if col_name == GridColumns.Index.name:
             self._reorder_grid()
+            self._apply_type_colours()
 
     @call_in_wx_main
     def _on_current_target_changes(self, target: Target) -> None:
@@ -1000,6 +1005,7 @@ class CorrelationPointsController:
                 self.grid.SetCellValue(current_row_count, GridColumns.Type.value, target.name.value)
 
             self._reorder_grid()
+            self._apply_type_colours()
         finally:
             self.grid.Bind(wx.grid.EVT_GRID_SELECT_CELL, self._on_cell_selected)
 
@@ -1084,6 +1090,28 @@ class CorrelationPointsController:
         self.grid.HideCol(col_idx)
         # Run the correlation. Note that our z pixel spacing for the fm_coords is not equal to x and y, but internal
         # scaling in the affine registration logic should handle this just fine.
+
+    def _apply_type_colours(self) -> None:
+        """
+        Sets the text colour of the Type and Index columns for every row containing a fiducial
+        (FM or FIB), based on its index, so that a fiducial pair sharing the same index can be
+        visually matched at a glance, both in the grid and (see cryo_feature.py) in the viewports.
+        Non-fiducial rows (e.g. Point of Interest) are reset to the grid's default text colour.
+        Must be called whenever grid rows are (re)populated or reordered, since SetCellValue() does
+        not preserve/move cell attributes such as colour along with the row's content.
+        """
+        default_colour = self.grid.GetDefaultCellTextColour()
+        for row in range(self.grid.GetNumberRows()):
+            for target in self._tab_data_model.main.targets.value:
+                if self._selected_target_in_grid(target, row):
+                    if target.type.value in FIDUCIAL_INDEX_TARGET_TYPES:
+                        colour = wx.Colour(get_fiducial_colour(target.index.value))
+                    else:
+                        colour = default_colour
+                    self.grid.SetCellTextColour(row, GridColumns.Type.value, colour)
+                    self.grid.SetCellTextColour(row, GridColumns.Index.value, colour)
+                    break
+        self.grid.ForceRefresh()
 
     def _renumber_fm_fiducials_on_start(self) -> None:
         """
