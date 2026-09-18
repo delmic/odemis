@@ -44,6 +44,7 @@ from odemis.gui.layout.constants.strings import (
     LABEL_SEM_IMAGING,
     LABEL_STATUS,
     LABEL_STREAMS,
+    LABEL_TRENCHING,
     TOOLTIP_OPEN_LOG_PANEL,
     LABEL_CHANGE,
     LABEL_ACQUIRE,
@@ -403,49 +404,61 @@ class PnlTabFibsem(wx.Panel):
                 self._build_milling_angle_row(panel),
                 flag=wx.ALIGN_CENTRE,
             )
+            sizer.Add(
+                self._build_trenching_angle_row(panel),
+                flag=wx.ALIGN_CENTRE,
+            )
 
         panel.SetSizer(sizer)
         item.add_item(panel)
 
     def _build_posture_buttons(self, parent: wx.Window) -> wx.Sizer:
-        """Build SEM-imaging and milling posture buttons.
+        """Build SEM-imaging, milling and trenching posture buttons.
 
         :param parent: Parent window.
-        :returns: Posture button row.
+        :returns: Posture button grid.
         """
-        with hbox() as sizer:
-            self.btn_switch_sem_imaging = create_progress_button(
-                parent,
+        grid = wx.GridBagSizer(vgap=0, hgap=0)
+        specs = (
+            (
+                "btn_switch_sem_imaging",
                 LABEL_SEM_IMAGING,
-                "ico_sem.png",
-                "ico_sem_orange.png",
-                "ico_sem_green.png",
-                text_colour=self._theme.button_text,
-                font_size=self._theme.font_size_button,
-            )
-            sizer.Add(
-                self.btn_switch_sem_imaging,
-                proportion=1,
-                flag=wx.EXPAND | wx.ALL,
-                border=self._theme.spacing_standard,
-            )
-
-            self.btn_switch_milling = create_progress_button(
-                parent,
+                "ico_sem",
+                (0, 0),
+            ),
+            (
+                "btn_switch_milling",
                 LABEL_MILLING,
-                "ico_milling.png",
-                "ico_milling_orange.png",
-                "ico_milling_green.png",
+                "ico_milling",
+                (0, 1),
+            ),
+            (
+                "btn_switch_trenching",
+                LABEL_TRENCHING,
+                "ico_trenching",
+                (1, 0),
+            ),
+        )
+        for attribute, label, icon_name, position in specs:
+            button = create_progress_button(
+                parent,
+                label,
+                f"{icon_name}.png",
+                f"{icon_name}_orange.png",
+                f"{icon_name}_green.png",
                 text_colour=self._theme.button_text,
                 font_size=self._theme.font_size_button,
             )
-            sizer.Add(
-                self.btn_switch_milling,
-                proportion=1,
+            setattr(self, attribute, button)
+            grid.Add(
+                button,
+                pos=position,
                 flag=wx.EXPAND | wx.ALL,
                 border=self._theme.spacing_standard,
             )
-        return sizer
+        grid.AddGrowableCol(0)
+        grid.AddGrowableCol(1)
+        return grid
 
     def _build_milling_angle_row(self, parent: wx.Window) -> wx.Sizer:
         """Build the milling-angle editor.
@@ -475,7 +488,7 @@ class PnlTabFibsem(wx.Panel):
                 accuracy=2,
             )
             self.ctrl_milling_angle.SetForegroundColour(
-                self._theme.text_muted
+                self._theme.text_edit
             )
             self.ctrl_milling_angle.SetBackgroundColour(
                 self._theme.background
@@ -486,6 +499,57 @@ class PnlTabFibsem(wx.Panel):
             )
             sizer.Add(
                 self.ctrl_milling_angle,
+                flag=wx.LEFT | wx.BOTTOM,
+                border=self._theme.spacing_standard,
+            )
+        return sizer
+
+    def _build_trenching_angle_row(self, parent: wx.Window) -> wx.Sizer:
+        """Build the trenching-angle read-out.
+
+        :param parent: Parent window.
+        :returns: Trenching-angle row.
+        """
+        with hbox() as sizer:
+            self.lbl_trenching_angle = wx.StaticText(
+                parent, label="Trenching angle"
+            )
+            self.lbl_trenching_angle.SetForegroundColour(
+                self._theme.text_secondary
+            )
+            set_font(
+                self.lbl_trenching_angle,
+                self._theme.font_size_checklist,
+            )
+            sizer.Add(
+                self.lbl_trenching_angle,
+                flag=wx.LEFT | wx.BOTTOM,
+                border=self._theme.spacing_standard,
+            )
+
+            self.ctrl_trenching_angle = UnitFloatCtrl(
+                parent,
+                value=10.0,
+                size=(-1, 20),
+                style=wx.BORDER_NONE,
+                unit="°",
+                min_val=0.0,
+                max_val=0.0,
+                key_step=0.1,
+                accuracy=2,
+            )
+            self.ctrl_trenching_angle.SetForegroundColour(
+                self._theme.text_muted
+            )
+            self.ctrl_trenching_angle.SetBackgroundColour(
+                self._theme.background
+            )
+            set_font(
+                self.ctrl_trenching_angle,
+                self._theme.font_size_checklist,
+            )
+            sizer.Add(
+                self.ctrl_trenching_angle,
                 flag=wx.LEFT | wx.BOTTOM,
                 border=self._theme.spacing_standard,
             )

@@ -179,14 +179,16 @@ class CorrelationPointsController:
         # should have made sure everything is present.
         fib_pos = self._main_data_model.currentFeature.value.reference_image.metadata[model.MD_STAGE_POSITION_RAW]
         fib_rx = fib_pos["rx"]
-        fib_mill_angle = pm.calculate_milling_angle(stage_tilt=fib_rx, column_tilt=pm.fib_column_tilt)
+        fib_mill_angle = pm.calculate_milling_angle(stage_tilt=fib_rx, posture=Posture.MILLING)
         # Iterate over al z-stacks and check if there are any that are acquired at the milling angle matching the
         # reference FIB image.
         z_stacks_at_milling = []
         for z_stack in z_stacks:
             # Directly indexing without safeguards, since everything should be there.
             z_stack_pos = z_stack.getRawMetadata()[0][model.MD_STAGE_POSITION_RAW]
-            z_stack_mill_angle = pm.calculate_milling_angle(stage_tilt=z_stack_pos["rx"], column_tilt=pm.fm_column_tilt)
+            z_stack_mill_angle = pm.calculate_milling_angle(
+                stage_tilt=z_stack_pos["rx"], posture=Posture.FIB_VIEW_FM
+            )
             # Consider a z-stack to be acquired at milling angle when it is acquired at the same tilt as the FIB image.
             if (math.isclose(fib_mill_angle, z_stack_mill_angle, abs_tol=MILLING_ANGLE_TOLERANCE) and
                 math.isclose(fib_pos["rz"], z_stack_pos["rz"], abs_tol=MILLING_ANGLE_TOLERANCE)):
