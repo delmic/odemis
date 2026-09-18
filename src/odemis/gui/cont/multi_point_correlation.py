@@ -36,7 +36,7 @@ import wx
 
 from odemis import model, util
 from odemis.acq.align.tdct import _convert_das_to_numpy_stack, run_tdct_correlation
-from odemis.acq.feature import FIBFMCorrelationData, Target, TargetType
+from odemis.acq.feature import FIBFMCorrelationData, Target, TargetType, get_fiducial_colour
 from odemis.acq.move import Posture
 from odemis.acq.stream import StaticFluoStream, StaticSEMStream, StaticFIBStream, FluoStream
 from odemis.gui.cont.features import save_project
@@ -58,6 +58,10 @@ class GridColumns(Enum):
     Index = 4  # Column for "index"
 
 GRID_PRECISION = 2  # Number of decimal places to display in the grid
+
+# Target types whose fiducial-index colour should be shown in the grid and the viewports, so that
+# a fiducial pair (FM + FIB, sharing the same index) can be visually matched across both.
+FIDUCIAL_INDEX_TARGET_TYPES = (TargetType.Fiducial, TargetType.FibFiducial)
 
 # Regex search pattern to distinguish between FIB and FM target. These targets can
 # have the same type of Fiducials but there is a prefix in the name to distinguish them.
@@ -215,6 +219,10 @@ class CorrelationPointsController:
 
         # Access the correlation points table (wxListCtrl)
         self.grid = self._panel.table_grid
+        # Guard flag: True while a currentTarget update is being driven by a grid row click, so
+        # that _on_current_target_changes does not re-select the row and collapse a multi-row
+        # selection made by the user (e.g. via shift-click).
+        self._grid_selection_in_progress = False
 
         # Access the Refine XYZ status text (to check if XYZ targeting is working or not)
         self.txt_refine_xyz_active = self._panel.txt_refine_xyz_active
@@ -236,6 +244,13 @@ class CorrelationPointsController:
 
         self.grid.CreateGrid(0, 5)
         self.grid.SetRowLabelSize(0)
+        # Since the row label is hidden (size 0), wx can otherwise mis-detect mouse interactions
+        # near the row/col boundaries as a resize drag, and hit a C++ assertion when it can't
+        # determine which row/col is being resized. Disabling drag-resize avoids that entirely.
+        self.grid.DisableDragRowSize()
+        self.grid.DisableDragColSize()
+        # Allow selecting (and later deleting) multiple whole rows at once, e.g. via shift-click
+        self.grid.SetSelectionMode(wx.grid.Grid.GridSelectRows)
         self.grid.SetColLabelValue(GridColumns.Type.value, GridColumns.Type.name)
         self.grid.SetColLabelValue(GridColumns.X.value, GridColumns.X.name)
         self.grid.SetColLabelValue(GridColumns.Y.value, GridColumns.Y.name)
@@ -528,9 +543,15 @@ class CorrelationPointsController:
         else:
             self._do_3d_correlation()
 
-        rms = self.correlation_target.correlation_result["output"]["error"]["rms_error"]
+        # rms_error, as computed by both _do_2d_correlation() and the 3DCT package (in
+        # _do_3d_correlation()), is a distance expressed in FIB pixels, not physical units.
+        # Convert it to metres using the FIB pixel size, so it can be displayed in a readable unit
+        # (e.g. µm) instead of a meaningless pixel count.
+        rms_px = self.correlation_target.correlation_result["output"]["error"]["rms_error"]
+        fib_pixel_size = self.correlation_target.fib_stream.getRawMetadata()[0][model.MD_PIXEL_SIZE][0]
+        rms_m = rms_px * fib_pixel_size
         wx.CallAfter(self.correlation_txt.SetLabel,
-                     f"Correlation RMS Deviation : {readable_str(rms, sig=3)}")
+                     f"Correlation RMS Deviation : {readable_str(rms_m, unit='m', sig=3)}")
 
         # Display the output in the relevant views
         self._viewports[1].canvas.Refresh()
@@ -669,57 +690,99 @@ class CorrelationPointsController:
 
     def _on_delete_row(self, event) -> None:
         """
-        Deletes the currently selected row and clear the current target VA. Updates the correlation target based on the
-        latest changes.
+        Deletes the currently selected row(s) and clears the current target VA. If multiple rows
+        are selected in the grid (e.g. via shift-click), all corresponding targets are deleted
+        in one go. Updates the correlation target based on the latest changes.
         """
-        target = self._tab_data_model.main.currentTarget.value
-        if not target:
-            self.grid.ClearSelection()
-            return
+        selected_rows = self._get_selected_grid_rows()
 
-        # A surface fiducial is not present in the grid, so special case to just remove it from the targets
-        if target.type.value == TargetType.SurfaceFiducial:
-            logging.debug("Deleting Surface Fiducial")
-            try:
-                self._tab_data_model.main.targets.value.remove(target)
-            except ValueError:
-                logging.warning("Target surface fiducial %s not found in the targets list.", target.name.value)
+        if selected_rows:
+            # Resolve rows to targets before deleting anything, since removing a target from the
+            # .targets VA triggers the grid to be rebuilt, which would invalidate row indices.
+            targets_to_delete = []
+            for row in selected_rows:
+                for target in self._tab_data_model.main.targets.value:
+                    if self._selected_target_in_grid(target, row):
+                        targets_to_delete.append(target)
+                        break
+
+            for target in targets_to_delete:
+                logging.debug(f"Deleting target: {target.name.value}")
+                try:
+                    # The VA subscribers will take care of updating the grid
+                    self._tab_data_model.main.targets.value.remove(target)
+                except ValueError:
+                    logging.warning("Target %s not found in the targets list.", target.name.value)
             self._tab_data_model.main.currentTarget.value = None
         else:
-            # Find the row which contains the current target, and delete both the row and the target itself
-            for row in range(self.grid.GetNumberRows()):
-                if self._selected_target_in_grid(target, row):
-                    logging.debug(f"Deleting target: {target.name.value}")
-                    # The VA subcribers will take care of updating the grid
+            # No row explicitly selected in the grid (e.g. a Surface Fiducial, which has no grid
+            # row): fall back to deleting the current target.
+            target = self._tab_data_model.main.currentTarget.value
+            if not target:
+                self.grid.ClearSelection()
+                return
+
+            # A surface fiducial is not present in the grid, so special case to just remove it from the targets
+            if target.type.value == TargetType.SurfaceFiducial:
+                logging.debug("Deleting Surface Fiducial")
+                try:
                     self._tab_data_model.main.targets.value.remove(target)
-                    self._tab_data_model.main.currentTarget.value = None
-                    break
+                except ValueError:
+                    logging.warning("Target surface fiducial %s not found in the targets list.", target.name.value)
+                self._tab_data_model.main.currentTarget.value = None
+            else:
+                # Find the row which contains the current target, and delete both the row and the target itself
+                for row in range(self.grid.GetNumberRows()):
+                    if self._selected_target_in_grid(target, row):
+                        logging.debug(f"Deleting target: {target.name.value}")
+                        # The VA subcribers will take care of updating the grid
+                        self._tab_data_model.main.targets.value.remove(target)
+                        self._tab_data_model.main.currentTarget.value = None
+                        break
 
         self.correlation_target = update_feature_correlation_target(self.correlation_target, self._tab_data_model)
         if self.check_correlation_conditions():
             self._need_reprocessing()
 
     def _on_cell_selected(self, event) -> None:
-        """Highlight the selected row in the grid and update the current target."""
+        """Update the current target to match the (last) selected row in the grid."""
         row = event.GetRow()
-        for target in self._tab_data_model.main.targets.value:
-            if self._selected_target_in_grid(target, row):
-                self._tab_data_model.main.currentTarget.value = target
-                break
+        # Note: as of wxPython 4.1, when AppendRow() is called on an empty grid, this event is
+        # triggered with an invalid row (-1). We now temporarily unbind from this event when
+        # recreating the grid to avoid this, but also guard against it here just in case.
+        if row >= 0:
+            # Guard so _on_current_target_changes knows the currentTarget update below originated
+            # from a grid click, and must not call SelectRow() (which would collapse any
+            # multi-row selection the user just made, e.g. via shift-click).
+            self._grid_selection_in_progress = True
+            try:
+                for target in self._tab_data_model.main.targets.value:
+                    if self._selected_target_in_grid(target, row):
+                        self._tab_data_model.main.currentTarget.value = target
+                        break
+            finally:
+                self._grid_selection_in_progress = False
 
         for vp in self._viewports:
             vp.canvas.request_drawing_update()
 
-        # Highlight the selected row
-        # Note: as of wxPython 4.1, when AppendRow() is called on an empty grid, this event is
-        # triggered. This causes an error, as it's not possible to select a row in such case.
-        # We now temporarily unbind from this event when recreating the grid to avoid this, but also
-        # handle it explicitly just in case.
-        try:
-            self.grid.SelectRow(row)
-        except Exception as e:
-            logging.warning("Could not select row %s: %s", row, e)
+        # Note: the grid is in row-selection mode (GridSelectRows), so wx already takes care of
+        # highlighting the whole row, and of extending the selection to multiple rows on
+        # shift-click. We must not call self.grid.SelectRow() here, as that would collapse
+        # any existing multi-row selection down to just this row.
         event.Skip()
+
+    def _get_selected_grid_rows(self) -> List[int]:
+        """
+        :return: the sorted, deduplicated list of row indices currently selected in the grid.
+            Accounts for both individually selected rows and selected ranges/blocks (e.g.
+            shift-click or click-drag).
+        """
+        rows = set(self.grid.GetSelectedRows())
+        for top_left, bottom_right in zip(self.grid.GetSelectionBlockTopLeft(),
+                                           self.grid.GetSelectionBlockBottomRight()):
+            rows.update(range(top_left.GetRow(), bottom_right.GetRow() + 1))
+        return sorted(rows)
 
     def _selected_target_in_grid(self, target: Target, row: int) -> bool:
         """
@@ -826,6 +889,7 @@ class CorrelationPointsController:
         col_name = self.grid.GetColLabelValue(col)
         if col_name == GridColumns.Index.name:
             self._reorder_grid()
+            self._apply_type_colours()
 
     @call_in_wx_main
     def _on_current_target_changes(self, target: Target) -> None:
@@ -867,10 +931,14 @@ class CorrelationPointsController:
                 # Reset refinement
                 target.needs_refinement.value = False
 
-        for row in range(self.grid.GetNumberRows()):
-            if self._selected_target_in_grid(target, row):
-                self.grid.SelectRow(row)
-                break
+        # Only force-select the row in the grid when the currentTarget change came from elsewhere
+        # (e.g. clicking a target in the viewport). If it came from a grid click itself, leave the
+        # grid's own selection alone, so multi-row selections (shift-click) are preserved.
+        if not self._grid_selection_in_progress:
+            for row in range(self.grid.GetNumberRows()):
+                if self._selected_target_in_grid(target, row):
+                    self.grid.SelectRow(row)
+                    break
 
         for vp in self._viewports:
             vp.canvas.request_drawing_update()
@@ -956,6 +1024,7 @@ class CorrelationPointsController:
                 self.grid.SetCellValue(current_row_count, GridColumns.Type.value, target.name.value)
 
             self._reorder_grid()
+            self._apply_type_colours()
         finally:
             self.grid.Bind(wx.grid.EVT_GRID_SELECT_CELL, self._on_cell_selected)
 
@@ -1003,9 +1072,11 @@ class CorrelationPointsController:
             x_end = min(shape_x, target_x + pixel_padding + 1)
             roi = numpy.s_[:, y_start:y_end, x_start:x_end]
             multi_crop = raw_multi[(slice(None),) + roi]  # We search along all stack slices (first axis)
-            # Find best channel and compute COM
+            # Find best channel and compute COM, anchored on the clicked position so that the
+            # refinement stays on the local peak instead of being pulled by unrelated bright signal
             best_c = get_brightest_channel(multi_crop)
-            com = compute_center_of_mass(multi_crop[best_c], baseline_ratio=0.95)
+            click_center = (pixel_coords[2], target_y - y_start, target_x - x_start)
+            com = compute_center_of_mass(multi_crop[best_c], baseline_ratio=0.95, center=click_center)
             com_z = com[0]
             com_y_crop = com[1] + roi[1].start
             com_x_crop = com[2] + roi[2].start
@@ -1036,6 +1107,28 @@ class CorrelationPointsController:
         for row, row_data in enumerate(data):
             for col, value in enumerate(row_data):
                 self.grid.SetCellValue(row, col, str(value))
+
+    def _apply_type_colours(self) -> None:
+        """
+        Sets the text colour of the Type and Index columns for every row containing a fiducial
+        (FM or FIB), based on its index, so that a fiducial pair sharing the same index can be
+        visually matched at a glance, both in the grid and (see cryo_feature.py) in the viewports.
+        Non-fiducial rows (e.g. Point of Interest) are reset to the grid's default text colour.
+        Must be called whenever grid rows are (re)populated or reordered, since SetCellValue() does
+        not preserve/move cell attributes such as colour along with the row's content.
+        """
+        default_colour = self.grid.GetDefaultCellTextColour()
+        for row in range(self.grid.GetNumberRows()):
+            for target in self._tab_data_model.main.targets.value:
+                if self._selected_target_in_grid(target, row):
+                    if target.type.value in FIDUCIAL_INDEX_TARGET_TYPES:
+                        colour = wx.Colour(get_fiducial_colour(target.index.value))
+                    else:
+                        colour = default_colour
+                    self.grid.SetCellTextColour(row, GridColumns.Type.value, colour)
+                    self.grid.SetCellTextColour(row, GridColumns.Index.value, colour)
+                    break
+        self.grid.ForceRefresh()
 
     def _renumber_fm_fiducials_on_start(self) -> None:
         """

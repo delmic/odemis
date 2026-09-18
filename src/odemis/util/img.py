@@ -1465,18 +1465,44 @@ def get_brightest_channel(sub_image_multi: numpy.ndarray) -> int:
 
 
 def compute_center_of_mass(image: numpy.ndarray,
-                           baseline_ratio: float = 0.95, roi_slice: tuple = None) -> Tuple[float, float, float]:
+                            baseline_ratio: float = 0.95,
+                            center: Optional[Tuple[float, float, float]] = None) -> Tuple[float, float, float]:
     """
-    Computes center of mass with baselining.
-    Uses the brightest pixels (above the baseline percentile) as weights for center of mass calculation,
-    effectively filtering background noise.
+    Computes the center of mass of the local peak closest to a reference position, with baselining.
 
-    :param image: Single-channel 3D sub-image as (Z, Y, X) array
-    :param baseline_ratio: Ratio for background separation (0-1). Values lower than the baseline
+    Pixels above the baseline percentile are first isolated into connected components. Only the
+    component containing (or nearest to) the reference position is kept, and the center of mass is
+    computed on that component alone, weighted by intensity above baseline. This prevents unrelated
+    bright regions elsewhere in the image (e.g. a different fiducial or debris) from pulling the
+    result away from the local peak near the reference position.
+
+    :param image: single-channel 3D sub-image as (Z, Y, X) array.
+    :param baseline_ratio: ratio for background separation (0-1). Values lower than the baseline
         will be discarded.
-    :returns: Tuple of (global_z, global_y, global_x) in pixel coordinates maintaining input order.
+    :param center: reference (z, y, x) pixel position, typically the position the search was
+        initiated from, used to select which connected component of bright pixels to keep. Defaults
+        to the geometric center of the image.
+    :returns: tuple of (global_z, global_y, global_x) in pixel coordinates maintaining input order.
     """
+    image = numpy.asarray(image)
     baseline = numpy.percentile(image, baseline_ratio * 100)
-    image_weights = numpy.where(image > baseline, image - baseline, 0)
-    com = scipy.ndimage.center_of_mass(numpy.asarray(image_weights))
+    mask = image > baseline
+    image_weights = numpy.where(mask, image - baseline, 0)
+
+    if center is None:
+        center = tuple((s - 1) / 2 for s in image.shape)
+    center_idx = tuple(int(numpy.clip(round(c), 0, s - 1)) for c, s in zip(center, image.shape))
+
+    labeled, num_features = scipy.ndimage.label(mask)
+    if num_features > 1:
+        local_label = labeled[center_idx]
+        if local_label == 0:
+            # The reference position itself is below baseline: fall back to the nearest
+            # labelled (bright) region instead of the geometrically-nearest peak overall.
+            _, nearest_idx = scipy.ndimage.distance_transform_edt(labeled == 0, return_indices=True)
+            nearest = tuple(idx[center_idx] for idx in nearest_idx)
+            local_label = labeled[nearest]
+        image_weights = numpy.where(labeled == local_label, image_weights, 0)
+
+    com = scipy.ndimage.center_of_mass(image_weights)
     return com
