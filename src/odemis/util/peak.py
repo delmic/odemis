@@ -162,7 +162,7 @@ def Detect(y_vector, x_vector=None, lookahead=5, delta=0):
         raise ValueError("Delta must be a positive number")
 
     y_vector = numpy.asarray(y_vector)
-    mn, mx = numpy.Inf, -numpy.Inf
+    mn, mx = numpy.inf, -numpy.inf
 
     # Compare candidate peak to the lookahead amount of points in front of it
     for index, (x, y) in enumerate(zip(x_vector[:-lookahead], y_vector[:-lookahead])):
@@ -173,19 +173,19 @@ def Detect(y_vector, x_vector=None, lookahead=5, delta=0):
             mn = y
             mnpos = x
 
-        if y < mx - delta and mx != numpy.Inf:
+        if y < mx - delta and mx != numpy.inf:
             if y_vector[index:index + lookahead].max() < mx:
                 maxtab.append((mxpos, mx))
                 dump.append(True)
-                mx = numpy.Inf
-                mn = numpy.Inf
+                mx = numpy.inf
+                mn = numpy.inf
 
-        if y > mn + delta and mn != -numpy.Inf:
+        if y > mn + delta and mn != -numpy.inf:
             if y_vector[index:index + lookahead].min() > mn:
                 mintab.append((mnpos, mn))
                 dump.append(False)
-                mn = -numpy.Inf
-                mx = -numpy.Inf
+                mn = -numpy.inf
+                mx = -numpy.inf
 
     # remove the first value since it is always detected as peak
     try:
