@@ -27,10 +27,10 @@ from typing import Optional
 
 import wx
 
-from odemis import model, util
+from odemis import model
+from odemis.gui.layout import theme
 from odemis.gui.plugin import Plugin
 from odemis.gui.util import call_in_wx_main
-import odemis.gui as gui
 
 COOLING_OFF_TEMP = 25  # Temperature in °C that indicates cooling is off
 DEFAULT_COOLING_TEMP = -75  # Default target temperature in °C when turning on cooling
@@ -137,15 +137,15 @@ class TemperatureControlDialog(wx.Dialog):
 
         # Current temperature display
         temp_panel = wx.Panel(self)
-        temp_panel.SetBackgroundColour(gui.BG_COLOUR_MAIN)
+        temp_panel.SetBackgroundColour(theme.background)
         temp_sizer = wx.BoxSizer(wx.HORIZONTAL)
 
         temp_label = wx.StaticText(temp_panel, label="Current temperature:")
-        temp_label.SetForegroundColour(gui.FG_COLOUR_MAIN)
+        temp_label.SetForegroundColour(theme.field_foreground)
         temp_sizer.Add(temp_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.LEFT | wx.RIGHT, 5)
 
         self._temp_display = wx.StaticText(temp_panel, label="-- °C")
-        self._temp_display.SetForegroundColour(gui.FG_COLOUR_MAIN)
+        self._temp_display.SetForegroundColour(theme.field_foreground)
         font = self._temp_display.GetFont()
         font.PointSize += 2
         font.SetWeight(wx.FONTWEIGHT_BOLD)
@@ -157,19 +157,19 @@ class TemperatureControlDialog(wx.Dialog):
 
         # Cooling control panel
         control_panel = wx.Panel(self)
-        control_panel.SetBackgroundColour(gui.BG_COLOUR_MAIN)
+        control_panel.SetBackgroundColour(theme.background)
         control_sizer = wx.BoxSizer(wx.VERTICAL)
 
         # Cooling checkbox
         self._cooling_checkbox = wx.CheckBox(control_panel, label="Enable cooling")
-        self._cooling_checkbox.SetForegroundColour(gui.FG_COLOUR_MAIN)
+        self._cooling_checkbox.SetForegroundColour(theme.field_foreground)
         self._cooling_checkbox.Bind(wx.EVT_CHECKBOX, self._on_cooling_toggle)
         control_sizer.Add(self._cooling_checkbox, 0, wx.ALL, 5)
 
         # Target temperature control
         target_sizer = wx.BoxSizer(wx.HORIZONTAL)
         target_label = wx.StaticText(control_panel, label="Target temperature (°C):")
-        target_label.SetForegroundColour(gui.FG_COLOUR_MAIN)
+        target_label.SetForegroundColour(theme.field_foreground)
         target_sizer.Add(target_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 10)
 
         # Get range from VA if available

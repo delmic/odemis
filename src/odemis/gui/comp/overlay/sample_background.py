@@ -27,6 +27,8 @@ from typing import Dict, Tuple
 
 import wx
 from odemis.gui.comp.overlay.base import WorldOverlay
+from odemis.gui.layout import theme
+from odemis.util.conversion import hex_to_frgba
 
 
 class SampleBackgroundOverlay(WorldOverlay):
@@ -42,7 +44,7 @@ class SampleBackgroundOverlay(WorldOverlay):
         sample_radius: the radius of a sample in m (all samples are shown with the same radius)
         """
         super().__init__(cnvs)
-        self._colour = (0.0, 0.42, 0.8, 1.0)  # Blue
+        self._colour = hex_to_frgba(theme.text_edit)
         self._samples = samples
         self._radius = sample_radius
         self._labels = {}
@@ -50,7 +52,9 @@ class SampleBackgroundOverlay(WorldOverlay):
             self._labels[name] = self.add_label(name,
                                                 align = wx.ALIGN_CENTRE_HORIZONTAL | wx.ALIGN_CENTER_VERTICAL,
                                                 colour=self._colour[:3],  # no transparency, to support .opacity
-                                                background=(0, 0, 0, 0.5)  # Black semi-transparent
+                                                background=hex_to_frgba(
+                                                    theme.viewport_background, 0.5
+                                                )
                                                 )
 
     def draw(self, ctx, shift=(0, 0), scale=1.0):

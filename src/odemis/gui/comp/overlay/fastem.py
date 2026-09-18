@@ -41,6 +41,8 @@ from odemis.gui.model.main_gui_data import (
     RectangleScintillator,
     Scintillator,
 )
+from odemis.util.conversion import hex_to_frgba
+from odemis.gui.layout import theme
 
 # The CircleScintillator background overlay is drawn by drawing multiple concentric rings of a
 # certain thickness. This number represents the multiple concentric rings.
@@ -51,7 +53,7 @@ class FastEMROCOverlay(WorldSelectOverlay):
     """Overlay representing one region of calibration (ROC) on the FastEM."""
 
     def __init__(
-        self, cnvs, coordinates, label, sample_bbox, colour=gui.SELECTION_COLOUR
+        self, cnvs, coordinates, label, sample_bbox, colour=theme.selection
     ):
         """
         cnvs (FastEMAcquisitionCanvas): canvas for the overlay
@@ -185,7 +187,7 @@ class FastEMROCOverlay(WorldSelectOverlay):
 
             self.position_label.pos = pos
             self.position_label.text = "%s" % self.label
-            self.position_label.background = (0, 0, 0)  # black
+            self.position_label.background = hex_to_frgba(theme.viewport_background)
             self.position_label.colour = self.colour
             self._write_labels(ctx)
 
@@ -247,7 +249,7 @@ class FastEMScintillatorOverlay(WorldOverlay):
                     b_end_pos[0] - b_start_pos[0],
                     b_end_pos[1] - b_start_pos[1],
                 )
-                ctx.set_source_rgba(0.5, 0.5, 0.5, 1)  # grey
+                ctx.set_source_rgba(*hex_to_frgba(theme.text_muted))
                 ctx.rectangle(*rect)
                 ctx.fill()
         elif isinstance(self.shape, CircleScintillator):
@@ -262,7 +264,7 @@ class FastEMScintillatorOverlay(WorldOverlay):
             # Draw multiple concentric rings
             for i in range(1, NUM_RINGS):
                 outer_radius = b_radius + i * ring_thickness
-                ctx.set_source_rgba(0.5, 0.5, 0.5, 1)  # grey
+                ctx.set_source_rgba(*hex_to_frgba(theme.text_muted))
                 if i > 1:
                     ctx.set_line_width(1.1 * ring_thickness)  # Line width for the ring
                 else:

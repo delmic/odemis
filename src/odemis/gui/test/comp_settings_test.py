@@ -33,7 +33,7 @@ test.goto_manual()
 
 class SettingsPanelTestCase(test.GuiTestCase):
 
-    frame_class = test.test_gui.xrcstream_frame
+    frame_class = test.test_gui.StreamBarFrame
 
     @classmethod
     def setUpClass(cls):

@@ -37,7 +37,7 @@ class TabController(object):
         :param: tab_list: (List[Tab]) list of odemis.gui.cont.tabs.tab.Tab objects.
         :param: tab_va: (VAEnumerated) va which stores the current tab and all
             available tabs in choices.
-        :param: main_frame: odemis.gui.main_xrc.xrcfr_main
+        :param: main_frame: wx.Frame
         :param: main_data: (MainGUIData) the main GUI data.
         :param: default_tab: (Tab) the default_tab to be shown.
         """

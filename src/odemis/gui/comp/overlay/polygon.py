@@ -38,7 +38,8 @@ from odemis.gui.comp.overlay.base import (
     WorldOverlay,
 )
 from odemis.gui.comp.overlay.shapes import EditableShape
-from odemis.util.conversion import frgba_to_hex, hex_to_frgba
+from odemis.util.conversion import frgba_to_hex, hex_to_frgba, hex_to_frgb
+from odemis.gui.layout import theme
 
 
 class PolygonState:
@@ -75,7 +76,7 @@ class PolygonState:
 class PolygonOverlay(EditableShape, LineEditingMixin, WorldOverlay):
     """Overlay representing one polygon."""
 
-    def __init__(self, cnvs, colour=gui.SELECTION_COLOUR):
+    def __init__(self, cnvs, colour=theme.selection):
         """
         :param: cnvs: canvas for the overlay.
         :param: colour (str): hex colour code for the polygon.
@@ -98,7 +99,7 @@ class PolygonOverlay(EditableShape, LineEditingMixin, WorldOverlay):
             font_size=12,
             flip=True,
             align=wx.ALIGN_CENTRE_HORIZONTAL,
-            colour=(1.0, 1.0, 1.0),  # default to white
+            colour=hex_to_frgb(theme.button_text_contrast),
             opacity=1.0,
             deg=None,
             background=None
@@ -109,7 +110,7 @@ class PolygonOverlay(EditableShape, LineEditingMixin, WorldOverlay):
             font_size=12,
             flip=True,
             align=wx.ALIGN_CENTRE_HORIZONTAL,
-            colour=(1.0, 1.0, 1.0),  # default to white
+            colour=hex_to_frgb(theme.button_text_contrast),
             opacity=1.0,
             deg=None,
             background=None
@@ -120,7 +121,7 @@ class PolygonOverlay(EditableShape, LineEditingMixin, WorldOverlay):
             font_size=12,
             flip=True,
             align=wx.ALIGN_CENTRE_HORIZONTAL,
-            colour=(1.0, 1.0, 1.0),  # default to white
+            colour=hex_to_frgb(theme.button_text_contrast),
             opacity=1.0,
             deg=None,
             background=None
@@ -319,7 +320,7 @@ class PolygonOverlay(EditableShape, LineEditingMixin, WorldOverlay):
         b_rotation = Vec(self.cnvs.view_to_buffer(self.v_rotation))
         ctx.set_dash([])
         ctx.set_line_width(1)
-        ctx.set_source_rgba(0.1, 0.5, 0.8, 0.8)  # Dark blue-green
+        ctx.set_source_rgba(*hex_to_frgba(theme.text_edit, 0.8))
         ctx.arc(b_rotation.x, b_rotation.y, 4, 0, 2 * math.pi)
         ctx.fill()
         offset = self.cnvs.get_half_buffer_size()
@@ -332,13 +333,13 @@ class PolygonOverlay(EditableShape, LineEditingMixin, WorldOverlay):
     def draw_rotation_label(self, ctx):
         self._rotation_label.text = units.readable_str(math.degrees(self.rotation), "°", sig=4)
         self._rotation_label.pos = self.cnvs.view_to_buffer(self.v_center)
-        self._rotation_label.background = (0, 0, 0)  # black
+        self._rotation_label.background = hex_to_frgba(theme.viewport_background)
         self._rotation_label.draw(ctx)
 
     def draw_name_label(self, ctx):
         self._name_label.text = self.name.value
         self._name_label.pos = self.cnvs.view_to_buffer(self.v_center)
-        self._name_label.background = (0, 0, 0)  # black
+        self._name_label.background = hex_to_frgba(theme.viewport_background)
         self._name_label.draw(ctx)
 
     def draw(self, ctx, shift=(0, 0), scale=1.0, line_width=4):
@@ -416,7 +417,7 @@ class PolygonOverlay(EditableShape, LineEditingMixin, WorldOverlay):
                         self._label.font_size = 9
                     else:
                         self._label.font_size = 14
-                self._label.background = (0, 0, 0)  # background
+                self._label.background = hex_to_frgba(theme.viewport_background)
                 self._label.draw(ctx)
                 # calculate the center explicitly for ShapesOverlay _get_shape function, if polygon creation is not finished
                 self._calc_center()

@@ -31,7 +31,7 @@ from typing import Dict, List, Tuple, Union
 
 import wx
 
-from odemis.gui import SELECTION_COLOUR, img
+from odemis.gui import img
 from odemis.gui.comp import popup
 from odemis.gui.comp.fastem_roa import FastEMROA, FastEMTOA
 from odemis.gui.comp.settings import SettingsPanel
@@ -56,6 +56,7 @@ from odemis.gui.cont.tabs.fastem_project_sections_tab import (
 )
 from odemis.gui.cont.tabs.fastem_project_settings_tab import FastEMProjectSettingsTab
 from odemis.gui.cont.tabs.tab_bar_controller import TabController
+from odemis.gui.layout import theme
 from odemis.gui.model import TOOL_ELLIPSE, TOOL_NONE, TOOL_POLYGON, TOOL_RECTANGLE, TOOL_ROI
 from odemis.gui.util import call_in_wx_main
 from odemis.util import units
@@ -63,12 +64,12 @@ from odemis.util.conversion import hex_to_frgba, hex_to_rgb
 from odemis.util.filename import make_compliant_string, make_unique_name
 
 FASTEM_PROJECT_COLOURS = [
-    "#0000ff",  # Blue
-    "#00ffff",  # Cyan
-    "#ffff00",  # Yellow
-    "#ff00ff",  # Magenta
-    "#ff00bf",  # Rose
-    "#ff0000",  # Red
+    theme.categorical_blue,
+    theme.categorical_cyan,
+    theme.categorical_yellow,
+    theme.categorical_magenta,
+    theme.categorical_rose,
+    theme.categorical_red,
 ]
 
 
@@ -93,7 +94,7 @@ def generate_unique_color(existing_colors: List[str]) -> str:
 
     :return: (str) A unique color in hexadecimal format.
     """
-    existing_colors.append(SELECTION_COLOUR)
+    existing_colors.append(theme.selection)
     existing_rgb_colors = [hex_to_rgb(color) for color in existing_colors]
     existing_hls_colors = [
         rgb_to_hls(*[x / 255.0 for x in rgb]) for rgb in existing_rgb_colors

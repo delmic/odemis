@@ -43,6 +43,7 @@ from odemis.gui.comp import hist
 from odemis.gui.comp.buttons import ImageTextToggleButton
 from odemis.gui.comp.file import EVT_FILE_SELECT
 from odemis.gui.comp.settings import SettingsPanel
+from odemis.gui.layout import theme
 from odemis.gui.conf.data import HIDDEN_VAS, get_hw_config
 from odemis.gui.conf.util import bind_setting_context_menu, create_setting_entry, SettingEntry, \
     create_axis_entry
@@ -454,7 +455,7 @@ class SettingsBarController(object):
 
         # Add a intensity/time graph
         self.spec_graph = hist.Histogram(setting_cont.panel, size=(-1, 40))
-        self.spec_graph.SetBackgroundColour("#000000")
+        self.spec_graph.SetBackgroundColour(theme.viewport_background)
         setting_cont.add_widgets(self.spec_graph)
         # the "Mean" value bellow the graph
         lbl_mean = wx.StaticText(setting_cont.panel, label="Mean")
@@ -466,8 +467,8 @@ class SettingsBarController(object):
             f = self.txt_mean.GetFont()
             f.PointSize = ftsize
             self.txt_mean.SetFont(f)
-        self.txt_mean.SetForegroundColour(odemis.gui.FG_COLOUR_MAIN)
-        self.txt_mean.SetBackgroundColour(odemis.gui.BG_COLOUR_MAIN)
+        self.txt_mean.SetForegroundColour(theme.field_foreground)
+        self.txt_mean.SetBackgroundColour(theme.background)
         self.txt_mean.SetToolTip(tooltip_txt)
         setting_cont.add_widgets(lbl_mean, self.txt_mean)
 
@@ -885,7 +886,7 @@ class MirrorSettingsController(SettingsBarController):
         mirror_lens = tab_data.main.lens
 
         self.panel_center = SettingsPanel(self.panel.pnl_mode_btns)
-        self.panel_center.SetBackgroundColour(odemis.gui.BG_COLOUR_PANEL)
+        self.panel_center.SetBackgroundColour(theme.panel_background)
         self.panel.pnl_mode_btns.GetSizer().Add(self.panel_center, 1, border=5,
                                             flag=wx.LEFT | wx.RIGHT | wx.EXPAND)
 
@@ -896,7 +897,7 @@ class MirrorSettingsController(SettingsBarController):
                                                           "label": "Mirror type",
                                                           "tooltip": "Change the type of the mirror"})
 
-        entry_mirrorPosition.value_ctrl.SetBackgroundColour(odemis.gui.BG_COLOUR_PANEL)
+        entry_mirrorPosition.value_ctrl.SetBackgroundColour(theme.panel_background)
         # remove border
         self.panel_center.GetSizer().GetItem(0).SetBorder(0)
         self.panel_center.Layout()
@@ -927,7 +928,7 @@ class StreakCamAlignSettingsController(SettingsBarController):
         self._calib_path = get_picture_folder()  # path to the trigger delay calibration folder
 
         self.panel_streak = SettingsPanel(self.panel.pnl_streak)
-        self.panel_streak.SetBackgroundColour(odemis.gui.BG_COLOUR_PANEL)
+        self.panel_streak.SetBackgroundColour(theme.panel_background)
         self.panel.pnl_streak.GetSizer().Add(self.panel_streak, 1, border=5,
                                              flag=wx.BOTTOM | wx.EXPAND)
 
@@ -939,7 +940,7 @@ class StreakCamAlignSettingsController(SettingsBarController):
                                                      "tooltip": "Time needed by the streak unit for one sweep "
                                                                 "from top to bottom of the readout camera chip."}
                                                )
-        entry_timeRange.value_ctrl.SetBackgroundColour(odemis.gui.BG_COLOUR_PANEL)
+        entry_timeRange.value_ctrl.SetBackgroundColour(theme.panel_background)
         self.ctrl_timeRange = entry_timeRange.value_ctrl
 
         entry_triggerDelay = create_setting_entry(self.panel_streak, "Trigger delay",
@@ -955,7 +956,7 @@ class StreakCamAlignSettingsController(SettingsBarController):
                                                         },
                                                   change_callback=self._onUpdateTriggerDelayMD)
 
-        entry_triggerDelay.value_ctrl.SetBackgroundColour(odemis.gui.BG_COLOUR_PANEL)
+        entry_triggerDelay.value_ctrl.SetBackgroundColour(theme.panel_background)
         self.ctrl_triggerDelay = entry_triggerDelay.value_ctrl
 
         if (self.streak_lens
@@ -972,7 +973,7 @@ class StreakCamAlignSettingsController(SettingsBarController):
                                                                         "Values < 1: De-magnifying \n"
                                                                         "Values > 1: Magnifying"})
 
-            entry_magnification.value_ctrl.SetBackgroundColour(odemis.gui.BG_COLOUR_PANEL)
+            entry_magnification.value_ctrl.SetBackgroundColour(theme.panel_background)
             self.combo_magnification = entry_magnification.value_ctrl
 
         # remove border
@@ -1014,9 +1015,9 @@ class StreakCamAlignSettingsController(SettingsBarController):
         # catches errors regarding type and out-of-range inputs
 
         # update txt displayed in GUI
-        self._onUpdateTriggerDelayGUI("Calibration not saved yet", odemis.gui.FG_COLOUR_WARNING)
+        self._onUpdateTriggerDelayGUI("Calibration not saved yet", theme.text_warning)
 
-    def _onUpdateTriggerDelayGUI(self, text, colour=odemis.gui.FG_COLOUR_EDIT):
+    def _onUpdateTriggerDelayGUI(self, text, colour=theme.text_edit):
         """
         Updates the GUI elements regarding the new trigger delay value.
         :parameter text (str): the text to show
@@ -1054,7 +1055,7 @@ class StreakCamAlignSettingsController(SettingsBarController):
                                                       self.streak_unit.timeRange.choices,
                                                       self.streak_delay.triggerDelay.range)
         except ValueError as error:
-            self._onUpdateTriggerDelayGUI("Error while loading file!", odemis.gui.FG_COLOUR_HIGHLIGHT)
+            self._onUpdateTriggerDelayGUI("Error while loading file!", theme.text_highlight)
             logging.error("Failed loading %s: %s", filename, error)
             return
 

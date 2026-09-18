@@ -31,6 +31,7 @@ from odemis.gui.util import call_in_wx_main
 import odemis.gui as gui
 from odemis.gui.comp import popup
 from odemis import model
+from odemis.gui.layout import theme
 
 MIN_PERIOD_WARNING = 60  # in seconds, represents the time before notifications are shown again
 
@@ -58,7 +59,7 @@ class TemperatureController(object):
 
     def __init__(self, main_frame, thermostat, max_duration=5):
         '''
-        main_frame: (wx) main xrc frame of the GUI
+        main_frame: (wx) main frame of the GUI
         thermostat: (HwComponent) a component with the VA "temperature"
         max_duration: (float) in seconds, the maximum duration
         '''
@@ -115,7 +116,7 @@ class TemperatureController(object):
             ):
             # temperature is out of range
             # change colour to red
-            set_label_colour(self.temperature_label, gui.FG_COLOUR_ERROR, weight=wx.BOLD)
+            set_label_colour(self.temperature_label, theme.text_error, weight=wx.BOLD)
             text = "Temperature {temp:.2f}°C is outside of the target range of {lo:.2f}°C to {hi:.2f}°C!".format(
                     temp=temperature,
                     lo=target_temperature + safe_range[0],
@@ -129,7 +130,7 @@ class TemperatureController(object):
         elif safe_speed is not None and not safe_speed[0] <= speed <= safe_speed[1]:
             # temperature is changing at an unsafe speed
             # change colour to yellow
-            set_label_colour(self.temperature_label, gui.FG_COLOUR_ERROR, weight=wx.BOLD)
+            set_label_colour(self.temperature_label, theme.text_error, weight=wx.BOLD)
             text = "Temperature {temp:.2f}°C is changing at an unsafe rate of {speed:.2f}°C/s!".format(temp=temperature, speed=speed)
             logging.warning(text)
             # display messagebox warning, but only once per minute

@@ -34,6 +34,7 @@ import wx
 import wx.adv
 from odemis.util.img import getColorbar, tintToColormap
 from odemis.gui.util.img import NDImage2wxBitmap
+from odemis.gui.layout import theme
 
 
 class ComboBox(wx.adv.OwnerDrawnComboBox):
@@ -63,7 +64,7 @@ class ComboBox(wx.adv.OwnerDrawnComboBox):
         # margin won't move and stays at the default -1.
         self.SetMargins(0, 0)
 
-        self.SetForegroundColour(odemis.gui.FG_COLOUR_EDIT)
+        self.SetForegroundColour(theme.text_edit)
         # Use the same colour as the parent (by default)
         # HACK: there seems to be a bug in wxWidgets (v3.0.2), where
         # OwnerDrawnComboBox.GetBackgroundColour() always returns the same fixed

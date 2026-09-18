@@ -53,7 +53,7 @@ class CorrelationTab(StreamLoadMixin, Tab):
     def __init__(self, name: str,
                  button: odemis.gui.comp.buttons.TabButton,
                  panel: wx.Panel,
-                 main_frame: odemis.gui.main_xrc.xrcfr_main,
+                 main_frame: wx.Frame,
                  main_data: odemis.gui.model.MainGUIData):
         """ Correlation tab for the correlation of multiple streams"""
 

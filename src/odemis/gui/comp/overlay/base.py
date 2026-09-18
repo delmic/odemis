@@ -47,6 +47,7 @@ from odemis.acq.stream import Stream
 from odemis.gui import EVT_BUFFER_SIZE
 from odemis.model import BooleanVA, TupleVA
 from odemis.util.raster import point_in_polygon
+from odemis.gui.layout import theme
 
 
 class EdgeBoundingBox:
@@ -257,7 +258,11 @@ class Label(object):
 
         # Draw Shadow
         if self.colour:
-            ctx.set_source_rgba(0.0, 0.0, 0.0, 0.7 * self.opacity)
+            ctx.set_source_rgba(
+                *conversion.hex_to_frgba(
+                    theme.viewport_background, 0.7 * self.opacity
+                )
+            )
             ofst = 0
             for part in parts:
                 ctx.move_to(x + 1, y + 1 + ofst)
@@ -687,7 +692,7 @@ class SelectionMixin(DragMixin):
 
     hover_margin = 10  # px
 
-    def __init__(self, colour=gui.SELECTION_COLOUR, center=(0, 0), edit_mode=EDIT_MODE_BOX):
+    def __init__(self, colour=theme.selection, center=(0, 0), edit_mode=EDIT_MODE_BOX):
 
         DragMixin.__init__(self)
 
@@ -712,7 +717,7 @@ class SelectionMixin(DragMixin):
 
         # TODO: Move these to the super classes
         self.colour = conversion.hex_to_frgba(colour)
-        self.highlight = conversion.hex_to_frgba(gui.FG_COLOUR_HIGHLIGHT)
+        self.highlight = conversion.hex_to_frgba(theme.text_highlight)
         self.center = center
 
     @staticmethod
@@ -966,11 +971,11 @@ class SelectionMixin(DragMixin):
             ctx.set_line_width(0.5)
             ctx.set_dash([])
 
-            ctx.set_source_rgba(1, 0, 0, 1)
+            ctx.set_source_rgba(*conversion.hex_to_frgba(theme.categorical_red))
             ctx.rectangle(*inner_rect)
             ctx.stroke()
 
-            ctx.set_source_rgba(0, 0, 1, 1)
+            ctx.set_source_rgba(*conversion.hex_to_frgba(theme.categorical_blue))
             ctx.rectangle(*outer_rect)
             ctx.stroke()
 
@@ -978,11 +983,11 @@ class SelectionMixin(DragMixin):
                 start_rect = self.start_rect(convert_to_buffer)
                 end_rect = self.end_rect(convert_to_buffer)
 
-                ctx.set_source_rgba(0.3, 1, 0.3, 1)
+                ctx.set_source_rgba(*conversion.hex_to_frgba(theme.categorical_green))
                 ctx.rectangle(*start_rect)
                 ctx.stroke()
 
-                ctx.set_source_rgba(0.6, 1, 0.6, 1)
+                ctx.set_source_rgba(*conversion.hex_to_frgba(theme.categorical_green))
                 ctx.rectangle(*end_rect)
                 ctx.stroke()
 
@@ -1153,7 +1158,7 @@ class RectangleEditingMixin(DragMixin):
 
     hover_margin = 10  # px
 
-    def __init__(self, colour=gui.SELECTION_COLOUR, can_rotate: bool=True):
+    def __init__(self, colour=theme.selection, can_rotate: bool=True):
         """
         :param colour: line colour of the rectangle
         :param can_rotate: If True, allow the user to rotate the rectangle. Note that even if this
@@ -1186,7 +1191,7 @@ class RectangleEditingMixin(DragMixin):
         self.v_edges: Dict[int, List[EdgeBoundingBox]] = {}
 
         self.colour = conversion.hex_to_frgba(colour)
-        self.highlight = conversion.hex_to_frgba(gui.FG_COLOUR_HIGHLIGHT)
+        self.highlight = conversion.hex_to_frgba(theme.text_highlight)
 
         self.can_rotate = can_rotate
         # Rotation angle is the angle between the X axis and the segment of point 1 -> 2.
@@ -1683,7 +1688,7 @@ class LineEditingMixin(ClickMixin, DragMixin):
 
     """
 
-    def __init__(self, colour=gui.SELECTION_COLOUR, center=(0, 0), edit_mode=EDIT_MODE_POINT):
+    def __init__(self, colour=theme.selection, center=(0, 0), edit_mode=EDIT_MODE_POINT):
         """
         :param center: (float, float) The center of the selection after right_click_finished
         :param edit_mode: The mode which helps manipulation of the selection.
@@ -1712,7 +1717,7 @@ class LineEditingMixin(ClickMixin, DragMixin):
 
         # TODO: Move these to the super classes
         self.colour = conversion.hex_to_frgba(colour)
-        self.highlight = conversion.hex_to_frgba(gui.FG_COLOUR_HIGHLIGHT)
+        self.highlight = conversion.hex_to_frgba(theme.text_highlight)
         self.v_center = Vec(center)
         self.rotation = 0  # radians
         # The rotation point in view coordinates
@@ -2100,8 +2105,8 @@ class WorldOverlay(Overlay):
 class SpotModeBase(metaclass=ABCMeta):
 
     def __init__(self, cnvs, spot_va=None):
-        self.colour = conversion.hex_to_frgb(gui.FG_COLOUR_EDIT)
-        self.highlight = conversion.hex_to_frgb(gui.FG_COLOUR_HIGHLIGHT)
+        self.colour = conversion.hex_to_frgb(theme.text_edit)
+        self.highlight = conversion.hex_to_frgb(theme.text_highlight)
 
         # Rendering attributes
         self._sect_count = 4
@@ -2127,7 +2132,7 @@ class SpotModeBase(metaclass=ABCMeta):
         for i in range(self._sect_count):
             ctx.set_line_width(width)
 
-            ctx.set_source_rgba(0, 0, 0, 0.6)
+            ctx.set_source_rgba(*conversion.hex_to_frgba(theme.viewport_background, 0.6))
             ctx.arc(x + 1, y + 1,
                     self._spot_radius,
                     start + self._gap,
@@ -2148,7 +2153,7 @@ class SpotModeBase(metaclass=ABCMeta):
 
         ctx.set_line_width(width)
 
-        ctx.set_source_rgba(0, 0, 0, 0.6)
+        ctx.set_source_rgba(*conversion.hex_to_frgba(theme.viewport_background, 0.6))
         ctx.arc(x + 1, y + 1, radius, 0, 2 * math.pi)
         ctx.stroke()
 

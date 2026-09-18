@@ -29,6 +29,7 @@ import wx
 import odemis.gui as gui
 import odemis.gui.comp.overlay.base as base
 import odemis.util.conversion as conversion
+from odemis.gui.layout import theme
 
 
 class DichotomyOverlay(base.ViewOverlay):
@@ -43,7 +44,7 @@ class DichotomyOverlay(base.ViewOverlay):
     BOTTOM_LEFT = 2
     BOTTOM_RIGHT = 3
 
-    def __init__(self, cnvs, sequence_va, colour=gui.SELECTION_COLOUR):
+    def __init__(self, cnvs, sequence_va, colour=theme.selection):
         """ :param sequence_va: (ListVA) VA to store the sequence in
         """
         base.ViewOverlay.__init__(self, cnvs)

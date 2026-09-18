@@ -145,6 +145,7 @@ from odemis import gui, util
 from odemis.gui import BLEND_DEFAULT, BLEND_SCREEN, BufferSizeEvent, img
 from odemis.gui.comp.overlay.base import ViewOverlay, WorldOverlay
 from odemis.gui.evt import EVT_KNOB_PRESS, EVT_KNOB_ROTATE
+from odemis.gui.layout import theme
 from odemis.gui.util import (
     call_in_wx_main,
     capture_mouse_on_drag,
@@ -192,7 +193,7 @@ class BufferedCanvas(wx.Panel):
         self.view_overlays = []
 
         # Set default background colour
-        self.SetBackgroundColour(wx.BLACK)
+        self.SetBackgroundColour(theme.viewport_background)
         self.background_brush = wx.BRUSHSTYLE_CROSS_HATCH
         self.background_img = img.getBitmap("canvasbg.png")
         self.background_offset = (0, 0)  # offset of checkered background in px

@@ -90,7 +90,7 @@ def gen_test_data():
 
 class SliderTestCase(test.GuiTestCase):
 
-    frame_class = test.test_gui.xrcbutton_frame
+    frame_class = test.test_gui.ButtonTestFrame
 
     def test_slider(self):
 

@@ -24,6 +24,7 @@ import logging
 import wx
 from odemis import gui
 from odemis.gui.comp.text import UnitFloatCtrl
+from odemis.gui.layout import theme
 
 
 class EditMeteorCalibrationDialog(wx.Dialog):
@@ -35,8 +36,8 @@ class EditMeteorCalibrationDialog(wx.Dialog):
 
         self.md_calib = md_calib
 
-        self.SetForegroundColour(gui.FG_COLOUR_EDIT)
-        self.SetBackgroundColour(gui.BG_COLOUR_MAIN)
+        self.SetForegroundColour(theme.text_edit)
+        self.SetBackgroundColour(theme.background)
         self.SetTitle("Edit METEOR Calibration")
 
         self.main_sizer = wx.BoxSizer(wx.VERTICAL)
@@ -53,8 +54,8 @@ class EditMeteorCalibrationDialog(wx.Dialog):
 
         self._panel.SetSizer(border_sizer)
 
-        self._panel.SetBackgroundColour(gui.BG_COLOUR_MAIN)
-        self._panel.SetForegroundColour(gui.FG_COLOUR_MAIN)
+        self._panel.SetBackgroundColour(theme.background)
+        self._panel.SetForegroundColour(theme.field_foreground)
         self._panel.SetFont(self.GetFont())
 
         self._panel.Show(True)
@@ -143,10 +144,10 @@ class EditMeteorCalibrationDialog(wx.Dialog):
 
             self.ctrl_dict[name] = {"x": x_value_ctrl, "y": y_value_ctrl}
 
-            x_value_ctrl.SetForegroundColour(gui.FG_COLOUR_EDIT)
-            x_value_ctrl.SetBackgroundColour(gui.BG_COLOUR_MAIN)
-            y_value_ctrl.SetForegroundColour(gui.FG_COLOUR_EDIT)
-            y_value_ctrl.SetBackgroundColour(gui.BG_COLOUR_MAIN)
+            x_value_ctrl.SetForegroundColour(theme.text_edit)
+            x_value_ctrl.SetBackgroundColour(theme.background)
+            y_value_ctrl.SetForegroundColour(theme.text_edit)
+            y_value_ctrl.SetBackgroundColour(theme.background)
             self.num_rows += 1
 
         # add a label below the controls
@@ -183,13 +184,13 @@ class EditMeteorCalibrationDialog(wx.Dialog):
             border=5,
         )
         # Use blue color for the update button
-        update_bg_color = wx.Colour(0, 100, 200)  # Blue color
+        update_bg_color = wx.Colour(theme.control_active)
         self.update_button.SetBackgroundColour(update_bg_color)
-        self.update_button.SetForegroundColour(wx.WHITE)
+        self.update_button.SetForegroundColour(theme.button_text_contrast)
 
-        cancel_bg_color = wx.Colour(200, 0, 0)  # Red color
+        cancel_bg_color = wx.Colour(theme.text_error)
         self.cancel_button.SetBackgroundColour(cancel_bg_color)
-        self.cancel_button.SetForegroundColour(wx.WHITE)
+        self.cancel_button.SetForegroundColour(theme.button_text_contrast)
 
         # Fit sizer
         self.main_sizer.AddSpacer(5)

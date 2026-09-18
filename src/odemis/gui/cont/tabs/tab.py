@@ -37,7 +37,7 @@ class Tab(object):
         :type name: str
         :type button: odemis.gui.comp.buttons.TabButton
         :type panel: wx.Panel
-        :type main_frame: odemis.gui.main_xrc.xrcfr_main
+        :type main_frame: wx.Frame
         :type tab_data: odemis.gui.model.LiveViewGUIData
 
         """

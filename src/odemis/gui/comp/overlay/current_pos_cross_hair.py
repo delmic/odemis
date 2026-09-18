@@ -27,6 +27,7 @@ import odemis.util.conversion as conversion
 from odemis.gui.comp.overlay.base import WorldOverlay
 from odemis.gui.comp.overlay.centered_line import CenteredLineOverlay
 from odemis.gui.util import call_in_wx_main
+from odemis.gui.layout import theme
 
 
 class CurrentPosCrossHairOverlay(WorldOverlay):
@@ -35,7 +36,7 @@ class CurrentPosCrossHairOverlay(WorldOverlay):
     def __init__(
         self,
         cnvs,
-        colour=gui.CROSSHAIR_COLOR,
+        colour=theme.crosshair,
         size=gui.CROSSHAIR_SIZE,
         thickness=gui.CROSSHAIR_THICKNESS,
     ):

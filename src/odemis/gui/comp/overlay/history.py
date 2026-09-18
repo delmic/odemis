@@ -26,6 +26,7 @@ import wx
 import odemis.gui as gui
 import odemis.gui.comp.overlay.base as base
 import odemis.util.conversion as conversion
+from odemis.gui.layout import theme
 
 
 class HistoryOverlay(base.ViewOverlay):
@@ -34,8 +35,8 @@ class HistoryOverlay(base.ViewOverlay):
     def __init__(self, cnvs, history_list_va):
         base.ViewOverlay.__init__(self, cnvs)
 
-        self.trail_colour = conversion.hex_to_frgb(gui.FG_COLOUR_HIGHLIGHT)
-        self.pos_colour = conversion.hex_to_frgb(gui.FG_COLOUR_EDIT)
+        self.trail_colour = conversion.hex_to_frgb(theme.text_highlight)
+        self.pos_colour = conversion.hex_to_frgb(theme.text_edit)
         self.fade = True  # Fade older positions in the history list
         self.history = history_list_va  # ListVA  of (center, size) tuples
         self.history.subscribe(self._on_history_update)
@@ -104,7 +105,9 @@ class HistoryOverlay(base.ViewOverlay):
     @staticmethod
     def _draw_rect(ctx, v_center, v_size, colour, alpha):
 
-        ctx.set_source_rgba(0, 0, 0, alpha * 0.4)
+        ctx.set_source_rgba(
+            *conversion.hex_to_frgba(theme.viewport_background, alpha * 0.4)
+        )
 
         x = int(v_center[0] - v_size[0] / 2.0) + 0.5
         y = int(v_center[1] - v_size[1] / 2.0) + 0.5

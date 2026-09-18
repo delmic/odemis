@@ -27,7 +27,7 @@ from odemis.gui import model
 from odemis.gui.conf import get_calib_conf
 from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.widgets import ProgressiveFutureConnector
-from odemis.gui.win.dialog_xrc import xrcprogress_dialog
+from odemis.gui.win.progress_dialog import ProgressDialog
 import subprocess
 import sys
 import threading
@@ -132,12 +132,12 @@ class RecalibrationDialog(wx.MessageDialog):
         self.SetYesNoLabels("&Automatic", "&Manual")
 
 
-class CalibrationProgressDialog(xrcprogress_dialog):
+class CalibrationProgressDialog(ProgressDialog):
     """ Wrapper class responsible for the connection between delphi calibration
-    future and the xrcprogress_dialog.
+    future and the ProgressDialog.
     """
     def __init__(self, parent, main_data, shid):
-        xrcprogress_dialog.__init__(self, parent)
+        ProgressDialog.__init__(self, parent)
 
         # ProgressiveFuture for the ongoing calibration
         self._main_data = main_data

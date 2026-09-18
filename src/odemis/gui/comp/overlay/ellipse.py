@@ -34,6 +34,7 @@ from odemis.gui.comp.overlay.base import (
 )
 from odemis.gui.comp.overlay.rectangle import RectangleOverlay
 from odemis.util.conversion import frgba_to_hex, hex_to_frgba
+from odemis.gui.layout import theme
 
 # The circumference of an ellipse is divided into 72 arcs.
 # This will result in an angle increment of 5 degrees.
@@ -92,7 +93,7 @@ class EllipseOverlay(RectangleOverlay):
     by the bounding rectangle, allowing for intuitive interaction and manipulation.
 
     """
-    def __init__(self, cnvs, colour=gui.SELECTION_COLOUR):
+    def __init__(self, cnvs, colour=theme.selection):
         """
         :param cnvs: canvas for the overlay
         :param colour: (str) hex colour code for the ellipse

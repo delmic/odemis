@@ -34,14 +34,11 @@ from odemis.gui.model import MainGUIData
 from odemis.gui.plugin import Plugin, AcquisitionDialog
 import odemis.gui.test as test
 from odemis.gui.test.comp_stream_test import FakeFluoStream
-from odemis.gui.xmlh import odemis_get_resources
-from odemis.gui import main_xrc, CONTROL_SAVE_FILE
+from odemis.gui import CONTROL_SAVE_FILE
 
 logging.getLogger().setLevel(logging.DEBUG)
 
 test.goto_manual()
-
-main_xrc.get_resources = odemis_get_resources
 
 
 class SimplePlugin(Plugin):
@@ -114,7 +111,7 @@ class SimplePlugin(Plugin):
 
 class PluginTestCase(test.GuiTestCase):
 
-    frame_class = test.test_gui.xrccanvas_frame
+    frame_class = test.test_gui.CanvasTestFrame
 
     def test_find_plugins(self):
         """ Test that find_plugins can find plugin modules"""

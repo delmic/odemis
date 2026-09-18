@@ -20,7 +20,6 @@ see http://www.gnu.org/licenses/. """
 import collections
 import logging
 from logging.handlers import RotatingFileHandler
-from odemis.gui import FG_COLOUR_ERROR, FG_COLOUR_WARNING, FG_COLOUR_DIS, FG_COLOUR_MAIN
 from odemis.gui.util import wxlimit_invocation, get_home_folder
 from odemis.gui.comp.popup import show_message
 from odemis.model import ST_RUNNING, HwError
@@ -28,6 +27,7 @@ import os.path
 import sys
 import threading
 import wx
+from odemis.gui.layout import theme
 
 
 LOG_FILE = "odemis-gui.log"
@@ -126,10 +126,10 @@ def stop_gui_logger():
 class TextFieldHandler(logging.Handler):
     """ Custom log handler, used to output log entries to a text field. """
     TEXT_STYLES = (
-        wx.TextAttr(FG_COLOUR_ERROR, None),
-        wx.TextAttr(FG_COLOUR_WARNING, None),
-        wx.TextAttr(FG_COLOUR_MAIN, None),
-        wx.TextAttr(FG_COLOUR_DIS, None),
+        wx.TextAttr(theme.text_error, None),
+        wx.TextAttr(theme.text_warning, None),
+        wx.TextAttr(theme.field_foreground, None),
+        wx.TextAttr(theme.text_disabled, None),
     )
 
     def __init__(self):

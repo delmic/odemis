@@ -36,6 +36,8 @@ from odemis.gui.comp.overlay.base import RectangleEditingMixin, WorldOverlay, Ve
     SEL_MODE_EDIT, SEL_MODE_CREATE, SEL_MODE_NONE, cairo_polygon
 from odemis.util import units
 from odemis.util.comp import compute_scanner_fov, get_fov_rect
+from odemis.util.conversion import hex_to_frgba, hex_to_frgb
+from odemis.gui.layout import theme
 
 
 class RepetitionSelectOverlay(WorldOverlay, RectangleEditingMixin):
@@ -53,7 +55,7 @@ class RepetitionSelectOverlay(WorldOverlay, RectangleEditingMixin):
                  roa: Optional[model.VigilantAttribute] = None,
                  scanner: Optional[model.HwComponent] = None,
                  rotation: Optional[model.FloatVA] = None,
-                 colour: str = gui.SELECTION_COLOUR):
+                 colour: str = theme.selection):
         """
         :param roa (None or VA of 4 floats): If not None, it's linked to the rectangle
           displayed (ie, when the user changes the rectangle, its value is
@@ -95,10 +97,10 @@ class RepetitionSelectOverlay(WorldOverlay, RectangleEditingMixin):
             font_size=12,
             flip=False,
             align=wx.ALIGN_RIGHT,
-            colour=(1.0, 1.0, 1.0),  # white
+            colour=hex_to_frgb(theme.button_text_contrast),
             opacity=1.0,
             deg=None,
-            background=(0, 0, 0),  # black
+            background=hex_to_frgba(theme.viewport_background),
         )
         self._side2_label = Label(
             text="",
@@ -106,10 +108,10 @@ class RepetitionSelectOverlay(WorldOverlay, RectangleEditingMixin):
             font_size=12,
             flip=False,
             align=wx.ALIGN_RIGHT,
-            colour=(1.0, 1.0, 1.0),  # white
+            colour=hex_to_frgb(theme.button_text_contrast),
             opacity=1.0,
             deg=None,
-            background=(0, 0, 0),  # black
+            background=hex_to_frgba(theme.viewport_background),
         )
 
     @property

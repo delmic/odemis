@@ -28,6 +28,7 @@ import wx
 
 from odemis import gui
 from odemis.gui.comp.buttons import GraphicToggleButton
+from odemis.gui.layout import theme
 
 
 class GraphicalToggleButtonControl(wx.Panel):
@@ -80,13 +81,13 @@ class GraphicalToggleButtonControl(wx.Panel):
                     size=self.size,
                     height=self.height,
                 )
-                btn.SetForegroundColour(gui.FG_COLOUR_RADIO_INACTIVE)
+                btn.SetForegroundColour(theme.button_text)
                 self.buttons.append(btn)
                 self._sizer.Add(btn, flag=wx.RIGHT, border=5)
                 btn.Bind(wx.EVT_BUTTON, self.OnClick)
             if self.units:
                 lbl = wx.StaticText(self, -1, self.units)
-                lbl.SetForegroundColour(gui.FG_COLOUR_MAIN)
+                lbl.SetForegroundColour(theme.field_foreground)
                 self._sizer.Add(lbl, flag=wx.RIGHT, border=5)
         else:
             if self.grid_layout is not None:
@@ -108,7 +109,7 @@ class GraphicalToggleButtonControl(wx.Panel):
                                 size=self.size,
                                 height=self.height,
                             )
-                            btn.SetForegroundColour(gui.FG_COLOUR_RADIO_INACTIVE)
+                            btn.SetForegroundColour(theme.button_text)
                             calgrid_sz.Add(
                                 btn,
                                 pos=(row, col),
@@ -138,7 +139,7 @@ class GraphicalToggleButtonControl(wx.Panel):
                                     size=self.size,
                                     height=self.height,
                                 )
-                                btn.SetForegroundColour(gui.FG_COLOUR_RADIO_INACTIVE)
+                                btn.SetForegroundColour(theme.button_text)
                                 calgrid_sz.Add(
                                     btn,
                                     pos=(row_idx, col_idx),
@@ -165,9 +166,9 @@ class GraphicalToggleButtonControl(wx.Panel):
         Sets color of text of buttons"""
         btn.SetToggle(active)
         if active:
-            btn.SetForegroundColour(gui.FG_COLOUR_RADIO_ACTIVE)
+            btn.SetForegroundColour(theme.control_active)
         else:
-            btn.SetForegroundColour(gui.FG_COLOUR_RADIO_INACTIVE)
+            btn.SetForegroundColour(theme.button_text)
 
     def GetValue(self):
         """Get the toggle button values which have the state is toggled."""

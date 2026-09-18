@@ -26,6 +26,7 @@ import wx
 import odemis.gui as gui
 import odemis.gui.comp.overlay.base as base
 import odemis.util.conversion as conversion
+from odemis.gui.layout import theme
 
 
 class PlayIconOverlay(base.ViewOverlay):
@@ -37,7 +38,7 @@ class PlayIconOverlay(base.ViewOverlay):
         base.ViewOverlay.__init__(self, cnvs)
         self.pause = False  # if True: displayed
         self.play = 0  # opacity of the play icon
-        self.colour = conversion.hex_to_frgba(gui.FG_COLOUR_HIGHLIGHT, self.opacity)
+        self.colour = conversion.hex_to_frgba(theme.text_highlight, self.opacity)
 
     def hide_pause(self, hidden=True):
         """ Hide or show the pause icon """
@@ -82,7 +83,7 @@ class PlayIconOverlay(base.ViewOverlay):
         ctx.set_line_width(1)
         ctx.set_source_rgba(
             *conversion.hex_to_frgba(
-                gui.FG_COLOUR_HIGHLIGHT, self.play))
+                theme.text_highlight, self.play))
 
         ctx.move_to(x, y)
 
@@ -99,7 +100,9 @@ class PlayIconOverlay(base.ViewOverlay):
 
         ctx.fill_preserve()
 
-        ctx.set_source_rgba(0, 0, 0, self.play)
+        ctx.set_source_rgba(
+            *conversion.hex_to_frgba(theme.viewport_background, self.play)
+        )
         ctx.stroke()
 
     def _draw_pause(self, ctx):
@@ -123,5 +126,5 @@ class PlayIconOverlay(base.ViewOverlay):
         ctx.set_source_rgba(*self.colour)
         ctx.fill_preserve()
 
-        ctx.set_source_rgb(0, 0, 0)
+        ctx.set_source_rgb(*conversion.hex_to_frgb(theme.viewport_background))
         ctx.stroke()

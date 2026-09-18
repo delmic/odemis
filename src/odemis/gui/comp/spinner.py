@@ -23,14 +23,10 @@
 
 # This module contains various custom spinner classes used throughout the odemis
 # project.
-#
-# All these classes are supported within XRCED as long as the xmlh/delmic.py
-# and xmlh/xh_delmic.py modules are available (e.g. through a symbolic link)
-# in XRCED's plugin directory.
 
 import wx
+from odemis.gui.layout import theme
 
-from odemis.gui import FG_COLOUR_EDIT
 
 
 class UnitIntegerSpinner(wx.SpinCtrl):
@@ -58,7 +54,7 @@ class UnitIntegerSpinner(wx.SpinCtrl):
             initial=initial_val,
             styple=style,
         )
-        self.SetForegroundColour(FG_COLOUR_EDIT)
+        self.SetForegroundColour(theme.text_edit)
         self.SetBackgroundColour(self.Parent.BackgroundColour)
         self.current_value = initial_val
         self.Bind(wx.EVT_SPINCTRL, self.on_spin)
@@ -94,7 +90,7 @@ class UnitFloatSpinner(wx.SpinCtrlDouble):
             inc=increment,
             style=style,
         )
-        self.SetForegroundColour(FG_COLOUR_EDIT)
+        self.SetForegroundColour(theme.text_edit)
         self.SetBackgroundColour(self.Parent.BackgroundColour)
         self.current_value = initial_val
         self.Bind(wx.EVT_SPINCTRLDOUBLE, self.on_spin_double)

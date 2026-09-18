@@ -29,14 +29,18 @@ import wx
 
 import odemis.gui.cont.views as viewcont
 from odemis.acq.stream import EMStream, FastEMSEMStream
-from odemis.gui import img, main_xrc
+from odemis.gui import img
 from odemis.gui.comp.fastem_project_manager_panel import FastEMProjectManagerPanel
 from odemis.gui.comp.fastem_user_settings_panel import FastEMUserSettingsPanel
 from odemis.gui.comp.viewport import FastEMMainViewport
+from odemis.gui.layout.components.panel_fastem_project_manager import PnlFastemProjectManager
+from odemis.gui.layout.components.panel_fastem_user_settings import PnlFastemUserSettings
+from odemis.gui.layout.components.panel_tab_fastem_setup import PnlTabFastemSetup
 from odemis.gui.cont.tabs.fastem_acquisition_tab import FastEMAcquisitionTab
 from odemis.gui.cont.tabs.fastem_setup_tab import FastEMSetupTab
 from odemis.gui.cont.tabs.tab import Tab
 from odemis.gui.cont.tabs.tab_bar_controller import TabController
+from odemis.gui.layout.components.panel_tab_fastem_acqui import PnlTabFastemAcqui
 from odemis.gui.model import (
     TOOL_ACT_ZOOM_FIT,
     TOOL_CURSOR,
@@ -106,16 +110,12 @@ class FastEMMainTab(Tab):
             wx.EVT_SIZE, self.on_pnl_vp_grid_project_manager_size
         )
 
-        user_settings_panel = main_xrc.xrcpnl_fastem_user_settings(
-            panel.pnl_user_settings
-        )
+        user_settings_panel = PnlFastemUserSettings(panel.pnl_user_settings)
         self.user_settings_panel = FastEMUserSettingsPanel(
             user_settings_panel, tab_data
         )
 
-        project_manager_panel = main_xrc.xrcpnl_fastem_project_manager(
-            panel.pnl_project_manager
-        )
+        project_manager_panel = PnlFastemProjectManager(panel.pnl_project_manager)
         self.pnl_project_manager = project_manager_panel
         self.btn_pnl_project_manager = panel.btn_pnl_project_manager
         self.btn_detach_project_manager = panel.btn_detach_project_manager
@@ -140,7 +140,7 @@ class FastEMMainTab(Tab):
         panel.pnl_tabs.Bind(wx.EVT_SIZE, self.on_pnl_tabs_size)
         self.panel_tabs = panel.pnl_tabs
 
-        overview_panel = main_xrc.xrcpnl_tab_fastem_setup(panel.pnl_tabs)
+        overview_panel = PnlTabFastemSetup(panel.pnl_tabs)
         self.setup_tab = FastEMSetupTab(
             "fastem_setup",
             panel.btn_tab_setup,
@@ -151,7 +151,7 @@ class FastEMMainTab(Tab):
             tab_data,
         )
 
-        acquisition_panel = main_xrc.xrcpnl_tab_fastem_acqui(panel.pnl_tabs)
+        acquisition_panel = PnlTabFastemAcqui(panel.pnl_tabs)
         self.acquisition_tab = FastEMAcquisitionTab(
             "fastem_acq",
             panel.btn_tab_acqui,

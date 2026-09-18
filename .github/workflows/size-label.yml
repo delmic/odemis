@@ -14,11 +14,6 @@ jobs:
         env:
           GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
 
-          # Provide a newline-separated list of files or glob patterns to ignore.
-          # Lines starting with '!' are always included.
-          IGNORED: |
-            src/odemis/gui/win/dialog_xrc.py
-            src/odemis/gui/win/main_xrc.py
         with:
           # Philosophy: S should be reviewable in under 10 minutes, L takes more than an hour
           sizes: >

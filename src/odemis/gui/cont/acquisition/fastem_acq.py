@@ -46,16 +46,7 @@ from odemis.acq.align import fastem as align_fastem
 from odemis.acq.align.fastem import Calibrations
 from odemis.acq.fastem import FastEMCalibration, ROASkipped, estimate_acquisition_time
 from odemis.acq.stream import StaticSEMStream
-from odemis.gui import (
-    FG_COLOUR_BLIND_BLUE,
-    FG_COLOUR_BLIND_ORANGE,
-    FG_COLOUR_BLIND_PINK,
-    FG_COLOUR_DIS,
-    FG_COLOUR_EDIT,
-    FG_COLOUR_ERROR,
-    FG_COLOUR_WARNING,
-    img,
-)
+from odemis.gui import img
 from odemis.gui.comp import buttons
 from odemis.gui.comp.fastem_roa import FastEMROA, FastEMTOA
 from odemis.gui.comp.fastem_user_settings_panel import (
@@ -78,6 +69,7 @@ from odemis.gui.util import call_in_wx_main, get_picture_folder, wxlimit_invocat
 from odemis.gui.util.widgets import ProgressiveFutureConnector
 from odemis.util import units
 from odemis.util.dataio import data_to_static_streams, open_acquisition
+from odemis.gui.layout import theme
 
 OVERVIEW_IMAGES_DIR = os.path.join(get_picture_folder(), "Overview images")
 TOA_IMAGES_DIR = os.path.join(get_picture_folder(), "TOA images")
@@ -914,11 +906,11 @@ class FastEMSingleBeamAcquiController(object):
         try:
             da = future.result()
             success = True
-            update_window("Finished", FG_COLOUR_EDIT, success)
+            update_window("Finished", theme.text_edit, success)
         except CancelledError:
-            update_window("Cancelled", FG_COLOUR_WARNING, success)
+            update_window("Cancelled", theme.text_warning, success)
         except Exception:
-            update_window("Failed", FG_COLOUR_ERROR, success)
+            update_window("Failed", theme.text_error, success)
         finally:
             window.Layout()
             window.Refresh()
@@ -1389,7 +1381,7 @@ class FastEMMultiBeamAcquiController(object):
             for idx, roa_window in enumerate(roas):
                 roa = roa_window[0]
                 window = roa_window[1]
-                window.status_text.SetForegroundColour(FG_COLOUR_DIS)
+                window.status_text.SetForegroundColour(theme.text_disabled)
                 window.status_text.SetLabelText("Open")
                 window.Layout()
                 pre_calib = pre_calibrations.copy()
@@ -1570,16 +1562,16 @@ class FastEMMultiBeamAcquiController(object):
         try:
             _, ex = future.result()
             if isinstance(ex, ROASkipped):
-                update_status("Skipped", FG_COLOUR_ERROR)
+                update_status("Skipped", theme.text_error)
             elif ex is None:
-                update_status("Open", FG_COLOUR_EDIT, partial(self._open_folder, path=path))
+                update_status("Open", theme.text_edit, partial(self._open_folder, path=path))
             # If any other exception is returned and not raised it is still considered as a failure
             else:
-                update_status("Failed", FG_COLOUR_ERROR)
+                update_status("Failed", theme.text_error)
         except CancelledError:
-            update_status("Cancelled", FG_COLOUR_WARNING)
+            update_status("Cancelled", theme.text_warning)
         except Exception:
-            update_status("Failed", FG_COLOUR_ERROR)
+            update_status("Failed", theme.text_error)
         finally:
             window.Layout()
             window.Refresh()
@@ -1664,7 +1656,7 @@ class FastEMCalibrationController:
             "scintillator without a tissue."
         )
         self._calib_1.SetName(CALIBRATION_1)
-        self._calib_1_lbl.SetForegroundColour(FG_COLOUR_BLIND_BLUE)
+        self._calib_1_lbl.SetForegroundColour(theme.colour_blind_blue)
 
         self._calib_2_lbl, self._calib_2_vis_btn, self._calib_2 = self.add_calibration_control(
             CALIBRATION_2, value=False, pos_col=2, span=(1, 1)
@@ -1677,7 +1669,7 @@ class FastEMCalibrationController:
             "scintillator without a tissue."
         )
         self._calib_2.SetName(CALIBRATION_2)
-        self._calib_2_lbl.SetForegroundColour(FG_COLOUR_BLIND_ORANGE)
+        self._calib_2_lbl.SetForegroundColour(theme.colour_blind_orange)
 
         self._calib_3_lbl, self._calib_3_vis_btn, self._calib_3 = self.add_calibration_control(
             CALIBRATION_3, value=False, pos_col=2, span=(1, 1)
@@ -1690,7 +1682,7 @@ class FastEMCalibrationController:
             "of interest."
         )
         self._calib_3.SetName(CALIBRATION_3)
-        self._calib_3_lbl.SetForegroundColour(FG_COLOUR_BLIND_PINK)
+        self._calib_3_lbl.SetForegroundColour(theme.colour_blind_pink)
 
         self._calib_1_vis_btn.Bind(wx.EVT_BUTTON, self._on_visibility_btn)
         self._calib_2_vis_btn.Bind(wx.EVT_BUTTON, self._on_visibility_btn)

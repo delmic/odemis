@@ -38,9 +38,9 @@ import sys
 import wx
 import wx.lib.mixins.listctrl as listmix
 
-from odemis.gui import FG_COLOUR_DIS, FG_COLOUR_EDIT
 from odemis.util import units
 from odemis.util.units import decompose_si_prefix, si_scale_val
+from odemis.gui.layout import theme
 
 # Locale is needed for correct string sorting
 locale.setlocale(locale.LC_ALL, "")
@@ -756,7 +756,7 @@ class _NumberTextCtrl(wx.TextCtrl):
         wx.TextCtrl.__init__(self, *args, **kwargs)
 
         self.SetBackgroundColour(self.Parent.BackgroundColour)
-        self.SetForegroundColour(FG_COLOUR_EDIT)
+        self.SetForegroundColour(theme.text_edit)
 
         # Set the value so it will be validated to be a valid number
         if val is not None:
@@ -789,9 +789,9 @@ class _NumberTextCtrl(wx.TextCtrl):
 
     def Enable(self, enable=True):
         if enable:
-            self.SetForegroundColour(FG_COLOUR_EDIT)
+            self.SetForegroundColour(theme.text_edit)
         else:
-            self.SetForegroundColour(FG_COLOUR_DIS)
+            self.SetForegroundColour(theme.text_disabled)
 
         # TODO: Find a better way to deal with this hack that was put in place because under
         # MS Windows the background colour cannot (at all?) be set when a control is disabled

@@ -53,6 +53,7 @@ from odemis.gui.conf.util import create_axis_entry
 from odemis.gui.cont import settings
 from odemis.gui.cont.actuators import ActuatorController
 from odemis.gui.cont.settings import EBeamBlankerSettingsController
+from odemis.gui.layout import theme
 from odemis.gui.cont.stream_bar import StreamBarController
 from odemis.gui.cont.tabs._constants import MIRROR_AXES_LS, MIRROR_ONPOS_RADIUS, get_mirror_pos_parked
 from odemis.gui.cont.tabs.tab import Tab
@@ -740,7 +741,9 @@ class Sparc2AlignTab(Tab):
                 if len(photods) > 1 and photods[0] in main_data.photo_ds and photods[1] in main_data.photo_ds:
                     self._fbdet2 = photods[1]
                     _, self._det2_cnt_ctrl = speccnt_spe.stream_panel.add_text_field("Detector 2", "", readonly=True)
-                    self._det2_cnt_ctrl.SetForegroundColour("#FFFFFF")
+                    self._det2_cnt_ctrl.SetForegroundColour(
+                        theme.button_text_contrast
+                    )
                     f = self._det2_cnt_ctrl.GetFont()
                     f.PointSize = 12
                     self._det2_cnt_ctrl.SetFont(f)
@@ -843,7 +846,7 @@ class Sparc2AlignTab(Tab):
             self._support_mirror_auto_align = ("auto_align_min_step_size" in calib and "ebeam_working_distance" in calib)
 
         if self._support_mirror_auto_align:
-            # hidden by default in xrc file
+            # hidden by default
             self.panel.lbl_step_size_z.Show(True)
             self.panel.slider_stage.Show(True)
             self.panel.lbl_pz.Show(True)
@@ -1078,7 +1081,7 @@ class Sparc2AlignTab(Tab):
         f = txt_moi.GetFont()
         f.PointSize = 12
         txt_moi.SetFont(f)
-        txt_moi.SetForegroundColour(odemis.gui.FG_COLOUR_MAIN)
+        txt_moi.SetForegroundColour(theme.field_foreground)
         self._txt_moi = txt_moi
 
         lbl_ss, txt_ss = cont.add_text_field("Spot intensity", readonly=True)
@@ -1089,7 +1092,7 @@ class Sparc2AlignTab(Tab):
         f = txt_ss.GetFont()
         f.PointSize = 12
         txt_ss.SetFont(f)
-        txt_ss.SetForegroundColour(odemis.gui.FG_COLOUR_MAIN)
+        txt_ss.SetForegroundColour(theme.field_foreground)
         self._txt_ss = txt_ss
 
     def _on_reference_end(self, f, comp):
@@ -1441,7 +1444,7 @@ class Sparc2AlignTab(Tab):
                     spot_snapshot_raw.metadata[model.MD_POS] = (0, 0)  # Same as live streams
                     spot_snapshot_raw.metadata[model.MD_ROTATION] = 0
                     self._ccd_stream_spot_snapshot.update(spot_snapshot_raw)
-                    self._ccd_stream_spot_snapshot.tint.value = odemis.gui.CL_STREAM_SNAPSHOT_COLOR
+                    self._ccd_stream_spot_snapshot.tint.value = theme.snapshot_stream
             self.tab_data_model.focussedView.value = self.panel.vp_align_light.view
             # The spot stream is automatically stopped through `_on_ccd_stream_play`.
             self._ccd_stream_light.should_update.value = True
@@ -1484,7 +1487,7 @@ class Sparc2AlignTab(Tab):
                 ar_snapshot_raw.metadata[model.MD_POS] = (0, 0)  # Same as live streams
                 ar_snapshot_raw.metadata[model.MD_ROTATION] = 0
                 self._ccd_stream_ar_snapshot.update(ar_snapshot_raw)
-                self._ccd_stream_ar_snapshot.tint.value = odemis.gui.CL_STREAM_SNAPSHOT_COLOR
+                self._ccd_stream_ar_snapshot.tint.value = theme.snapshot_stream
 
             if self._mirror_settings_controller:
                 self._mirror_settings_controller.enable(False)
@@ -1908,7 +1911,7 @@ class Sparc2AlignTab(Tab):
                          model.MD_ROTATION: 0},
                 acq_type=model.MD_AT_ALIGN_OVERLAY,
             )
-            speclines.tint.value = odemis.gui.FOCUS_STREAM_COLOR
+            speclines.tint.value = theme.focus_stream
             # Show most of the image (compared to the standard 100/256 %), to see the potential faint parts of the line
             speclines.auto_bc_outliers.value = 0.001  # %
             # Fixed values, known to work well for autofocus
@@ -2231,15 +2234,19 @@ class Sparc2AlignTab(Tab):
         if btn.GetLabel() in {"Engage", "Engaged"}:
             # set the requested position to ACTIVE and change the appearance of the retract and engage buttons
             pos = spec_switch[model.MD_FAV_POS_ACTIVE]
-            self._change_spec_switch_btn_lbl(btn, "Cancel", wx.BLACK)
-            self._change_spec_switch_btn_lbl(self.panel.btn_spec_switch_retract, "Retract", wx.BLACK)
+            self._change_spec_switch_btn_lbl(btn, "Cancel", theme.button_text)
+            self._change_spec_switch_btn_lbl(
+                self.panel.btn_spec_switch_retract, "Retract", theme.button_text
+            )
             # pause the stream when engaging the mirror
             self._ccd_stream.should_update.value = False
         elif btn.GetLabel() in {"Retract", "Retracted"}:
             # set the requested position to DEACTIVE and change the appearance of the retract and engage buttons
             pos = spec_switch[model.MD_FAV_POS_DEACTIVE]
-            self._change_spec_switch_btn_lbl(btn, "Cancel", wx.BLACK)
-            self._change_spec_switch_btn_lbl(self.panel.btn_spec_switch_engage, "Engage", wx.BLACK)
+            self._change_spec_switch_btn_lbl(btn, "Cancel", theme.button_text)
+            self._change_spec_switch_btn_lbl(
+                self.panel.btn_spec_switch_engage, "Engage", theme.button_text
+            )
             # continue the stream when retracting the mirror
             self._ccd_stream.should_update.value = True
         elif btn.GetLabel() == "Cancel":
@@ -2278,8 +2285,12 @@ class Sparc2AlignTab(Tab):
             logging.exception("Failure during the move of spec-switch")
 
         # reset the labels on both buttons to support rollback after calling cancelling
-        self._change_spec_switch_btn_lbl(self.panel.btn_spec_switch_retract, "Retract", wx.BLACK)
-        self._change_spec_switch_btn_lbl(self.panel.btn_spec_switch_engage, "Engage", wx.BLACK)
+        self._change_spec_switch_btn_lbl(
+            self.panel.btn_spec_switch_retract, "Retract", theme.button_text
+        )
+        self._change_spec_switch_btn_lbl(
+            self.panel.btn_spec_switch_engage, "Engage", theme.button_text
+        )
 
         # check if the state of the buttons need adjustments
         self._adjust_spec_switch_button_state()
@@ -2321,21 +2332,21 @@ class Sparc2AlignTab(Tab):
             self.panel.btn_m_spec_switch_x.Enable(True)
             self.panel.btn_p_spec_switch_x.Enable(True)
             self._change_spec_switch_btn_lbl(self.panel.btn_spec_switch_engage,
-                                             "Engaged", odemis.gui.FG_COLOUR_RADIO_ACTIVE)
+                                             "Engaged", theme.control_active)
             self._change_spec_switch_btn_lbl(self.panel.btn_spec_switch_retract,
-                                             "Retract", wx.BLACK)
+                                             "Retract", theme.button_text)
         # when the mirror is in the DEACTIVE position disable manual alignment and update of FAV_POS
         elif almost_equal(self.tab_data_model.main.spec_switch.position.value["x"],
                           spec_switch_md[model.MD_FAV_POS_DEACTIVE]["x"], atol=1e-5):
             self._change_spec_switch_btn_lbl(self.panel.btn_spec_switch_retract,
-                                             "Retracted", odemis.gui.FG_COLOUR_RADIO_ACTIVE)
+                                             "Retracted", theme.control_active)
             self._change_spec_switch_btn_lbl(self.panel.btn_spec_switch_engage,
-                                             "Engage", wx.BLACK)
+                                             "Engage", theme.button_text)
         else:
             self._change_spec_switch_btn_lbl(self.panel.btn_spec_switch_engage,
-                                             "Engage", odemis.gui.FG_COLOUR_ERROR)
+                                             "Engage", theme.text_error)
             self._change_spec_switch_btn_lbl(self.panel.btn_spec_switch_retract,
-                                             "Retract", odemis.gui.FG_COLOUR_ERROR)
+                                             "Retract", theme.text_error)
 
     def _onBkgAcquire(self, evt):
         """
@@ -2711,7 +2722,7 @@ class Sparc2AlignTab(Tab):
 class FocusPanelContainer:
     """
     This is a workaround Class, usually this adds a combo box to the focus panel.
-    It must be named so, to look like a StreamPanel. No components are created, this is already defined in the xrc file.
+    It must be named so, to look like a StreamPanel. No components are created, this is already defined in the python file.
     """
     def __init__(self, pnl_focus_lbl, pnl_focus_cmb):
         self.pnl_focus_gratings_lbl = pnl_focus_lbl

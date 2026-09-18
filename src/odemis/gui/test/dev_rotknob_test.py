@@ -38,7 +38,7 @@ test.goto_manual()
 
 class RotationKnobTestCase(test.GuiTestCase):
 
-    frame_class = test.test_gui.xrccanvas_frame
+    frame_class = test.test_gui.CanvasTestFrame
 
     def test_mirror_arc_overlay(self):
         vp = ARLiveViewport(self.panel)

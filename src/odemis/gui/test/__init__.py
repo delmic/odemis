@@ -37,7 +37,6 @@ from odemis import model
 from odemis.acq.move import Posture, MeteorTFS3PostureManager
 from odemis.driver.tmcm import TMCLController
 from odemis.gui.model import MainGUIData
-from odemis.gui.xmlh import odemis_get_test_resources
 from . import test_gui
 
 # Common configuration and code for the GUI test cases
@@ -88,7 +87,6 @@ class GuiTestApp(wx.App):
     test_frame = None
 
     def __init__(self, frame):
-        test_gui.get_resources = odemis_get_test_resources
         self.test_frame = frame
         self.module_name = ""
 
@@ -103,7 +101,7 @@ class GuiTestApp(wx.App):
     #     return -1
 
     def OnInit(self):
-        self.test_frame = self.test_frame(None)  # odemis.gui.test.test_gui.xrccanvas_frame(None)
+        self.test_frame = self.test_frame(None)  # odemis.gui.test.test_gui.CanvasTestFrame(None)
         self.main_frame = self.test_frame  # Just for compatibility with the real app
 
         # Process menu items if any

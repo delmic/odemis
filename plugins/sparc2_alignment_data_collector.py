@@ -31,11 +31,11 @@ import numpy
 import wx
 from matplotlib.backends.backend_wxagg import FigureCanvasWxAgg
 
-import odemis.gui as gui
 from odemis import model
 from odemis.dataio import hdf5
 from odemis.gui.comp.settings import SettingsPanel
 from odemis.gui.cont.tabs.tab import Tab
+from odemis.gui.layout import theme
 from odemis.gui.model import TabName
 from odemis.gui.plugin import Plugin
 from odemis.gui.util import get_picture_folder
@@ -233,7 +233,7 @@ class AlignmentDataCollectorDialog(wx.Dialog):
         lbl_ctrl = wx.StaticText(self, -1, str(label_text))
 
         path_display = wx.TextCtrl(self, value=str(value or ""), style=wx.TE_READONLY)
-        path_display.SetForegroundColour(gui.FG_COLOUR_DIS)
+        path_display.SetForegroundColour(theme.text_disabled)
         path_display.SetBackgroundColour(self.GetBackgroundColour())
 
         def on_browse(evt):

@@ -38,7 +38,7 @@ from odemis.gui.preset import preset_as_is, get_global_settings_entries, \
     get_local_settings_entries, apply_preset
 from odemis.gui.model import TabName, TOOL_NONE, TOOL_SPOT
 from odemis.gui.util import call_in_wx_main
-from odemis.gui.win.acquisition import AcquisitionDialog
+from odemis.gui.win.acquisition import SecomAcquisitionDialog
 
 
 # TODO: Once the Secom acquisition is merged back into the main stream tab,
@@ -133,11 +133,7 @@ class SecomAcquiController(object):
 
         # create the dialog
         try:
-            acq_dialog = AcquisitionDialog(self._tab_panel.Parent, self._tab_data_model)
-            parent_size = [v * 0.77 for v in self._tab_panel.Parent.GetSize()]
-
-            acq_dialog.SetSize(parent_size)
-            acq_dialog.Center()
+            acq_dialog = SecomAcquisitionDialog(self._tab_panel.Parent, self._tab_data_model)
             action = acq_dialog.ShowModal()
         except Exception:
             logging.exception("Failed to create acquisition dialog")

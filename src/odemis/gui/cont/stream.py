@@ -34,8 +34,7 @@ import odemis.acq.stream as acqstream
 import wx
 from odemis import model, util
 from odemis.acq.stream import MeanSpectrumProjection
-from odemis.gui import (CONTROL_COMBO, CONTROL_FLT, FG_COLOUR_DIS,
-                        FG_COLOUR_ERROR, FG_COLOUR_WARNING)
+from odemis.gui import CONTROL_COMBO, CONTROL_FLT
 from odemis.gui.comp.buttons import ImageTextButton
 from odemis.gui.comp.foldpanelbar import FoldPanelBar
 from odemis.gui.comp.overlay.repetition_select import RepetitionSelectOverlay
@@ -55,6 +54,7 @@ from odemis.util import fluo
 from odemis.util.conversion import wavelength2rgb
 from odemis.util.fluo import get_one_center, to_readable_band
 from odemis.util.units import readable_str
+from odemis.gui.layout import theme
 
 # There are two kinds of controllers:
 # * Stream controller: links 1 stream <-> stream panel (cont/stream/StreamPanel)
@@ -1286,9 +1286,9 @@ class StreamController(object):
 
             fit = fluo.estimate_fit_to_dye(wl, band)
             # Update colour
-            colour = {fluo.FIT_GOOD: FG_COLOUR_DIS,
-                      fluo.FIT_BAD: FG_COLOUR_WARNING,
-                      fluo.FIT_IMPOSSIBLE: FG_COLOUR_ERROR}[fit]
+            colour = {fluo.FIT_GOOD: theme.text_disabled,
+                      fluo.FIT_BAD: theme.text_warning,
+                      fluo.FIT_IMPOSSIBLE: theme.text_error}[fit]
             lbl_ctrl.SetForegroundColour(colour)
 
             # Update tooltip string

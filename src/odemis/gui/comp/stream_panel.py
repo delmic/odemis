@@ -32,15 +32,7 @@ import wx.lib.newevent
 from decorator import decorator
 
 from odemis import gui
-from odemis.gui import (
-    BG_COLOUR_MAIN,
-    BG_COLOUR_STREAM,
-    FG_COLOUR_DIS,
-    FG_COLOUR_EDIT,
-    FG_COLOUR_MAIN,
-    FG_COLOUR_RADIO_ACTIVE,
-    img,
-)
+from odemis.gui import img
 from odemis.gui.comp import buttons
 from odemis.gui.comp.buttons import ImageTextButton
 from odemis.gui.comp.combo import ColorMapComboBox, ComboBox
@@ -60,6 +52,7 @@ from odemis.gui.comp.text import (
     UnitFloatCtrl,
     UnitIntegerCtrl,
 )
+from odemis.gui.layout import theme
 from odemis.gui.conf.data import COLORMAPS
 from odemis.gui.evt import StreamPeakEvent, StreamRemoveEvent, StreamVisibleEvent
 from odemis.gui.util import call_in_wx_main, ignore_dead
@@ -169,7 +162,7 @@ class StreamPanelHeader(wx.Control):
         """ Add a suggest control to the header panel """
         suggest_ctrl = SuggestTextCtrl(self, id=-1, value=self.Parent.stream.name.value)
         suggest_ctrl.SetBackgroundColour(self.Parent.GetBackgroundColour())
-        suggest_ctrl.SetForegroundColour(FG_COLOUR_EDIT)
+        suggest_ctrl.SetForegroundColour(theme.text_edit)
         suggest_ctrl.Bind(wx.EVT_COMMAND_ENTER, self._on_label_change)
 
         self._add_ctrl(suggest_ctrl, stretch=True)
@@ -182,7 +175,7 @@ class StreamPanelHeader(wx.Control):
         # In case the name is too long, at least we can see it full with a mouse hover
         label_ctrl.SetToolTip(self.Parent.stream.name.value)
         label_ctrl.SetBackgroundColour(self.Parent.GetBackgroundColour())
-        label_ctrl.SetForegroundColour(FG_COLOUR_MAIN)
+        label_ctrl.SetForegroundColour(theme.field_foreground)
         self._add_ctrl(label_ctrl, stretch=True)
         return label_ctrl
 
@@ -528,8 +521,8 @@ class StreamPanel(wx.Panel):
         self._btn_emission = None
 
         # Appearance
-        self.SetBackgroundColour(BG_COLOUR_STREAM)
-        self.SetForegroundColour(FG_COLOUR_MAIN)
+        self.SetBackgroundColour(theme.panel_background)
+        self.SetForegroundColour(theme.field_foreground)
 
         # State
         self._collapsed = collapsed
@@ -583,8 +576,8 @@ class StreamPanel(wx.Panel):
 
         self._panel.SetSizer(border_sizer)
 
-        self._panel.SetBackgroundColour(BG_COLOUR_MAIN)
-        self._panel.SetForegroundColour(FG_COLOUR_MAIN)
+        self._panel.SetBackgroundColour(theme.background)
+        self._panel.SetForegroundColour(theme.field_foreground)
         self._panel.SetFont(self.GetFont())
 
         # Simplified version of .collapse()
@@ -834,7 +827,7 @@ class StreamPanel(wx.Panel):
 
         btn_autobc = buttons.ImageTextToggleButton(self._panel, height=24,
                                                    icon=img.getBitmap("icon/ico_contrast.png"),
-                                                   label="Auto", active_colour=FG_COLOUR_RADIO_ACTIVE)
+                                                   label="Auto", active_colour=theme.control_active)
         btn_autobc.SetToolTip("Toggle image auto brightness/contrast")
 
         lbl_bc_outliers = wx.StaticText(self._panel, -1, "Outliers")
@@ -871,7 +864,7 @@ class StreamPanel(wx.Panel):
         sld_hist = VisualRangeSlider(self._panel, size=(-1, 40),
                                      value=self.stream.intensityRange.value,
                                      min_val=hist_min, max_val=hist_max)
-        sld_hist.SetBackgroundColour("#000000")
+        sld_hist.SetBackgroundColour(theme.viewport_background)
 
         self.gb_sizer.Add(sld_hist, pos=(self.num_rows, 0), span=(1, 3), border=5,
                           flag=wx.EXPAND | wx.TOP | wx.LEFT | wx.RIGHT)
@@ -890,8 +883,8 @@ class StreamPanel(wx.Panel):
                                  style=wx.NO_BORDER, size=(-1, 14),
                                  min_val=hist_min, max_val=hist_max,
                                  key_step_min=1, accuracy=6)
-        txt_lowi.SetForegroundColour(FG_COLOUR_EDIT)
-        txt_lowi.SetOwnBackgroundColour(BG_COLOUR_MAIN)
+        txt_lowi.SetForegroundColour(theme.text_edit)
+        txt_lowi.SetOwnBackgroundColour(theme.background)
 
         txt_lowi.SetToolTip(tooltip_txt)
 
@@ -904,8 +897,8 @@ class StreamPanel(wx.Panel):
                                   style=wx.NO_BORDER, size=(-1, 14),
                                   min_val=hist_min, max_val=hist_max,
                                   key_step_min=1, accuracy=6)
-        txt_highi.SetBackgroundColour(BG_COLOUR_MAIN)
-        txt_highi.SetForegroundColour(FG_COLOUR_EDIT)
+        txt_highi.SetBackgroundColour(theme.background)
+        txt_highi.SetForegroundColour(theme.text_edit)
         txt_highi.SetToolTip(tooltip_txt)
 
         # Add controls to sizer for spacing
@@ -931,8 +924,8 @@ class StreamPanel(wx.Panel):
         lbl_ctrl = self._add_side_label(name)
         value_ctrl = FloatTextCtrl(self._panel, -1, value or 0.0, style=wx.NO_BORDER)
 
-        value_ctrl.SetForegroundColour(gui.FG_COLOUR_EDIT)
-        value_ctrl.SetBackgroundColour(gui.BG_COLOUR_MAIN)
+        value_ctrl.SetForegroundColour(theme.text_edit)
+        value_ctrl.SetBackgroundColour(theme.background)
 
         self.gb_sizer.Add(value_ctrl, (self.num_rows, 1), span=(1, 2),
                           flag=wx.EXPAND | wx.ALL, border=5)
@@ -1016,8 +1009,8 @@ class StreamPanel(wx.Panel):
         value_ctrl = klass(self._panel, value=value, style=wx.NO_BORDER, **conf)
         self.gb_sizer.Add(value_ctrl, (self.num_rows, 1),
                           flag=wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
-        value_ctrl.SetForegroundColour(gui.FG_COLOUR_EDIT)
-        value_ctrl.SetBackgroundColour(gui.BG_COLOUR_MAIN)
+        value_ctrl.SetForegroundColour(theme.text_edit)
+        value_ctrl.SetBackgroundColour(theme.background)
 
         return lbl_ctrl, value_ctrl
 
@@ -1061,8 +1054,8 @@ class StreamPanel(wx.Panel):
                                 wildcard=wildcard,
                                 default_dir=None)
 
-        value_ctrl.SetForegroundColour(gui.FG_COLOUR_EDIT)
-        value_ctrl.SetBackgroundColour(gui.BG_COLOUR_MAIN)
+        value_ctrl.SetForegroundColour(theme.text_edit)
+        value_ctrl.SetBackgroundColour(theme.background)
 
         self.gb_sizer.Add(value_ctrl,
                           (self.num_rows, 1), span=(1, 2),
@@ -1097,13 +1090,13 @@ class StreamPanel(wx.Panel):
                 value_ctrl = wx.TextCtrl(self._panel, value=value,
                                          style=wx.BORDER_NONE | wx.TE_READONLY)
                 value_ctrl.MinSize = (-1, min(value_ctrl.BestSize[1], 16))  # Workaround BestSize bug on wxPython 4.2.1
-                value_ctrl.SetForegroundColour(gui.FG_COLOUR_DIS)
-                value_ctrl.SetBackgroundColour(gui.BG_COLOUR_MAIN)
+                value_ctrl.SetForegroundColour(theme.text_disabled)
+                value_ctrl.SetBackgroundColour(theme.background)
                 self.gb_sizer.Add(value_ctrl, (self.num_rows, 1), span=(1, 2),
                                   flag=wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
             else:
                 value_ctrl = wx.StaticText(self._panel, label=value)
-                value_ctrl.SetForegroundColour(gui.FG_COLOUR_DIS)
+                value_ctrl.SetForegroundColour(theme.text_disabled)
                 self.gb_sizer.Add(value_ctrl, (self.num_rows, 1), span=(1, 2),
                                   flag=wx.BOTTOM | wx.TOP | wx.ALIGN_CENTER_VERTICAL, border=5)
         else:
@@ -1175,10 +1168,10 @@ class StreamPanel(wx.Panel):
                                  style=wx.TE_PROCESS_ENTER | wx.BORDER_NONE | (wx.TE_READONLY if readonly else 0))
         value_ctrl.MinSize = (-1, min(value_ctrl.BestSize[1], 16))  # Workaround BestSize bug on wxPython 4.2.1
         if readonly:
-            value_ctrl.SetForegroundColour(gui.FG_COLOUR_DIS)
+            value_ctrl.SetForegroundColour(theme.text_disabled)
         else:
-            value_ctrl.SetForegroundColour(gui.FG_COLOUR_EDIT)
-        value_ctrl.SetBackgroundColour(gui.BG_COLOUR_MAIN)
+            value_ctrl.SetForegroundColour(theme.text_edit)
+        value_ctrl.SetBackgroundColour(theme.background)
         self.gb_sizer.Add(value_ctrl, (self.num_rows, 1),
                           flag=wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
 
@@ -1201,7 +1194,7 @@ class StreamPanel(wx.Panel):
     def add_divider(self):
         """ Add a dividing line to the stream panel """
         line_ctrl = wx.StaticLine(self._panel, size=(-1, 1))
-        line_ctrl.SetBackgroundColour(gui.BG_COLOUR_SEPARATOR)
+        line_ctrl.SetBackgroundColour(theme.section_header)
         self.gb_sizer.Add(line_ctrl, (self.num_rows, 0), span=(1, 3),
                           flag=wx.ALL | wx.EXPAND, border=5)
 
@@ -1245,7 +1238,7 @@ class StreamPanel(wx.Panel):
             hw_set = wx.TextCtrl(self._panel, value=band, size=(-1, 16),
                                  style=wx.BORDER_NONE | wx.TE_READONLY)
             hw_set.SetBackgroundColour(self._panel.BackgroundColour)
-            hw_set.SetForegroundColour(FG_COLOUR_DIS)
+            hw_set.SetForegroundColour(theme.text_disabled)
             exc_sizer.Add(hw_set, 1, flag=wx.LEFT | wx.RIGHT | wx.ALIGN_CENTRE_VERTICAL, border=5)
         else:
             hw_set = ComboBox(self._panel, value=band, size=(-1, 16),
@@ -1296,7 +1289,7 @@ class StreamPanel(wx.Panel):
 
         sld_spec = VisualRangeSlider(self._panel, size=(-1, 40),
                                      value=wl, min_val=wl_rng[0], max_val=wl_rng[1])
-        sld_spec.SetBackgroundColour("#000000")
+        sld_spec.SetBackgroundColour(theme.viewport_background)
 
         self.gb_sizer.Add(sld_spec, pos=(self.num_rows, 0), span=(1, 3), border=5,
                           flag=wx.EXPAND | wx.TOP | wx.LEFT | wx.RIGHT)
@@ -1315,8 +1308,8 @@ class StreamPanel(wx.Panel):
                                     unit=self.stream.spectrumBandwidth.unit,  # m or px
                                     accuracy=3)
 
-        txt_scenter.SetBackgroundColour(BG_COLOUR_MAIN)
-        txt_scenter.SetForegroundColour(FG_COLOUR_EDIT)
+        txt_scenter.SetBackgroundColour(theme.background)
+        txt_scenter.SetForegroundColour(theme.text_edit)
         txt_scenter.SetToolTip(tooltip_txt)
 
         tooltip_txt = "Bandwidth of the spectrum"
@@ -1328,8 +1321,8 @@ class StreamPanel(wx.Panel):
                                 min_val=0, max_val=(wl_rng[1] - wl_rng[0]),
                                 unit=self.stream.spectrumBandwidth.unit,
                                 accuracy=3)
-        txt_sbw.SetBackgroundColour(BG_COLOUR_MAIN)
-        txt_sbw.SetForegroundColour(FG_COLOUR_EDIT)
+        txt_sbw.SetBackgroundColour(theme.background)
+        txt_sbw.SetForegroundColour(theme.text_edit)
         txt_sbw.SetToolTip(tooltip_txt)
 
         cb_wl_sz = wx.BoxSizer(wx.HORIZONTAL)

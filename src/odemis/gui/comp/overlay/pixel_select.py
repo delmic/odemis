@@ -30,6 +30,7 @@ import wx
 import odemis.gui as gui
 import odemis.util.conversion as conversion
 from odemis.gui.comp.overlay.base import DragMixin, PixelDataMixin, WorldOverlay, cairo_polygon
+from odemis.gui.layout import theme
 
 
 class PixelSelectOverlay(WorldOverlay, PixelDataMixin, DragMixin):
@@ -43,8 +44,8 @@ class PixelSelectOverlay(WorldOverlay, PixelDataMixin, DragMixin):
         self._selected_pixel_va = None
         self._selected_width_va = None
 
-        self.colour = conversion.hex_to_frgba(gui.SELECTION_COLOUR, 0.5)
-        self.select_color = conversion.hex_to_frgba(gui.FG_COLOUR_HIGHLIGHT, 0.5)
+        self.colour = conversion.hex_to_frgba(theme.selection, 0.5)
+        self.select_color = conversion.hex_to_frgba(theme.text_highlight, 0.5)
 
     def connect_selection(self, selection_va, width_va):
 

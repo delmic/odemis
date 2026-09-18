@@ -50,7 +50,9 @@ from odemis.gui.conf import get_acqui_conf, util
 from odemis.gui.cont.multi_point_correlation import CorrelationPointsController
 from odemis.gui.cont.settings import LocalizationSettingsController, SecomSettingsController
 from odemis.gui.cont.stream_bar import StreamBarController
-from odemis.gui.main_xrc import xrcfr_acq, xrcfr_overview_acq, xrcfr_correlation
+from odemis.gui.layout.components.dialog_correlation_tdct import TDCorrelationDialogBase
+from odemis.gui.layout.components.dialog_overview_acq import OverviewAcqDialogBase
+from odemis.gui.layout.components.dialog_secom_acq import SecomAcqDialogBase
 from odemis.gui.model import TOOL_NONE, AcquisitionWindowData, StreamView, TOOL_ACT_ZOOM_FIT
 from odemis.gui.preset import (apply_preset, get_global_settings_entries,
                                get_local_settings_entries, preset_as_is,
@@ -63,14 +65,15 @@ from odemis.util import units
 from odemis.util.filename import create_filename, guess_pattern, update_counter
 
 
-class AcquisitionDialog(xrcfr_acq):
-    """ Wrapper class responsible for additional initialization of the
-    Acquisition Dialog created in XRCed
+class SecomAcquisitionDialog(SecomAcqDialogBase):
+    """
+    Class responsible for controlling the acquisition dialog for SECOM
+    The GUI is defined in the parent class.
     """
 
     # TODO: share more code with cont.acquisition
     def __init__(self, parent, orig_tab_data):
-        xrcfr_acq.__init__(self, parent)
+        SecomAcqDialogBase.__init__(self, parent)
 
         self.conf = get_acqui_conf()
 
@@ -189,6 +192,11 @@ class AcquisitionDialog(xrcfr_acq):
         # To update the estimated time when streams are removed/added
         self._view.stream_tree.flat.subscribe(self.on_streams_changed)
         self._hidden_view.stream_tree.flat.subscribe(self.on_streams_changed)
+
+        # HACK WARNING: if not done as a CallAfter, the right panel sometimes doesn't draw completely
+        # when opening the window.
+        wx.CallAfter(self.Refresh)
+        wx.CallAfter(self.Update)
 
     def start_listening_to_va(self):
         # Get all the VA's from the stream and subscribe to them for changes.
@@ -628,7 +636,7 @@ class AcquisitionDialog(xrcfr_acq):
 DEFAULT_FOV = (100e-6, 100e-6) # m
 
 
-class OverviewAcquisitionDialog(xrcfr_overview_acq):
+class OverviewAcquisitionDialog(OverviewAcqDialogBase):
     """
     Class used to control the overview acquisition dialog
     The data acquired is stored in a file, with predefined name, available on
@@ -636,7 +644,7 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
     """
     def __init__(self, parent, orig_tab_data,
                  mode: guimod.AcquiMode = guimod.AcquiMode.FLM):
-        xrcfr_overview_acq.__init__(self, parent)
+        OverviewAcqDialogBase.__init__(self, parent)
 
         self.conf = get_acqui_conf()
 
@@ -720,10 +728,6 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
 
             self.whole_grid_chkbox.Value = True
 
-            # GridSelectionPanel doesn't have xmlh helper, and in addition a refactoring
-            # would be needed to allow changing the grid layout after init. So
-            # for now we use a placeholder panel, and insert the GridSelectionPanel
-            # here at runtime.
             layout = sample_positions_to_layout(self._main_data_model.sample_centers)
             subsizer = wx.BoxSizer(wx.VERTICAL)
             self.selected_grid_pnl_holder.SetSizer(subsizer)
@@ -1325,12 +1329,13 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         self.EndModal(wx.ID_OPEN)
 
 
-class CorrelationDialog(xrcfr_correlation):
+class TDCorrelationDialog(TDCorrelationDialogBase):
     """
-    Initialize the controllers for CorrelationDialog box.
+    Control the 3D correlation dialog.
+    The GUI layout is defined in the parent class.
     """
     def __init__(self,  parent, orig_tab_data):
-        xrcfr_correlation.__init__(self, parent)
+        TDCorrelationDialogBase.__init__(self, parent)
         main_data = orig_tab_data.main
         tab_data = guimod.CryoTdctCorrelationGUIData(main_data)
         self.tab_data = tab_data

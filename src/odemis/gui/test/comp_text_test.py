@@ -57,7 +57,7 @@ def suggest(val):
 
 
 class OwnerDrawnComboBoxTestCase(test.GuiTestCase):
-    frame_class = test.test_gui.xrctext_frame
+    frame_class = test.test_gui.TextControlsFrame
 
     def test_ms_windows(self):
         # test.goto_manual()
@@ -87,7 +87,7 @@ class OwnerDrawnComboBoxTestCase(test.GuiTestCase):
 
 
 class NumberTextCtrlTestCase(test.GuiTestCase):
-    frame_class = test.test_gui.xrcbutton_frame
+    frame_class = test.test_gui.ButtonTestFrame
 
     def _simulate_typing(self, ctrl, text):
         """Simulate typing into a NumberTextCtrl without requiring OS-level focus.

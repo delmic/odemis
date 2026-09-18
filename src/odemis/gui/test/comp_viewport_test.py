@@ -75,7 +75,7 @@ BAD_RANGED_PLOTS = [
 
 class ViewportTestCase(test.GuiTestCase):
 
-    frame_class = test.test_gui.xrccanvas_frame
+    frame_class = test.test_gui.CanvasTestFrame
 
     def _generate_sine_list(self, period, amp=1):
 
@@ -242,7 +242,7 @@ class ViewportTestCase(test.GuiTestCase):
 
 
 class MicroscopeViewportTestCase(test.GuiTestCase):
-    frame_class = test.test_gui.xrccanvas_frame
+    frame_class = test.test_gui.CanvasTestFrame
 
     def test_resize(self):
 

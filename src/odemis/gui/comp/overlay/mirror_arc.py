@@ -30,6 +30,7 @@ import odemis.util.conversion as conversion
 import wx
 from odemis import model
 from odemis.gui.comp.overlay.base import DragMixin, Vec, WorldOverlay
+from odemis.gui.layout import theme
 
 
 class MirrorArcOverlay(WorldOverlay, DragMixin):
@@ -39,7 +40,7 @@ class MirrorArcOverlay(WorldOverlay, DragMixin):
         WorldOverlay.__init__(self, cnvs)
         DragMixin.__init__(self)
 
-        self.colour = conversion.hex_to_frgb(gui.FG_COLOUR_EDIT)
+        self.colour = conversion.hex_to_frgb(theme.text_edit)
 
         # The phys position of the hole in the mirror (starts with a non-used VA)
         self.hole_pos_va = model.TupleContinuous((0.0, 0.0), ((-1.0, -1.0), (1.0, 1.0)))

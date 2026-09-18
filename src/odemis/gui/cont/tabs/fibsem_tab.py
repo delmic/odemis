@@ -62,7 +62,7 @@ class FibsemTab(Tab):
         :type name: str
         :type button: odemis.gui.comp.buttons.TabButton
         :type panel: wx._windows.Panel
-        :type main_frame: odemis.gui.main_xrc.xrcfr_main
+        :type main_frame: wx.Frame
         :type main_data: odemis.gui.model.MainGUIData
         """
 

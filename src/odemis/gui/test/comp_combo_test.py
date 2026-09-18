@@ -22,6 +22,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 import odemis.gui.test as test
 from odemis import gui
 from odemis.gui.comp import combo
+from odemis.gui.layout import theme
 import unittest
 import wx
 
@@ -32,7 +33,7 @@ test.goto_manual()
 
 class ComboTestCase(test.GuiTestCase):
 
-    frame_class = test.test_gui.xrcbutton_frame
+    frame_class = test.test_gui.ButtonTestFrame
 
     @classmethod
     def setUpClass(cls):
@@ -82,7 +83,7 @@ class ComboTestCase(test.GuiTestCase):
         cfixed = wx.ComboBox(self.panel, wx.ID_ANY, size=(-1, 23),
                              value=choices[2], choices=choices,
                              style=wx.NO_BORDER | wx.CB_DROPDOWN | wx.TE_PROCESS_ENTER | wx.CB_READONLY)
-        cfixed.SetForegroundColour(gui.FG_COLOUR_EDIT)
+        cfixed.SetForegroundColour(theme.text_edit)
         cfixed.SetBackgroundColour(self.panel.GetBackgroundColour())
         cfixed.SetSelection(2)
         self.add_control(cfixed, flags=wx.ALL | wx.EXPAND, border=2, label="Fixed:")
@@ -91,7 +92,7 @@ class ComboTestCase(test.GuiTestCase):
         cfree = cfixed = wx.ComboBox(self.panel, wx.ID_ANY, size=(-1, 23),
                              value=choices[2], choices=choices,
                              style=wx.NO_BORDER | wx.CB_DROPDOWN | wx.TE_PROCESS_ENTER)
-        cfixed.SetForegroundColour(gui.FG_COLOUR_EDIT)
+        cfixed.SetForegroundColour(theme.text_edit)
         cfixed.SetBackgroundColour(self.panel.GetBackgroundColour())
         cfree.SetSelection(0)
         self.add_control(cfree, flags=wx.ALL | wx.EXPAND, border=2, label="Free:")

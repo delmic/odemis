@@ -23,7 +23,6 @@ This file is part of Odemis.
 from odemis.gui.comp.settings import SettingsPanel
 from odemis.gui.cont.settings import SettingsController
 from odemis.gui.test import gui_loop
-from odemis.gui.xmlh import odemis_get_test_resources
 import locale
 import odemis.gui.test as test
 import unittest
@@ -35,7 +34,7 @@ test.goto_manual()
 
 class SettingsControllerTestCase(test.GuiTestCase):
 
-    frame_class = test.test_gui.xrcfpb_frame
+    frame_class = test.test_gui.FoldPanelBarFrame
 
     @classmethod
     def setUpClass(cls):

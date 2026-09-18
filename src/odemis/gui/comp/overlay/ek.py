@@ -33,6 +33,7 @@ from odemis import model
 from odemis.gui.comp.overlay.base import Label, Vec, WorldOverlay
 from odemis.gui.comp.overlay.gadget import EKLine
 from odemis.util.comp import compute_camera_fov
+from odemis.gui.layout import theme
 
 
 class EKOverlay(WorldOverlay):
@@ -58,7 +59,7 @@ class EKOverlay(WorldOverlay):
             font_size=30,
             flip=False,
             align=wx.ALIGN_CENTRE_HORIZONTAL | wx.ALIGN_CENTRE_VERTICAL,
-            colour=conversion.hex_to_frgba(gui.FG_COLOUR_WARNING),
+            colour=conversion.hex_to_frgba(theme.text_warning),
             opacity=1.0,
             deg=None,
             background=None
@@ -266,12 +267,12 @@ class EKOverlay(WorldOverlay):
 
         # Draws a black background for the line
         ctx.set_line_width(3)
-        ctx.set_source_rgba(0, 0, 0, 0.5)
+        ctx.set_source_rgba(*conversion.hex_to_frgba(theme.viewport_background, 0.5))
         ctx.move_to(*b_start)
         ctx.line_to(*b_end)
         ctx.stroke()
 
-        colour = conversion.hex_to_frgb(gui.FG_COLOUR_EDIT)
+        colour = conversion.hex_to_frgb(theme.text_edit)
         ctx.set_source_rgba(*colour)
         ctx.set_line_width(2)
         ctx.set_dash([50, 10, 10, 10])

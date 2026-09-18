@@ -34,16 +34,16 @@ from wx.lib.agw.infobar import AutoWrapStaticText
 
 import odemis
 from odemis import util, gui
-from odemis.gui import FG_COLOUR_ERROR, FG_COLOUR_WARNING, FG_COLOUR_MAIN
 from odemis.gui.comp.buttons import ImageTextButton
 from odemis.gui.cont.settings import SettingsController
 from odemis.gui.cont.stream_bar import StreamBarController
-from odemis.gui.main_xrc import xrcfr_plugin
+from odemis.gui.layout.components.dialog_plugin import PluginDialogBase
 from odemis.gui.model import MicroscopeView, MicroscopyGUIData, StreamView, TabName
 from odemis.gui.util import call_in_wx_main, get_home_folder
 from odemis.gui.util.widgets import ProgressiveFutureConnector
 from odemis.model import getVAs
 from odemis.util import inspect_getmembers
+from odemis.gui.layout import theme
 
 
 def find_plugins():
@@ -377,7 +377,7 @@ class Plugin(metaclass=ABCMeta):
         analysis_tab.load_data(filename)
 
 
-class AcquisitionDialog(xrcfr_plugin):
+class AcquisitionDialog(PluginDialogBase):
     def __init__(self, plugin, title, text=None):
         """
         Creates a modal window. The return code is the button number that was
@@ -396,7 +396,7 @@ class AcquisitionDialog(xrcfr_plugin):
         if text is not None:
             self.lbl_description = AutoWrapStaticText(self.pnl_desc, "")
             self.lbl_description.SetBackgroundColour(self.pnl_desc.GetBackgroundColour())
-            self.lbl_description.SetForegroundColour(gui.FG_COLOUR_MAIN)
+            self.lbl_description.SetForegroundColour(theme.field_foreground)
             self.pnl_desc.GetSizer().Add(self.lbl_description, flag=wx.EXPAND | wx.ALL, border=10)
             self.lbl_description.SetLabel(text)
 
@@ -597,11 +597,11 @@ class AcquisitionDialog(xrcfr_plugin):
         else:
             self.lbl_acquisition_info.SetLabel(text)
             if lvl >= logging.ERROR:
-                self.lbl_acquisition_info.SetForegroundColour(FG_COLOUR_ERROR)
+                self.lbl_acquisition_info.SetForegroundColour(theme.text_error)
             elif lvl >= logging.WARNING:
-                self.lbl_acquisition_info.SetForegroundColour(FG_COLOUR_WARNING)
+                self.lbl_acquisition_info.SetForegroundColour(theme.text_warning)
             else:
-                self.lbl_acquisition_info.SetForegroundColour(FG_COLOUR_MAIN)
+                self.lbl_acquisition_info.SetForegroundColour(theme.field_foreground)
             self.pnl_info.Show()
 
         self.Layout()

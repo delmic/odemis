@@ -33,7 +33,7 @@ import odemis.model as model
 
 class ConnectorTestCase(test.GuiTestCase):
 
-    frame_class = test.test_gui.xrcbutton_frame
+    frame_class = test.test_gui.ButtonTestFrame
 
     def test_va_connector(self):
         va = model.FloatContinuous(0.3, (0.0, 1.0))

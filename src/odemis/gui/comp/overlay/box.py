@@ -27,6 +27,7 @@ import odemis.util.conversion as conversion
 import wx
 from odemis import util
 from odemis.gui.comp.overlay.base import WorldOverlay
+from odemis.gui.layout import theme
 
 
 class BoxOverlay(WorldOverlay):
@@ -42,7 +43,7 @@ class BoxOverlay(WorldOverlay):
         self.roi = None  #
         self.set_dimensions((-50e-6, -50e-6, 50e-6, 50e-6))  # m
 
-        self.colour = conversion.hex_to_frgb("#FF0000")
+        self.colour = conversion.hex_to_frgb(theme.categorical_red)
         self.line_width = 1  # px
         self.dash_pattern = [2]
 
@@ -73,7 +74,7 @@ class BoxOverlay(WorldOverlay):
 
         # draws a light black background for the rectangle
         ctx.set_line_width(self.line_width + 1)
-        ctx.set_source_rgba(0, 0, 0, 0.5)
+        ctx.set_source_rgba(*conversion.hex_to_frgba(theme.viewport_background, 0.5))
         ctx.rectangle(*rect)
         ctx.stroke()
 

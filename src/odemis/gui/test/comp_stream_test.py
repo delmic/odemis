@@ -109,7 +109,7 @@ class FakeFluoStream(FluoStream):
 
 class FoldPanelBarTestCase(test.GuiTestCase):
 
-    frame_class = test.test_gui.xrcstream_frame
+    frame_class = test.test_gui.StreamBarFrame
 
     @staticmethod
     def _find_entry(name, entries):

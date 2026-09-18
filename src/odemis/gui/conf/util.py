@@ -49,6 +49,7 @@ from odemis.util.units import (
     to_string_si_prefix,
     value_to_str,
 )
+from odemis.gui.layout import theme
 
 MIN_RES = 128 * 128  # px, minimum amount of pixels acceptable in an acquisition
 
@@ -1164,9 +1165,9 @@ class Entry(object):
             return
 
         if active:
-            self.lbl_ctrl.SetForegroundColour(odemis.gui.FG_COLOUR_HIGHLIGHT)
+            self.lbl_ctrl.SetForegroundColour(theme.text_highlight)
         else:
-            self.lbl_ctrl.SetForegroundColour(odemis.gui.FG_COLOUR_MAIN)
+            self.lbl_ctrl.SetForegroundColour(theme.field_foreground)
 
 
 class SettingEntry(VigilantAttributeConnector, Entry):

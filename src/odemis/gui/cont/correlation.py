@@ -29,11 +29,6 @@ from typing import List
 
 import wx
 
-# IMPORTANT: wx.html needs to be imported for the HTMLWindow defined in the XRC
-# file to be correctly identified. See: http://trac.wxwidgets.org/ticket/3626
-# This is not related to any particular wxPython version and is most likely permanent.
-import wx.html
-
 import odemis.acq.stream as acqstream
 import odemis.gui.model as guimod
 from odemis import model

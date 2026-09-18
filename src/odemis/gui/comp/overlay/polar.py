@@ -28,6 +28,7 @@ import wx
 import odemis.gui as gui
 import odemis.gui.comp.overlay.base as base
 import odemis.util.conversion as conversion
+from odemis.gui.layout import theme
 
 
 class PolarOverlay(base.ViewOverlay):
@@ -51,9 +52,9 @@ class PolarOverlay(base.ViewOverlay):
         self.px, self.py = None, None
         self.tx, self.ty = None, None
 
-        self.colour = conversion.hex_to_frgb(gui.SELECTION_COLOUR)
-        self.colour_drag = conversion.hex_to_frgba(gui.SELECTION_COLOUR, 0.5)
-        self.colour_highlight = conversion.hex_to_frgb(gui.FG_COLOUR_HIGHLIGHT)
+        self.colour = conversion.hex_to_frgb(theme.selection)
+        self.colour_drag = conversion.hex_to_frgba(theme.selection, 0.5)
+        self.colour_highlight = conversion.hex_to_frgb(theme.text_highlight)
         self.intensity_label = self.add_label("", align=wx.ALIGN_CENTER_HORIZONTAL,
                                               colour=self.colour_highlight)
 
@@ -291,7 +292,7 @@ class PolarOverlay(base.ViewOverlay):
 
             label = self.add_label("%d°" % (deg + 90),
                                    (lx, ly),
-                                   colour=(0.8, 0.8, 0.8),
+                                   colour=conversion.hex_to_frgb(theme.text_secondary),
                                    deg=deg - 90,
                                    flip=True,
                                    align=wx.ALIGN_CENTRE_HORIZONTAL | wx.ALIGN_BOTTOM)
@@ -308,7 +309,11 @@ class PolarOverlay(base.ViewOverlay):
     def draw(self, ctx):
         # Draw angle lines
         ctx.set_line_width(2.5)
-        ctx.set_source_rgba(0, 0, 0, 0.2 if self.dragging else 0.5)
+        ctx.set_source_rgba(
+            *conversion.hex_to_frgba(
+                theme.viewport_background, 0.2 if self.dragging else 0.5
+            )
+        )
 
         if self.theta is not None:
             # Draw dark underline azimuthal circle
@@ -353,7 +358,7 @@ class PolarOverlay(base.ViewOverlay):
 
         # Draw frame that covers everything outside the center circle
         ctx.set_fill_rule(cairo.FILL_RULE_EVEN_ODD)
-        ctx.set_source_rgb(0.2, 0.2, 0.2)
+        ctx.set_source_rgb(*conversion.hex_to_frgb(theme.background))
 
         ctx.rectangle(0, 0, self.cnvs.ClientSize.x, self.cnvs.ClientSize.y)
         ctx.arc(self.center_x, self.center_y, self.inner_radius, 0, self.tau)
@@ -362,7 +367,7 @@ class PolarOverlay(base.ViewOverlay):
 
         # Draw Azimuth degree circle
         ctx.set_line_width(2)
-        ctx.set_source_rgb(0.5, 0.5, 0.5)
+        ctx.set_source_rgb(*conversion.hex_to_frgb(theme.text_muted))
         ctx.arc(self.center_x, self.center_y, self.radius, 0, self.tau)
         ctx.stroke()
 
