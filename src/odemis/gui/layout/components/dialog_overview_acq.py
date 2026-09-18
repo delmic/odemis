@@ -35,7 +35,8 @@ from odemis.gui.layout.constants.strings import (
 from odemis.gui.layout.constants.themes import Theme
 from odemis.gui.layout.util.fonts import set_font
 from odemis.gui.layout.util.sizers import hbox, vbox
-from odemis.gui.layout.util.widgets import create_label, create_text_button
+from odemis.gui.layout.util.widgets import create_label, create_text_button, \
+    size_window_to_available_space
 
 
 class OverviewAcqDialogBase(wx.Dialog):
@@ -67,23 +68,7 @@ class OverviewAcqDialogBase(wx.Dialog):
         root_sizer.Add(self._build_action_panel(), flag=wx.EXPAND)
 
         self.SetSizer(root_sizer)
-        self._size_to_available_space(parent)
-
-    def _size_to_available_space(self, parent: Optional[wx.Window]) -> None:
-        """Size and centre the dialog to 90% of the available area.
-
-        The available area is the parent window's current size, or the
-        primary display's client area when there is no parent.
-
-        :param parent: Parent window, or None to use the display.
-        """
-        available = parent.GetSize() if parent is not None else wx.GetClientDisplayRect().GetSize()
-        self.SetSize(wx.Size(int(available.width * 0.9), int(available.height * 0.9)))
-        if parent is not None:
-            self.CenterOnParent()
-        else:
-            self.Center()
-        self.Layout()
+        size_window_to_available_space(self, parent)
 
     def _build_viewport(self) -> LiveViewport:
         """Build the overview acquisition viewport.

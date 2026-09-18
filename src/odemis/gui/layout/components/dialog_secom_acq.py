@@ -38,7 +38,8 @@ from odemis.gui.layout.constants.strings import (
 from odemis.gui.layout.constants.themes import Theme
 from odemis.gui.layout.util.fonts import set_font
 from odemis.gui.layout.util.sizers import hbox, vbox
-from odemis.gui.layout.util.widgets import create_combo, create_text_button
+from odemis.gui.layout.util.widgets import create_combo, create_text_button, \
+    size_window_to_available_space
 
 
 class SecomAcqDialogBase(wx.Dialog):
@@ -75,7 +76,8 @@ class SecomAcqDialogBase(wx.Dialog):
         root_sizer.Add(self._build_action_panel(), flag=wx.EXPAND)
 
         self.SetSizer(root_sizer)
-        self.Layout()
+        self.SetMinSize(root_sizer.GetMinSize())
+        size_window_to_available_space(self, parent)
 
     def _build_settings_column(self) -> wx.Panel:
         """Build the presets/filename row and the settings fold panels.
@@ -199,7 +201,6 @@ class SecomAcqDialogBase(wx.Dialog):
             fold_bar = FoldPanelBar(self.scr_win_right)
             fold_bar.SetBackgroundColour(self._theme.background)
             scroll_sizer.Add(fold_bar, flag=wx.EXPAND)
-
             self._build_settings_sections(fold_bar)
 
         self.scr_win_right.SetSizer(scroll_sizer)

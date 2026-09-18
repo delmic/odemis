@@ -36,6 +36,7 @@ from odemis.gui.layout.constants.strings import (
 from odemis.gui.layout.constants.themes import Theme
 from odemis.gui.layout.util.fonts import set_font
 from odemis.gui.layout.util.sizers import hbox, vbox
+from odemis.gui.layout.util.widgets import size_window_to_available_space
 
 
 class TDCorrelationDialogBase(wx.Dialog):
@@ -73,7 +74,7 @@ class TDCorrelationDialogBase(wx.Dialog):
         root_sizer.Add(self._build_settings_column(), flag=wx.EXPAND)
 
         self.SetSizer(root_sizer)
-        self.Layout()
+        size_window_to_available_space(self, parent)
 
     def _build_toolbar_panel(self) -> wx.Panel:
         """Build the left column holding the vertical viewport toolbar.

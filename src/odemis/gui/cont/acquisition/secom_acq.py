@@ -134,10 +134,6 @@ class SecomAcquiController(object):
         # create the dialog
         try:
             acq_dialog = SecomAcquisitionDialog(self._tab_panel.Parent, self._tab_data_model)
-            parent_size = [int(v * 0.9) for v in self._tab_panel.Parent.GetSize()]
-
-            acq_dialog.SetSize(parent_size)
-            acq_dialog.Center()
             action = acq_dialog.ShowModal()
         except Exception:
             logging.exception("Failed to create acquisition dialog")

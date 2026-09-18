@@ -235,3 +235,21 @@ def create_combo(
     if tooltip is not None:
         combo.SetToolTip(tooltip)
     return combo
+
+
+def size_window_to_available_space(win: wx.Window, parent: Optional[wx.Window]) -> None:
+    """Size and centre the window to 90% of the available area.
+
+    The available area is the parent window's current size, or the
+    primary display's client area when there is no parent.
+
+    :param win: Window to size and centre.
+    :param parent: Parent window, or None to use the display.
+    """
+    available = parent.GetSize() if parent is not None else wx.GetClientDisplayRect().GetSize()
+    win.SetSize(wx.Size(int(available.width * 0.9), int(available.height * 0.9)))
+    if parent is not None:
+        win.CenterOnParent()
+    else:
+        win.Center()
+    win.Layout()

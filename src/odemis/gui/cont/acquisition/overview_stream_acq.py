@@ -138,14 +138,8 @@ class CorrelationDialogController:
 
         # create the dialog
         try:
-            self.cor_dialog = TDCorrelationDialog(
-                self._tab.main_frame, self._tab_data_model)
-            parent_size = [int(v * 0.9) for v in self._tab.main_frame.GetSize()]
-
-            self.cor_dialog.SetSize(parent_size)
-            self.cor_dialog.Center()
+            self.cor_dialog = TDCorrelationDialog(self._tab.main_frame, self._tab_data_model)
             self.cor_dialog.ShowModal()
-
         except Exception:
             logging.exception("Failed to create correlation dialog")
             raise
