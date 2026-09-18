@@ -1003,9 +1003,11 @@ class CorrelationPointsController:
             x_end = min(shape_x, target_x + pixel_padding + 1)
             roi = numpy.s_[:, y_start:y_end, x_start:x_end]
             multi_crop = raw_multi[(slice(None),) + roi]  # We search along all stack slices (first axis)
-            # Find best channel and compute COM
+            # Find best channel and compute COM, anchored on the clicked position so that the
+            # refinement stays on the local peak instead of being pulled by unrelated bright signal
             best_c = get_brightest_channel(multi_crop)
-            com = compute_center_of_mass(multi_crop[best_c], baseline_ratio=0.95)
+            click_center = (pixel_coords[2], target_y - y_start, target_x - x_start)
+            com = compute_center_of_mass(multi_crop[best_c], baseline_ratio=0.95, center=click_center)
             com_z = com[0]
             com_y_crop = com[1] + roi[1].start
             com_x_crop = com[2] + roi[2].start
