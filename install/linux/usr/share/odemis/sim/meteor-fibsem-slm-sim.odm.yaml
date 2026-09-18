@@ -475,11 +475,30 @@
     },
 }
 
+# The lens-arm (l) and objective focus (z) are mechanically linked: moving the
+# "Linked LZ"/"SLM Alignment Stage" y axis always shifts l and z in opposite
+# directions. To always approach a target from the same mechanical side (and
+# so avoid a collision/backlash issue), whichever of l/z would move in the
+# positive direction is moved first, and the one moving in the negative
+# direction is moved last.
+"SLM LZ Forced Order": {
+    class: actuator.ForcedOrderActuator,
+    role: null,
+    dependencies: {"slave": "SLM LZ Axes"},
+    init: {
+        backlash: {
+            # Only the sign matters: positive direction moves first.
+            "l": 1,
+            "z": 1,
+        },
+    },
+}
+
 "Linked LZ": {
     class: actuator.ConvertStage,
     role: null,
     dependencies: {
-        "under": "SLM LZ Axes",
+        "under": "SLM LZ Forced Order",
     },
     init: {
       axes: [ "l", "z" ], # combines lens-arm l and objective z into linked Y transform
