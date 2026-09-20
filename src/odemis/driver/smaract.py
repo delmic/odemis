@@ -2870,6 +2870,11 @@ class SA_CTLDLL(CDLL):
 
     SA_CTL_INFINITE = 0xffffffff
 
+    # sensor power modes
+    SA_CTL_SENSOR_POWER_MODE_DISABLED = 0
+    SA_CTL_SENSOR_POWER_MODE_ENABLED = 1
+    SA_CTL_SENSOR_POWER_MODE_POWER_SAVE = 2
+
     def __init__(self):
         if os.name == "nt":
             raise NotImplementedError("Windows not yet supported")
@@ -3015,6 +3020,7 @@ class MCS2(model.Actuator):
 
         logging.debug("Using SA_CTL library version %s to connect to %s", self._swVersion, self._hwVersion)
 
+        self._sensor_power_disabled_channels = set()
         # Read param_file and apply it
         if param_file:
             try:
@@ -3030,6 +3036,12 @@ class MCS2(model.Actuator):
 
             # apply the new property values
             self.apply_config(prop_params)
+
+            # for these channels the sensor power will be turned on before any movement and turned off afterwards
+            for (ch, p, _), v in prop_params.items():
+                if p == SA_CTLDLL.SA_CTL_PKEY_SENSOR_POWER_MODE and v == SA_CTLDLL.SA_CTL_SENSOR_POWER_MODE_DISABLED:
+                    self._sensor_power_disabled_channels.add(ch)
+            logging.debug("Sensor power disabled channels: %s", self._sensor_power_disabled_channels)
 
         # set specific axis properties
         for name, channel in self._axis_map.items():
@@ -3286,10 +3298,17 @@ class MCS2(model.Actuator):
         self.core.SA_CTL_Reference(self._id, c_int8(channel), c_int8(0))
 
     def Calibrate(self, channel):
-        # Calibrate the controller. Note - this is blocking
-        self.core.SA_CTL_Calibrate(self._id, c_int8(channel), c_int8(0))
-        while self._is_channel_moving(channel):
-            time.sleep(0.1)
+        # enable sensor power for the axes whose SA_CTL_PKEY_SENSOR_POWER_MODE
+        # is set to disabled in the param_file before calibration
+        self._enable_sensor_power({channel})
+        try:
+            # Calibrate the controller. Note - this is blocking
+            self.core.SA_CTL_Calibrate(self._id, c_int8(channel), c_int8(0))
+            while self._is_channel_moving(channel):
+                time.sleep(0.1)
+        finally:
+            # disable sensor power for the axes enabled by _enable_sensor_power
+            self._disable_sensor_power({channel})
 
     def Move(self, pos, channel, moveMode):
         """
@@ -3418,6 +3437,28 @@ class MCS2(model.Actuator):
 
         self.SetProperty_i32(SA_CTLDLL.SA_CTL_PKEY_HOLD_TIME, channel, ht)
 
+    def _enable_sensor_power(self, channels: set) -> None:
+        """
+        Enable the sensor power for the specified channels, if they were initially disabled in the param file.
+
+        :param channels: The set of channels for which to enable the sensor power.
+        """
+        channels_to_enable = channels & self._sensor_power_disabled_channels
+        for channel in channels_to_enable:
+            self.SetProperty_i32(SA_CTLDLL.SA_CTL_PKEY_SENSOR_POWER_MODE, channel,
+                                 SA_CTLDLL.SA_CTL_SENSOR_POWER_MODE_ENABLED)
+
+    def _disable_sensor_power(self, channels: set) -> None:
+        """
+        Disable the sensor power for the specified channels, if they were enabled by calling _enable_sensor_power.
+
+        :param channels: The set of channels for which to disable the sensor power.
+        """
+        channels_to_disable = channels & self._sensor_power_disabled_channels
+        for channel in channels_to_disable:
+            self.SetProperty_i32(SA_CTLDLL.SA_CTL_PKEY_SENSOR_POWER_MODE, channel,
+                                 SA_CTLDLL.SA_CTL_SENSOR_POWER_MODE_DISABLED)
+
     def stop(self, axes=None):
         """
         Stop the SA_CTL controller and update position
@@ -3508,10 +3549,12 @@ class MCS2(model.Actuator):
         with future._moving_lock:
             try:
                 end = 0  # expected end
-                moving_axes = set()
+                moving_axes = {self._axis_map[an] for an in pos}
+                # enable sensor power for the axes whose SA_CTL_PKEY_SENSOR_POWER_MODE
+                # is set to disabled in the param_file before moving
+                self._enable_sensor_power(moving_axes)
                 for an, v in pos.items():
                     channel = self._axis_map[an]
-                    moving_axes.add(channel)
                     self.Move(v, channel, SA_CTLDLL.SA_CTL_MOVE_MODE_CL_RELATIVE)
                     # compute expected end
                     dur = driver.estimateMoveDuration(abs(v),
@@ -3524,6 +3567,9 @@ class MCS2(model.Actuator):
             except Exception as ex:
                 logging.error("Move by %s failed: %s", pos, ex)
                 raise
+            finally:
+                # disable sensor power for the axes enabled by _enable_sensor_power
+                self._disable_sensor_power(moving_axes)
 
         logging.debug("Relative move successfully completed")
 
@@ -3540,10 +3586,12 @@ class MCS2(model.Actuator):
             try:
                 end = 0  # expected end
                 old_pos = self._applyInversion(self.position.value)
-                moving_axes = set()
+                moving_axes = {self._axis_map[an] for an in pos}
+                # enable sensor power for the axes whose SA_CTL_PKEY_SENSOR_POWER_MODE
+                # is set to disabled in the param_file before moving
+                self._enable_sensor_power(moving_axes)
                 for an, v in pos.items():
                     channel = self._axis_map[an]
-                    moving_axes.add(channel)
                     self.Move(v, channel, SA_CTLDLL.SA_CTL_MOVE_MODE_CL_ABSOLUTE)
                     d = abs(v - old_pos[an])
                     dur = driver.estimateMoveDuration(d,
@@ -3554,6 +3602,9 @@ class MCS2(model.Actuator):
             except Exception as ex:
                 logging.error("Move to %s failed: %s", pos, ex)
                 raise
+            finally:
+                # disable sensor power for the axes enabled by _enable_sensor_power
+                self._disable_sensor_power(moving_axes)
 
         logging.debug("Absolute move successfully completed")
 
@@ -3616,6 +3667,8 @@ class MCS2(model.Actuator):
             raise
         finally:
             self._updatePosition()  # update (all axes) with final position
+            # disable sensor power for the axes enabled by _enable_sensor_power
+            self._disable_sensor_power(set(axes))
 
     def _cancelCurrentMove(self, future):
         """
@@ -3693,16 +3746,18 @@ class MCS2(model.Actuator):
         # referenced (anymore)
         with future._moving_lock:
             try:
-                moving_channels = set()
+                moving_axes = {self._axis_map[a] for a in axes}
+                # enable sensor power for the axes whose SA_CTL_PKEY_SENSOR_POWER_MODE
+                # is set to disabled in the param_file before referencing
+                self._enable_sensor_power(moving_axes)
                 for a in axes:
                     if future._must_stop.is_set():
                         raise CancelledError()
                     channel = self._axis_map[a]
-                    moving_channels.add(channel)
                     self.referenced._value[a] = False
                     self.Reference(channel)  # search for the negative limit signal to set an origin
 
-                self._waitEndMove(future, moving_channels, time.time() + 100)  # block until it's over
+                self._waitEndMove(future, moving_axes, time.time() + 100)  # block until it's over
 
                 for a in axes:
                     self.referenced._value[a] = self._is_channel_referenced(self._axis_map[a])
@@ -3740,6 +3795,8 @@ class MCS2(model.Actuator):
                 # We only notify after updating the position so that when a listener
                 # receives updates both values are already updated.
                 self._updatePosition()  # all the referenced axes should be back to 0
+                # disable sensor power for the axes enabled by _enable_sensor_power
+                self._disable_sensor_power(moving_axes)
                 # read-only so manually notify
                 self.referenced.notify(self.referenced.value)
 
@@ -3779,6 +3836,9 @@ class MCS2(model.Actuator):
                     raise CancelledError()
 
                 channel = self._axis_map[a]
+                # enable sensor power for the axes whose SA_CTL_PKEY_SENSOR_POWER_MODE
+                # is set to disabled in the param_file before referencing
+                self._enable_sensor_power({channel})
                 self.referenced._value[a] = False
                 logging.info("Referencing %s axis %s (attempt %d)", reference_lbl, a, attempt + 1)
                 self.Reference(channel)
