@@ -27,6 +27,7 @@ refer to the SmarAct readme for Linux installation instructions.
 import copy
 import logging
 import math
+import numbers
 import os
 import threading
 import time
@@ -2921,7 +2922,7 @@ class SA_CTLError(IOError):
 class MCS2(model.Actuator):
 
     def __init__(self, name, role, locator, ref_on_init=False, refproc=REFPROC_STD, axes=None, speed=1e-3, accel=1e-3,
-                 hold_time=float('inf'), pos_deactive_after_ref=False, param_file=None, **kwargs):
+                 hold_time=float('inf'), pos_deactive_after_ref=False, param_file=None, backlash=None, **kwargs):
         """
         A driver for a SmarAct MCS2 Actuator.
         This driver uses a DLL provided by SmarAct which connects via
@@ -2972,6 +2973,9 @@ class MCS2(model.Actuator):
             If provided, properties are applied to the controller after connection but before referencing. If a sensor
             power property is disabled (SA_CTL_SENSOR_POWER_MODE_DISABLED) via this file, the driver will automatically
             enable/disable sensor power during movements and calibration.
+        backlash (dict str -> float): for axes with gravity-loading or backlash, the
+            extra distance to overshoot before a final corrective move in the safe
+            direction.
         """
         if not axes:
             raise ValueError("Needs at least 1 axis.")
@@ -3007,6 +3011,24 @@ class MCS2(model.Actuator):
             ad = model.Axis(canAbs=True, unit=axis_unit, range=axis_range)
             axes_def[axis_name] = ad
             self._axis_map[axis_name] = axis_channel
+
+        self._backlash = backlash or {}
+        for a, v in self._backlash.items():
+            if not isinstance(a, str):
+                raise ValueError("Backlash axis name must be a string but got %s" % (a,))
+            if a not in axes_def:
+                raise ValueError("Backlash axis %s is not a valid axis" % (a,))
+            if not isinstance(v, numbers.Real):
+                raise ValueError("Backlash value of %s must be a number but got %s" % (a, v))
+            rng = axes_def[a].range
+            if rng[1] - rng[0] < abs(v):
+                raise ValueError("Backlash value %s is bigger than the range %s" % (v, rng))
+            if v > 0:
+                axes_def[a].range = (rng[0] + v, rng[1])
+            else:
+                axes_def[a].range = (rng[0], rng[1] + v)
+        self._shifted = {a: False for a in self._backlash.keys()}
+        self._shifted_lock = threading.Lock()
 
         # Connect to the device
         logging.debug("Connecting to locator %s", locator)
@@ -3057,6 +3079,7 @@ class MCS2(model.Actuator):
             logging.debug("Sensor power disabled channels: %s", self._sensor_power_disabled_channels)
 
         # set specific axis properties
+        self._hold_time = hold_time
         for name, channel in self._axis_map.items():
             self._set_speed(channel, speed)
             self._set_accel(channel, accel)
@@ -3070,6 +3093,7 @@ class MCS2(model.Actuator):
             logging.log(log_lvl, "Current referencing mode = {}.".format(ref_mode))
 
         self.position = model.VigilantAttribute({}, readonly=True)
+        self._backlash = self._applyInversion(self._backlash)
 
         try:
             self._updatePosition()
@@ -3390,6 +3414,25 @@ class MCS2(model.Actuator):
         """
         return bool(self._get_channel_state(channel) & SA_CTLDLL.SA_CTL_CH_STATE_BIT_ACTIVELY_MOVING)
 
+    def _is_channel_stopped(self, channel):
+        """
+        channel (int)
+        return (bool): True if the axis is neither actively moving nor holding
+        its position in closed-loop (ie, fully stopped, not just between moves)
+        """
+        state = self._get_channel_state(channel)
+        active_mask = (SA_CTLDLL.SA_CTL_CH_STATE_BIT_ACTIVELY_MOVING |
+                       SA_CTLDLL.SA_CTL_CH_STATE_BIT_CLOSED_LOOP_ACTIVE)
+        return (state & active_mask) == 0
+
+    def _is_channel_holding(self, channel):
+        """
+        channel (int)
+        return (bool): True if the axis is holding its position in closed-loop
+        """
+        state = self._get_channel_state(channel)
+        return bool(state & SA_CTLDLL.SA_CTL_CH_STATE_BIT_CLOSED_LOOP_ACTIVE)
+
     def _get_position(self, channel):
         """
         Get the position on a specified channel
@@ -3547,11 +3590,83 @@ class MCS2(model.Actuator):
         f = self._executor.submitf(f, self._doMoveRel, f, shift)
         return f
 
+    def _compute_backlash_pos(self, pos):
+        """
+        pos (dict str -> float): hw-frame (already inverted) absolute target position
+        return (dict, set): hw-frame intermediate (overshoot) position to reach
+        first, and the set of axis names needing it
+        """
+        cur_pos = self._applyInversion(self.position.value)
+        sub_pos = {}
+        overshoot = set()
+        with self._shifted_lock:
+            for a, v in pos.items():
+                bl = self._backlash.get(a)
+                if bl is None:
+                    continue
+                shift = v - cur_pos[a]
+                if shift * bl >= 0:
+                    # move already ends in the safe direction, nothing to do
+                    self._shifted[a] = False
+                    continue
+                if self._shifted[a]:
+                    # already sitting in the overshoot state from a previous move
+                    continue
+                sub_pos[a] = v - bl
+                overshoot.add(a)
+                self._shifted[a] = True
+        return sub_pos, overshoot
+
+    def _compute_backlash_shift(self, shift):
+        """
+        shift (dict str -> float): hw-frame relative shift
+        return (dict, set): hw-frame overshoot shift for only the axes that need it,
+        and the set of those axis names
+        """
+        sub_shift = {}
+        overshoot = set()
+        with self._shifted_lock:
+            for a, v in shift.items():
+                bl = self._backlash.get(a)
+                if bl is None:
+                    continue
+                if v * bl >= 0:
+                    # move already ends in the safe direction, nothing to do
+                    self._shifted[a] = False
+                    continue
+                if self._shifted[a]:
+                    # already sitting in the overshoot state from a previous move
+                    continue
+                sub_shift[a] = v - bl
+                overshoot.add(a)
+                self._shifted[a] = True
+        return sub_shift, overshoot
+
     def _doMoveRel(self, future, pos):
+        """
+        pos (dict str -> float): hw-frame relative shift
+        """
+        sub_shift, overshoot = self._compute_backlash_shift(pos)
+        if overshoot:
+            logging.debug("Anti-backlash overshoot move on axes %s via %s", overshoot, sub_shift)
+            try:
+                self._doMoveRelHw(future, sub_shift, overshoot=True)
+            finally:
+                with self._shifted_lock:
+                    for a in overshoot:
+                        self._shifted[a] = False
+        # remaining move: full shift for axes untouched in leg 1, backlash correction for overshoot ones
+        remaining = dict(pos)
+        for a in overshoot:
+            remaining[a] = self._backlash[a]
+        self._doMoveRelHw(future, remaining)
+
+    def _doMoveRelHw(self, future, pos, overshoot=False):
         """
         Blocking and cancellable relative move
         future (Future): the future it handles
         _pos (dict str -> float): axis name -> relative target position
+        overshoot (bool): whether this move is an anti-backlash overshoot move
         raise:
             ValueError: if the target position is
             TMCLError: if the controller reported an error
@@ -3575,7 +3690,10 @@ class MCS2(model.Actuator):
 
                     end = max(time.time() + dur, end)
 
-                self._waitEndMove(future, moving_axes, end)
+                if overshoot:
+                    self._waitEndMoveOvershoot(future, moving_axes, end)
+                else:
+                    self._waitEndMove(future, moving_axes, end)
             except Exception as ex:
                 logging.error("Move by %s failed: %s", pos, ex)
                 raise
@@ -3588,9 +3706,25 @@ class MCS2(model.Actuator):
 
     def _doMoveAbs(self, future, pos):
         """
+        pos (dict str -> float): hw-frame absolute target position
+        """
+        sub_pos, overshoot = self._compute_backlash_pos(pos)
+        if overshoot:
+            logging.debug("Anti-backlash overshoot move on axes %s via %s", overshoot, sub_pos)
+            try:
+                self._doMoveAbsHw(future, sub_pos, overshoot=True)
+            finally:
+                with self._shifted_lock:
+                    for a in overshoot:
+                        self._shifted[a] = False
+        self._doMoveAbsHw(future, pos)
+
+    def _doMoveAbsHw(self, future, pos, overshoot=False):
+        """
         Blocking and cancellable absolute move
         future (Future): the future it handles
         _pos (dict str -> float): axis name -> absolute target position
+        overshoot (bool): whether this move is an anti-backlash overshoot move
         raise:
             TMCLError: if the controller reported an error
             CancelledError: if cancelled before the end of the move
@@ -3612,7 +3746,10 @@ class MCS2(model.Actuator):
                                                       self.speed.value[an],
                                                       self._accel[an])
                     end = max(time.time() + dur, end)
-                self._waitEndMove(future, moving_axes, end)
+                if overshoot:
+                    self._waitEndMoveOvershoot(future, moving_axes, end)
+                else:
+                    self._waitEndMove(future, moving_axes, end)
             except Exception as ex:
                 logging.error("Move to %s failed: %s", pos, ex)
                 raise
@@ -3622,6 +3759,49 @@ class MCS2(model.Actuator):
                     self._disable_sensor_power(moving_axis)
 
         logging.debug("Absolute move successfully completed")
+
+    def _waitEndMoveOvershoot(self, future, axes, end):
+        """
+        Wait until the expected duration of an anti-backlash overshoot move has
+        elapsed, then explicitly stop the axes. Unlike _waitEndMove, taking the
+        full expected duration is normal here (the axis may keep servoing/holding
+        against gravity at the overshoot position), so no TimeoutError is raised.
+        future (Future): the future it handles
+        axes (set of int): the axes IDs to stop once the overshoot is done
+        end (float): expected end time
+        raise:
+            CancelledError: if cancelled before the end of the move
+        """
+        moving_axes = set(axes)
+        end += self._hold_time if math.isfinite(self._hold_time) else 0
+        try:
+            while not future._must_stop.is_set():
+                for a in moving_axes.copy():
+                    if not self._is_channel_moving(a) and self._is_channel_holding(a):
+                        moving_axes.discard(a)
+                        self._check_channel_error(a)
+
+                if not moving_axes:
+                    break
+
+                now = time.time()
+                if now > end:
+                    for a in moving_axes:
+                        logging.debug("Channel %s state 0x%x", a, self._get_channel_state(a))
+                    break
+                left = end - now
+                sleept = max(0.001, min(left / 2, 0.1))
+                future._must_stop.wait(sleept)
+            else:
+                logging.debug("Overshoot move of axes %s cancelled before the end", axes)
+                future._was_stopped = True
+                raise CancelledError()
+        finally:
+            # release the hold on, possibly still unsettled overshoot pose
+            for a in axes:
+                self.Stop(a)
+            self._updatePosition()
+            self._disable_sensor_power(set(axes))
 
     def _waitEndMove(self, future, axes, end):
         """
