@@ -21,6 +21,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
 import collections
+import sys
 from concurrent import futures
 from concurrent.futures._base import CANCELLED, CANCELLED_AND_NOTIFIED, FINISHED, \
     PENDING, RUNNING, CancelledError
@@ -53,7 +54,11 @@ class CancellableThreadPoolExecutor(ThreadPoolExecutor):
             if self._shutdown:
                 raise RuntimeError('cannot schedule new futures after shutdown')
 
-            w = _WorkItem(f, fn, args, kwargs)
+            if sys.version_info < (3, 14):
+                w = _WorkItem(f, fn, args, kwargs)
+            else:
+                # _WorkItem constructor changed in Python 3.14, so we need to use the new signature
+                w = _WorkItem(f, (fn, args, kwargs))
 
             self._work_queue.put(w)
             self._adjust_thread_count()
@@ -179,7 +184,11 @@ class ParallelThreadPoolExecutor(ThreadPoolExecutor):
             self._queue.append(f)
             f.add_done_callback(self._on_done)
 
-            w = _WorkItem(f, fn, args, kwargs)
+            if sys.version_info < (3, 14):
+                w = _WorkItem(f, fn, args, kwargs)
+            else:
+                # _WorkItem constructor changed in Python 3.14, so we need to use the new signature
+                w = _WorkItem(f, (fn, args, kwargs))
             with self._set_remove:
                 self._waiting_work.appendleft((w, f, dependences))
             self._schedule_work()
