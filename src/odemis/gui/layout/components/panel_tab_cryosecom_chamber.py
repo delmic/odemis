@@ -35,6 +35,7 @@ from odemis.gui.layout.constants.strings import (
     LABEL_MILLING,
     LABEL_SEM_IMAGING,
     LABEL_STEP_SIZE,
+    LABEL_TRENCHING,
     TOOLTIP_OPEN_LOG_PANEL,
 )
 from odemis.gui.layout.constants.themes import Theme
@@ -286,8 +287,9 @@ class PnlTabCryosecomChamber(wx.Panel):
                 (1, 1),
             ),
             ("btn_switch_fib_imaging", "FIB IMAGING", "ico_imaging", (2, 0)),
-            ("btn_switch_grid1", "GRID 1", "ico_meteorgrid", (3, 0)),
-            ("btn_switch_grid2", "GRID 2", "ico_meteorgrid", (3, 1)),
+            ("btn_switch_trenching", LABEL_TRENCHING, "ico_trenching", (3, 0)),
+            ("btn_switch_grid1", "GRID 1", "ico_meteorgrid", (4, 0)),
+            ("btn_switch_grid2", "GRID 2", "ico_meteorgrid", (4, 1)),
         )
         for attribute, label, icon_name, position in specs:
             button = create_progress_button(

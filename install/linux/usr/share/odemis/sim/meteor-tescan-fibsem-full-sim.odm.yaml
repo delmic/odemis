@@ -101,7 +101,7 @@
         # XYZ ranges for SEM & METEOR (FM imaging range should perfectly match the POS_ACTIVE_RANGE metadata of the "Meteor Stage" component!),
         # Z range is based on centering a sample at the FIB/SEM coincident point at a Z coordinate of ~ 30 mm:
         SEM_IMAGING_RANGE: {
-            "x": [-13.e-3, 7.e-3],
+            "x": [-13.e-3, 14.e-3],
             "y": [-25.e-3, 20.e-3],
             "z": [28.e-3, 38.e-3]  # NOTE: increased max z, since grid 1 center was outside
         },
