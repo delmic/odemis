@@ -259,11 +259,66 @@ class TestCancellableFuture(unittest.TestCase):
 
         self.assertEqual(self.cancelled, 0)
 
+    def test_pause_resume(self):
+        """Test pausing and resuming a future blocks the task for the expected duration."""
+        future = CancellableFuture()
+        future.can_pause = True
+        executor = CancellableThreadPoolExecutor(max_workers=2)
+        executor.submitf(future, self.pausing_task, future)
+
+        # Let one iteration run before pausing
+        time.sleep(0.15)
+        paused = future.pause()
+        self.assertTrue(paused)
+        self.assertFalse(future.done())
+
+        # Stay paused for ~0.5s; the task must still be blocked
+        time.sleep(0.5)
+        self.assertFalse(future.done())
+
+        future.resume()
+
+        waiting_times = future.result(timeout=5)
+        executor.shutdown(wait=False)
+        self.assertEqual(len(waiting_times), 10)
+        # Exactly one wait_if_paused call should have blocked for ~0.5s
+        long_waits = [t for t in waiting_times if t > 0.1]
+        self.assertEqual(len(long_waits), 1)
+        self.assertAlmostEqual(long_waits[0], 0.5, delta=0.15)
+
+    def test_pause_resume_not_pausable(self):
+        """Test that pause returns False when can_pause is False."""
+        future = CancellableFuture()
+        self.assertFalse(future.pause())
+
+    def test_pause_done_future(self):
+        """Test that pausing an already finished future returns False."""
+        future = CancellableFuture()
+        future.can_pause = True
+        future.set_running_or_notify_cancel()
+        future.set_result(None)
+        self.assertFalse(future.pause())
+
+    def test_pause_cancelled_future(self):
+        """Test that pausing a cancelled future returns False."""
+        future = CancellableFuture()
+        future.can_pause = True
+        future.cancel()
+        self.assertFalse(future.pause())
+
     def cancel_task(self, future):
         """Task canceller"""
         self.cancelled += 1
         return True
 
+    def pausing_task(self, future):
+        """Task that pauses and resumes."""
+        waiting_times = []
+        for _ in range(10):
+            time.sleep(0.1)
+            wait_time = future.wait_if_paused()
+            waiting_times.append(wait_time)
+        return waiting_times
 
 class TestProgressiveFuture(unittest.TestCase):
     """Test progressive future."""
@@ -394,6 +449,53 @@ class TestProgressiveFuture(unittest.TestCase):
         self.assertAlmostEqual(elapsed_f, 0.1, delta=0.05)
         # after done, remaining time is always 0
         self.assertEqual(remaining_f, 0)
+
+    def test_pause_resume_progress(self):
+        """Test that elapsed and remaining time are frozen while paused and resume correctly."""
+        executor = CancellableThreadPoolExecutor(max_workers=1)
+        future = ProgressiveFuture(remaining_time=30)
+        future.can_pause = True
+
+        executor.submitf(future, self.long_pausing_task, future)
+
+        # Let the task run briefly before pausing; pause() blocks until the task
+        # actually reaches wait_if_paused(), so the exact elapsed value varies.
+        time.sleep(0.05)
+        paused = future.pause()
+        self.assertTrue(paused)
+
+        elapsed_at_pause, remaining_at_pause = future.get_progress()
+        # Some time must have elapsed, remaining must have decreased accordingly
+        self.assertGreater(elapsed_at_pause, 0.0)
+        self.assertAlmostEqual(elapsed_at_pause + remaining_at_pause, 30.0, delta=0.1)
+
+        # While paused for 0.5s, progress must not advance
+        time.sleep(0.5)
+        elapsed_during_pause, remaining_during_pause = future.get_progress()
+        self.assertAlmostEqual(elapsed_during_pause, elapsed_at_pause, delta=0.05)
+        self.assertAlmostEqual(remaining_during_pause, remaining_at_pause, delta=0.05)
+
+        future.resume()
+
+        # After resuming, allow a short time for the task to re-anchor
+        time.sleep(0.2)
+        elapsed_after_resume, remaining_after_resume = future.get_progress()
+        # Elapsed must have grown beyond the frozen value, but not include pause time
+        self.assertAlmostEqual(elapsed_after_resume, elapsed_at_pause + 0.2, delta=0.05)
+        # Remaining decreases by the same amount as elapsed increases
+        self.assertAlmostEqual(elapsed_after_resume + remaining_after_resume, 30.0, delta=0.05)
+        future.task_canceller = self.cancel_task
+        self.cancelled = 0
+        self.addCleanup(executor.shutdown)
+        future.cancel()
+
+    def long_pausing_task(self, future):
+        """Long running task that supports pause via wait_if_paused."""
+        for _ in range(30):
+            if future.cancelled():
+                return
+            time.sleep(0.1)
+            future.wait_if_paused()
 
     def cancel_task(self, future):
         """Task canceller"""
@@ -557,6 +659,68 @@ class TestProgressiveBatchFuture(unittest.TestCase):
         self.assertEqual(f2.result(), 2)
 
         self.assertEqual(self.cancelled, 0)
+
+    def test_pause_resume(self):
+        """Test that pausing a ProgressiveBatchFuture freezes its progress tracking.
+
+        A coordinator thread periodically calls wait_if_paused() on the batch future,
+        simulating a batch-level orchestrator that respects pause requests between
+        sub-future submissions.
+        """
+        # Notes:
+        # test_pause_resume in TestProgressiveBatchFuture:
+        #
+        # * Creates a ProgressiveBatchFuture with one 30-second sub-future
+        # * Starts a coordinator thread that loops calling batch_future.wait_if_paused()
+        #       this simulates a real orchestrator that checks for pause between sub-future submissions (the
+        #       coordinator is what allows pause() to actually block the batch)
+        # * Calls batch_future.pause() after 0.1s and verifies elapsed + remaining ≈ 30
+        # * Waits 0.5s and asserts progress is frozen (elapsed/remaining unchanged)
+        # * Calls resume() and asserts elapsed has grown but elapsed + remaining still holds at 30
+        self.cancelled = 0
+        f1 = ProgressiveFuture(remaining_time=30)
+        f1.task_canceller = self.cancel_task
+        batch_future = ProgressiveBatchFuture({f1: 30})
+        batch_future.can_pause = True
+
+        f1.set_running_or_notify_cancel()
+
+        # Coordinator: periodically checks whether the batch is paused
+        coordinator_stop = threading.Event()
+        def coordinator():
+            while not coordinator_stop.is_set():
+                time.sleep(0.05)
+                batch_future.wait_if_paused()
+
+        t = threading.Thread(target=coordinator, daemon=True)
+        t.start()
+
+        # Let some time elapse so elapsed > 0
+        time.sleep(0.1)
+        paused = batch_future.pause()
+        self.assertTrue(paused)
+
+        elapsed_at_pause, remaining_at_pause = batch_future.get_progress()
+        self.assertGreater(elapsed_at_pause, 0.0)
+        self.assertAlmostEqual(elapsed_at_pause + remaining_at_pause, 30.0, delta=0.1)
+
+        # Progress must be frozen for the full pause duration
+        time.sleep(1)
+        elapsed_during, remaining_during = batch_future.get_progress()
+        self.assertAlmostEqual(elapsed_during, elapsed_at_pause, delta=0.05)
+        self.assertAlmostEqual(remaining_during, remaining_at_pause, delta=0.05)
+
+        batch_future.resume()
+
+        # After resuming, elapsed must grow beyond the frozen value
+        time.sleep(0.1)
+        elapsed_after, remaining_after = batch_future.get_progress()
+        self.assertGreater(elapsed_after, elapsed_at_pause)
+        self.assertAlmostEqual(elapsed_after + remaining_after, 30.0, delta=0.1)
+
+        coordinator_stop.set()
+        t.join(timeout=1)
+        f1.cancel()
 
     def cancel_task(self, future):
         """Task canceller. Called whenever a sub-future is cancelled."""

@@ -31,6 +31,8 @@ from odemis.util import units
 import time
 import wx
 
+TIMER_INTERVAL_MS = 250  # Refresh progress UI every 250 ms (4 updates per second).
+
 
 class VigilantAttributeConnector(object):
     """ This class connects a vigilant attribute with a wxPython control, making sure that the
@@ -287,7 +289,7 @@ class ProgressiveFutureConnector(object):
 
         # a repeating timer, always called in the GUI thread
         self._timer = wx.PyTimer(self._update_progress)
-        self._timer.Start(250)  # 4 Hz (250 milliseconds)
+        self._timer.Start(TIMER_INTERVAL_MS)
 
         # Set the progress bar to 0
         bar.Range = PROGRESS_RANGE
@@ -326,8 +328,15 @@ class ProgressiveFutureConnector(object):
         self._bar = None
         self._label = None
 
-    def _update_progress(self):
-        """ Update the progression controls """
+    def _update_progress(self) -> None:
+        """
+        Update the progress bar and label with the current progress of the future.
+        """
+        if self._future.is_paused:
+            # Nothing new to show while paused: get_progress() would return the
+            # same frozen values anyway, so skip the work.
+            return
+
         now = time.time()
         elapsed, remaining = self._future.get_progress()
 
