@@ -54,10 +54,27 @@ class GridColumns(Enum):
     Type = 0  # Column for "type"
     X = 1  # Column for "x"
     Y = 2  # Column for "y"
-    Z = 3  # Column for "z"
+    Z_Slice = 3  # Column for "z slice"
     Index = 4  # Column for "index"
 
 GRID_PRECISION = 2  # Number of decimal places to display in the grid
+
+# Relative width of each grid column, used to redistribute the available space when columns are
+# shown/hidden. Index and Type only need to fit a short number/label, so they are of different width
+# than the other (coordinate) columns.
+GRID_COLUMN_WIDTH_WEIGHTS = {
+    GridColumns.Index: 0.5,
+    GridColumns.Type: 0.8,
+}
+DEFAULT_GRID_COLUMN_WIDTH_WEIGHT = 1.0
+
+# Horizontal alignment of each grid column: Index and Type are short, and are centred, while the
+# numeric coordinate columns are right-aligned for easier reading/comparison of the digits.
+GRID_COLUMN_ALIGNMENTS = {
+    GridColumns.Index: wx.ALIGN_CENTRE,
+    GridColumns.Type: wx.ALIGN_CENTRE,
+}
+DEFAULT_GRID_COLUMN_ALIGNMENT = wx.ALIGN_RIGHT
 
 # Target types whose fiducial-index colour should be shown in the grid and the viewports, so that
 # a fiducial pair (FM + FIB, sharing the same index) can be visually matched across both.
@@ -253,17 +270,20 @@ class CorrelationPointsController:
         self.grid.DisableDragColSize()
         # Allow selecting (and later deleting) multiple whole rows at once, e.g. via shift-click
         self.grid.SetSelectionMode(wx.grid.Grid.GridSelectRows)
-        self.grid.SetColLabelValue(GridColumns.Type.value, GridColumns.Type.name)
-        self.grid.SetColLabelValue(GridColumns.X.value, GridColumns.X.name)
-        self.grid.SetColLabelValue(GridColumns.Y.value, GridColumns.Y.name)
-        self.grid.SetColLabelValue(GridColumns.Z.value, GridColumns.Z.name)
-        self.grid.SetColLabelValue(GridColumns.Index.value, GridColumns.Index.name)
+        for col in GridColumns:
+            self.grid.SetColLabelValue(col.value, col.name.replace("_", " "))
+            attr = wx.grid.GridCellAttr()
+            attr.SetAlignment(GRID_COLUMN_ALIGNMENTS.get(col, DEFAULT_GRID_COLUMN_ALIGNMENT), wx.ALIGN_CENTRE)
+            self.grid.SetColAttr(col.value, attr)
         self.grid.Bind(wx.EVT_KEY_DOWN, self._on_key_down_grid)
         self.grid.EnableEditing(True)
 
         # Hide the z-column for the FIB-view FM workflow, since we only perform 2d correlation.
         if self.at_fib_view_fm.value:
-            self.hide_grid_column(GridColumns.Z.value)
+            self.grid.HideCol(GridColumns.Z_Slice.value)
+        # Deferred (via @call_in_wx_main) so the grid has been laid out and reports its real
+        # size, instead of a placeholder size from before the window/sizers were realized.
+        self._resize_grid_columns()
 
         # Parameters to keep track of the latest changes and process the correlation result with the latest change
         self.correlation_txt = self._panel.txt_correlation_rms
@@ -322,13 +342,13 @@ class CorrelationPointsController:
             self.xyz_targeting_btn.SetToolTip("Refine the position of the currently selected FM fiducial")
 
     @call_in_wx_main
-    def hide_grid_column(self, col_idx: int) -> None:
+    def _resize_grid_columns(self) -> None:
         """
-        Hides the provided grid column and redistributes the remaining column widths to fill the available space.
-        :param col_idx: Column index to hide
+        Redistributes the widths of the currently visible grid columns to fill the available
+        space, weighted by GRID_COLUMN_WIDTH_WEIGHTS (e.g. Index and Type are narrower, since
+        they only need to fit a short number/label). Deferred to the main loop (via
+        @call_in_wx_main), so the grid has already been laid out and reports its real size.
         """
-        # Hide the column
-        self.grid.HideCol(col_idx)
         # Gather only the columns that are currently visible
         visible_cols = [c for c in range(self.grid.GetNumberCols()) if self.grid.IsColShown(c)]
 
@@ -338,11 +358,13 @@ class CorrelationPointsController:
         # Determine usable display width
         grid_width, _ = self.grid.GetClientSize()
         usable_width = grid_width - self.grid.GetRowLabelSize()
-        # Divide width evenly (using integer division to avoid fractional pixels)
-        even_width = usable_width // len(visible_cols)
-        # Update sizes
-        for c in visible_cols:
-            self.grid.SetColSize(c, even_width)
+
+        weights = [GRID_COLUMN_WIDTH_WEIGHTS.get(GridColumns(c), DEFAULT_GRID_COLUMN_WIDTH_WEIGHT)
+                  for c in visible_cols]
+        unit_width = usable_width / sum(weights)
+        # Update sizes (integer division to avoid fractional pixels)
+        for c, weight in zip(visible_cols, weights):
+            self.grid.SetColSize(c, int(unit_width * weight))
 
         self.grid.ForceRefresh()
 
@@ -808,16 +830,16 @@ class CorrelationPointsController:
 
     def _on_cell_changing(self, event) -> None:
         """Update the target based on the cell change."""
-        col = event.GetCol()
+        column_index = event.GetCol()
         new_value = event.GetString()
-        col_name = self.grid.GetColLabelValue(col)
+        column = GridColumns(column_index)
         count_row_index = event.GetRow()
 
-        if col_name == GridColumns.Type.name:
+        if column == GridColumns.Type:
             wx.MessageBox("Type cannot be changed", "Invalid Input", wx.OK | wx.ICON_ERROR)
             event.Veto()
             return
-        elif col_name == GridColumns.Index.name:
+        elif column == GridColumns.Index:
             try:
                 current_name = self._tab_data_model.main.currentTarget.value.name.value
                 current_index = self._tab_data_model.main.currentTarget.value.index.value
@@ -852,11 +874,11 @@ class CorrelationPointsController:
                 event.Veto()  # Prevent the change
                 return
 
-        elif col_name in [GridColumns.X.name, GridColumns.Y.name, GridColumns.Z.name]:
+        elif column in [GridColumns.X, GridColumns.Y, GridColumns.Z_Slice]:
             x = float(self.grid.GetCellValue(count_row_index, GridColumns.X.value))
             y = float(self.grid.GetCellValue(count_row_index, GridColumns.Y.value))
             try:
-                if col_name == GridColumns.X.name:
+                if column == GridColumns.X:
                     if self._tab_data_model.main.currentTarget.value.type.value == TargetType.FibFiducial:
                         p_coord = self.correlation_target.fib_stream.getPhysicalCoordinates((float(new_value),
                                                                                              y))
@@ -865,14 +887,14 @@ class CorrelationPointsController:
                                                                                                 y))
                     self._tab_data_model.main.currentTarget.value.coordinates.value[0] = p_coord[0]
                     self._tab_data_model.main.currentTarget.value.coordinates.value[1] = p_coord[1]
-                if col_name == GridColumns.Y.name:
+                if column == GridColumns.Y:
                     if self._tab_data_model.main.currentTarget.value.type.value == TargetType.FibFiducial:
                         p_coord = self.correlation_target.fib_stream.getPhysicalCoordinates((x, float(new_value)))
                     else:
                         p_coord = self.correlation_target.fm_streams[0].getPhysicalCoordinates((x, float(new_value)))
                     self._tab_data_model.main.currentTarget.value.coordinates.value[0] = p_coord[0]
                     self._tab_data_model.main.currentTarget.value.coordinates.value[1] = p_coord[1]
-                elif col_name == GridColumns.Z.name and (
+                elif column == GridColumns.Z_Slice and (
                         self._tab_data_model.main.currentTarget.value.type.value != TargetType.FibFiducial):
                     self._tab_data_model.main.currentTarget.value.coordinates.value[2] = \
                     get_physical_3d_coordinates(self.correlation_target.fm_streams[0], (x, y, float(new_value)))[2]
@@ -889,9 +911,9 @@ class CorrelationPointsController:
         for vp in self._viewports:
             vp.canvas.request_drawing_update()
         # If the index column is modified, reorder the grid based on the index column
-        col = event.GetCol()
-        col_name = self.grid.GetColLabelValue(col)
-        if col_name == GridColumns.Index.name:
+        column_index = event.GetCol()
+        column = GridColumns(column_index)
+        if column == GridColumns.Index:
             self._reorder_grid()
             self._apply_type_colours()
 
@@ -971,9 +993,9 @@ class CorrelationPointsController:
                 else:
                     pixel_coords = get_pixel_3d_coordinates(self.correlation_target.fm_streams[0], target.coordinates.value)
                     if (self.grid.GetCellValue(row,
-                                               GridColumns.Z.value)) != f"{pixel_coords[2]:.{GRID_PRECISION}f}":
+                                               GridColumns.Z_Slice.value)) != f"{pixel_coords[2]:.{GRID_PRECISION}f}":
                         temp_check = True
-                    self.grid.SetCellValue(row, GridColumns.Z.value, f"{pixel_coords[2]:.{GRID_PRECISION}f}")
+                    self.grid.SetCellValue(row, GridColumns.Z_Slice.value, f"{pixel_coords[2]:.{GRID_PRECISION}f}")
                 # Get cell value
                 if (self.grid.GetCellValue(row, GridColumns.X.value) != f"{pixel_coords[0]:.{GRID_PRECISION}f}" or
                         self.grid.GetCellValue(row, GridColumns.Y.value) != f"{pixel_coords[1]:.{GRID_PRECISION}f}"):
@@ -1014,10 +1036,10 @@ class CorrelationPointsController:
                 if target.type.value == TargetType.FibFiducial:
                     pixel_coords = self.correlation_target.fib_stream.getPixelCoordinates(
                         (target.coordinates.value[0], target.coordinates.value[1]), check_bbox=False)
-                    self.grid.SetCellValue(current_row_count, GridColumns.Z.value, "")
+                    self.grid.SetCellValue(current_row_count, GridColumns.Z_Slice.value, "")
                 else:
                     pixel_coords = get_pixel_3d_coordinates(self.correlation_target.fm_streams[0], target.coordinates.value)
-                    self.grid.SetCellValue(current_row_count, GridColumns.Z.value,
+                    self.grid.SetCellValue(current_row_count, GridColumns.Z_Slice.value,
                                            f"{pixel_coords[2]:.{GRID_PRECISION}f}")
                 # Set x and y position in the grid
                 self.grid.SetCellValue(current_row_count, GridColumns.X.value,
