@@ -593,7 +593,7 @@ class CorrelationPointsController:
                      f"Correlation RMS Deviation : {readable_str(rms_m, unit='m', sig=3)}")
 
         # Display the output in the relevant views
-        self._viewports[1].canvas.Refresh()
+        wx.CallAfter(self._viewports[1].canvas.request_drawing_update)
         self.is_processing = False  # Mark that processing is complete
 
     def stop(self):
