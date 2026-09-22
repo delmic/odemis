@@ -95,13 +95,17 @@ REFINE_SEARCH_RANGE = 2.5e-6  # m, search range for fiducial refinement
 MILLING_ANGLE_TOLERANCE = math.radians(0.1)  # Now 0.1 degree, but this depends on stage accuracy, so might need to update this later.
 
 
-def get_pixel_3d_coordinates(stream: FluoStream, p_pos: Tuple[float, float, float], check_bbox: bool = False) \
+def get_pixel_3d_coordinates(stream: FluoStream, p_pos: Tuple[float, float, float], check_bbox: bool = False,
+                             use_xy_pixel_size_for_z: bool = False) \
         -> Optional[Tuple[float, float, float]]:
     """
     Translate 3D physical coordinates into 3D pixel coordinates.
     :param stream: Stream which is used as reference for coordinate conversion
     :param p_pos: the position in physical coordinates (m). x and y are the sample position, z is the focus position
     :param check_bbox: if True, the function will return None if the position is outside of the image
+    :param use_xy_pixel_size_for_z: if True, the z pixel size (x/y pixel size, assumed isotropic)
+        is used instead of the actual z/slice pixel size, to compute z. This mimics how some other
+        software (e.g. 3DCT) computes it, and is only meant for comparison/debugging purposes.
     :returns: (x, y, z) in pixel coordinates or None if it's outside of the image. No boundary check is done
     """
     pixel_pos = stream.getPixelCoordinates(p_pos[:2], check_bbox=check_bbox)
@@ -118,17 +122,22 @@ def get_pixel_3d_coordinates(stream: FluoStream, p_pos: Tuple[float, float, floa
 
     tpos = md.get(model.MD_POS, (0, 0, 0))
     tpos_z = tpos[2] if len(tpos) >= 3 else 0.0
-    z = (p_pos[2] - tpos_z) / pxs[2]
+    z_pxs = pxs[0] if use_xy_pixel_size_for_z else pxs[2]
+    z = (p_pos[2] - tpos_z) / z_pxs
     pixel_pos = (pixel_pos[0], pixel_pos[1], z)
 
     return pixel_pos
 
-def get_physical_3d_coordinates(stream: FluoStream, pixel_pos: Tuple[float, float, float])\
+def get_physical_3d_coordinates(stream: FluoStream, pixel_pos: Tuple[float, float, float],
+                                use_xy_pixel_size_for_z: bool = False)\
                              -> Optional[Tuple[float, float, float]]:
     """
     Translate 3D pixel coordinates into 3D physical coordinates.
     :param stream: Stream which is used as reference for coordinate conversion
     :param pixel_pos: the position in pixel coordinates (x, y, z)
+    :param use_xy_pixel_size_for_z: if True, the z pixel size (x/y pixel size, assumed isotropic)
+        is used instead of the actual z/slice pixel size, to compute z. This mimics how some other
+        software (e.g. 3DCT) computes it, and is only meant for comparison/debugging purposes.
     :returns: the position in physical coordinates (x, y, z) in meters
     """
     p_pos = stream.getPhysicalCoordinates(pixel_pos[:2])
@@ -138,7 +147,8 @@ def get_physical_3d_coordinates(stream: FluoStream, pixel_pos: Tuple[float, floa
     tpos = md.get(model.MD_POS, (0, 0, 0))
     tpos_z = tpos[2] if len(tpos) >= 3 else 0.0
     # Account for slice thickness, aka, the z distance between slices
-    p_pos_z = pixel_pos[2] * pxs[2] + tpos_z
+    z_pxs = pxs[0] if use_xy_pixel_size_for_z else pxs[2]
+    p_pos_z = pixel_pos[2] * z_pxs + tpos_z
     return (p_pos[0], p_pos[1], p_pos_z)
 
 def update_feature_correlation_target(correlation_target: FIBFMCorrelationData,
@@ -665,17 +675,24 @@ class CorrelationPointsController:
             fib_coords.append(fib_coord)
         fib_coords = numpy.array(fib_coords, dtype=numpy.float32)
         for fm_coord in self.correlation_target.fm_fiducials:
-            fm_coord_px = get_pixel_3d_coordinates(self.correlation_target.fm_streams[0], fm_coord.coordinates.value)
+            fm_coord_px = get_pixel_3d_coordinates(
+                self.correlation_target.fm_streams[0],
+                fm_coord.coordinates.value,
+                use_xy_pixel_size_for_z=True
+            )
             fm_coords.append(fm_coord_px)
         fm_coords = numpy.array(fm_coords, dtype=numpy.float32)
         poi_coord = self.correlation_target.fm_pois[0]
-        poi_coord_px = get_pixel_3d_coordinates(self.correlation_target.fm_streams[0], poi_coord.coordinates.value)
+        poi_coord_px = get_pixel_3d_coordinates(
+            self.correlation_target.fm_streams[0],
+            poi_coord.coordinates.value,
+            use_xy_pixel_size_for_z=True
+        )
         poi_coords.append(poi_coord_px)
         poi_coords = numpy.array(poi_coords, dtype=numpy.float32)
         # Fixing seed, and thus basically resetting randomness, to get more consistent results
         numpy.random.seed(0)
-        # Run the correlation. Note that our z pixel spacing for the fm_coords is not equal to x and y, but internal
-        # scaling in the affine registration logic should handle this just fine.
+
         self.correlation_target.correlation_result = run_tdct_correlation(fib_coords=fib_coords, fm_coords=fm_coords,
                                                                           poi_coords=poi_coords,
                                                                           fib_image=fib_da, fm_image=fm_image,
