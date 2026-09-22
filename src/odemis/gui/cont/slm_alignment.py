@@ -11,7 +11,7 @@ from odemis import model
 from odemis.acq.stream import FIBStream, FluoStream
 from odemis.gui.conf.data import get_local_vas
 from odemis.gui.cont.milling import FibucialMillingTaskController
-from typing import Optional, Tuple
+from typing import Dict, Optional, Tuple
 
 
 class SLMAlignmentController:
@@ -23,6 +23,7 @@ class SLMAlignmentController:
         self._main_data_model = self._tab_data_model.main
         self._panel = frame
         self._viewports = frame.pnl_slm_alignment_grid.viewports
+        self._alignment_stage = self._main_data_model.align_coincident
         self._fib_stream: Optional[FIBStream] = None
         self._slm_stream: Optional[FluoStream] = None
         self._fiducial_milling_controller: Optional[FibucialMillingTaskController] = None
@@ -35,10 +36,10 @@ class SLMAlignmentController:
         self.is_processing = True
         self._panel.txt_stage_moving.SetLabel("")
         self._setup_views_and_streams()
+        self._alignment_stage.position.subscribe(self._on_alignment_stage_pos, init=True)
         self._bind_fine_alignment_events()
-        self._fiducial_milling_controller = FibucialMillingTaskController(panel=self._panel, tab= self)
+        self._fiducial_milling_controller = FibucialMillingTaskController(panel=self._panel, tab=self)
         self.is_processing = False
-
 
     def _setup_views_and_streams(self) -> None:
         """Initialize viewports, stream bars, and live streams for alignment."""
@@ -60,12 +61,7 @@ class SLMAlignmentController:
             hwemtvas=hwemtvas,
             hwdetvas=get_local_vas(self._main_data_model.ion_sed, self._main_data_model.hw_settings_config),
         )
-        # Activate FIB stream BEFORE adding to streambar
-        self._fib_stream.should_update.value = True
-        self._fib_stream.is_active.value = True
-
-        # Add FIB stream first with play=True
-        fib_sc = self._panel.streambar_controller.addStream(self._fib_stream, play=True,
+        fib_sc = self._panel.streambar_controller.addStream(self._fib_stream,
                                                             add_to_view=self._tab_data_model.views.value[1])
         fib_sc.stream_panel.show_remove_btn(False)
 
@@ -75,6 +71,9 @@ class SLMAlignmentController:
         light_filter = getattr(self._main_data_model, "filter_coincident", None)
         focuser = getattr(self._main_data_model, "focus_coincident", None)
         if all((ccd, light, light_filter, focuser)):
+            stage_pos = self._alignment_stage.position.value
+            fm_forced_md = {model.MD_POS: (stage_pos["x"], stage_pos["y"])}
+            logging.debug("Prepared FM forced metadata from alignment stage: %s", fm_forced_md)
             self._slm_stream = FluoStream(
                 "FM",
                 ccd,
@@ -84,13 +83,9 @@ class SLMAlignmentController:
                 focuser=focuser,
                 opm=self._main_data_model.opm,
                 detvas={"exposureTime"},
+                forcemd=fm_forced_md,
             )
-            # Activate FM stream BEFORE adding to streambar
-            self._slm_stream.should_update.value = True
-            self._slm_stream.is_active.value = True
-
-            # Add FM stream second with play=True
-            slm_sc = self._panel.streambar_controller.addStream(self._slm_stream, play=True,
+            slm_sc = self._panel.streambar_controller.addStream(self._slm_stream,
                                                                 add_to_view=self._tab_data_model.views.value[0])
             slm_sc.stream_panel.show_remove_btn(False)
         else:
@@ -105,6 +100,25 @@ class SLMAlignmentController:
 
         for vp in self._viewports:
             vp.canvas.fit_view_to_content()
+
+    def _on_alignment_stage_pos(self, pos: Dict[str, float]) -> None:
+        """Update FM forced metadata whenever the alignment stage position changes."""
+        forced_md = {model.MD_POS: (pos["x"], pos["y"])}
+        self._slm_stream._forcemd = forced_md
+        logging.debug("Updated FM forced metadata to %s", forced_md)
+
+        image_va = getattr(self._slm_stream, "image", None)
+        image = image_va.value if image_va is not None else None
+        if image is None:
+            return
+
+        metadata = image.metadata.copy()
+        if metadata.get(model.MD_POS) == forced_md[model.MD_POS]:
+            return
+
+        metadata.update(forced_md)
+        self._slm_stream.image.value = model.DataArray(image, metadata=metadata)
+        logging.debug("Refreshed live FM image metadata with forced MD_POS=%s", forced_md[model.MD_POS])
 
     def _bind_fine_alignment_events(self) -> None:
         """Bind click handlers on SLM alignment canvases for one-shot FM point selection."""
@@ -124,20 +138,27 @@ class SLMAlignmentController:
         self._fine_alignment_active = False
         self._panel.vp_slm_fm_live.canvas.reset_default_cursor()
 
-    def _get_fov_center(self, stream: object, fallback_scanner: object) -> Tuple[float, float]:
-        """Return FoV center from stream image metadata, with scanner metadata fallback."""
-        image_va = getattr(stream, "image", None)
-        image = image_va.value if image_va is not None else None
-        if image is not None:
-            md_pos = image.metadata.get(model.MD_POS)
-            if md_pos is not None:
-                return md_pos
+    # def _get_fov_center(self, stream: Any, fallback_scanner: Any) -> Tuple[float, float]:
+    #     """Return FoV center from forced metadata, then image metadata, then scanner metadata."""
+    #     # forced_md = getattr(stream, "_forcemd", None)
+    #     # if forced_md is not None:
+    #     #     md_pos = forced_md.get(model.MD_POS)
+    #     #     if md_pos is not None:
+    #     #         return md_pos
+    #
+    #     image_va = getattr(stream, "image", None)
+    #     md_pos = None
+    #     image = image_va.value if image_va is not None else None
+    #     if image is not None:
+    #         md_pos = image.metadata.get(model.MD_POS)
+    #         # if md_pos is not None:
+    #     return md_pos
 
-        scanner_md = fallback_scanner.getMetadata()
-        md_pos = scanner_md.get(model.MD_POS)
-        if md_pos is None:
-            raise ValueError("No FoV center metadata available for fine alignment")
-        return md_pos
+        # scanner_md = fallback_scanner.getMetadata()
+        # md_pos = scanner_md.get(model.MD_POS)
+        # if md_pos is None:
+        #     raise ValueError("No FoV center metadata available for fine alignment")
+        # return md_pos
 
     def _apply_fine_alignment(self, fm_click_phys: Tuple[float, float]) -> None:
         """Compute and apply ion-beam shift correction from FM click position."""
@@ -148,9 +169,10 @@ class SLMAlignmentController:
         milling_angle = pm.milling_angle.value
         cos_angle = math.cos(milling_angle)
 
-        fm_center = self._get_fov_center(self._slm_stream, self._main_data_model.ion_beam)
-        fib_center = self._get_fov_center(self._fib_stream, self._main_data_model.ion_beam)
-
+        # fm_center = self._get_fov_center(self._slm_stream, self._main_data_model.ion_beam)
+        fm_center = self._slm_stream.image.value.metadata.get(model.MD_POS)
+        # fib_center = self._get_fov_center(self._fib_stream, self._main_data_model.ion_beam)
+        fib_center = self._fib_stream.image.value.metadata.get(model.MD_POS)
         fm_offset = (fm_click_phys[0] - fm_center[0], fm_click_phys[1] - fm_center[1])
         # Only Y is affected by tilt projection; keep X unchanged.
         fib_offset = (fm_offset[0], fm_offset[1] / cos_angle)
@@ -216,6 +238,7 @@ class SLMAlignmentController:
     def stop(self) -> None:
         """Stop processing and release runtime listeners and streams."""
         self.is_processing = False
+        self._alignment_stage.position.unsubscribe(self._on_alignment_stage_pos)
         self._unbind_fine_alignment_events()
         if self._fiducial_milling_controller is not None:
             self._fiducial_milling_controller.stop()
