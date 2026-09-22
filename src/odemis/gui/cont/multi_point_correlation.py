@@ -578,6 +578,7 @@ class CorrelationPointsController:
         except Exception:
             logging.exception("Failure in the correlation update")
 
+    @call_in_wx_main
     def _process_latest_change(self):
         """Process the latest change in the queue."""
         self.is_processing = True
@@ -597,7 +598,7 @@ class CorrelationPointsController:
                      f"Correlation RMS Deviation : {readable_str(rms_m, unit='m', sig=3)}")
 
         # Display the output in the relevant views
-        self._viewports[1].canvas.Refresh()
+        self._viewports[1].canvas.request_drawing_update()
         self.is_processing = False  # Mark that processing is complete
 
     def stop(self):
