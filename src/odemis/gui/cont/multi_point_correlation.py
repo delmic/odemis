@@ -89,7 +89,10 @@ RIM_COR_DEFAULT = 0.495  # See MD_RIM_COR. This value works fine for 50x objecti
 # conditions to convert between physical and pixel coordinate systems in order for multipoint correlation to operate.
 # For coordinate conversions, we assume the pixels in 3D are isosymmetric
 # i.e. size in pixel[0]=pixel[1]=pixel[2].
-REFINE_SEARCH_RANGE = 2.5e-6  # m, search range for fiducial refinement
+REFINE_SEARCH_RANGE = 1.5e-6  # m, search range for fiducial refinement
+
+REFINE_MODE_XYZ = "XYZ"
+REFINE_MODE_Z = "Z"
 
 # If the milling angle of a FIB image and an FM z-stack are below the tolerance, they are considered to be matching.
 MILLING_ANGLE_TOLERANCE = math.radians(0.1)  # Now 0.1 degree, but this depends on stage accuracy, so might need to update this later.
@@ -259,6 +262,8 @@ class CorrelationPointsController:
         # Access the XYZ-targeting button
         self.xyz_targeting_btn = self._panel.btn_xyz_targeting
         self.xyz_targeting_btn.Bind(wx.EVT_BUTTON, self._on_xyz_targeting)
+        # Access the refine mode selector (XYZ vs Z-only refinement)
+        self.refine_mode_choice = self._panel.refine_mode_choice
         # Disable XYZ-targeting button if super z stream is available as XYZ-targeting is not required in that case
         self.has_super_z = model.BooleanVA(False)
         if self._tab_data_model.main.currentFeature.value.superz_stream_name:
@@ -336,18 +341,22 @@ class CorrelationPointsController:
     def _update_refine_controls(self) -> None:
         if self.at_fib_view_fm.value:
             self.xyz_targeting_btn.Enable(False)
+            self.refine_mode_choice.Enable(False)
             self.txt_refine_xyz_active.SetLabel("")
             self.xyz_targeting_btn.SetToolTip("Refinement disabled when using FIB-view FM streams")
         elif self.has_super_z.value:
             self.xyz_targeting_btn.SetToolTip("Super Z information available, Refinement disabled")
             self.xyz_targeting_btn.Enable(False)
+            self.refine_mode_choice.Enable(False)
             self.txt_refine_xyz_active.SetLabel("Super Z information in use")
         elif TargetType.FibFiducial == self._tab_data_model.main.currentTarget.value.type.value:
             self.xyz_targeting_btn.Enable(False)
+            self.refine_mode_choice.Enable(False)
             self.txt_refine_xyz_active.SetLabel("")
             self.xyz_targeting_btn.SetToolTip("Refinement only available for non-reflective FM streams")
         else:
             self.xyz_targeting_btn.Enable(True)
+            self.refine_mode_choice.Enable(True)
             self.txt_refine_xyz_active.SetLabel("")
             self.xyz_targeting_btn.SetToolTip("Refine the position of the currently selected FM fiducial")
 
@@ -1083,7 +1092,10 @@ class CorrelationPointsController:
     def _on_xyz_targeting(self, evt: Optional[wx.Event] = None) -> None:
         """
         Handle targeting when the targeting button is clicked, or automatically triggered for MIP streams.
-        Performs 3D Center of Mass targeting (X, Y, Z).
+        Performs center of mass targeting over the full 3D volume (X, Y, Z). Depending on the
+        selected refine mode, either the full 3D result is kept (XYZ), or only the refined Z
+        coordinate is kept and the x/y position is left untouched (Z), e.g. because it was already
+        placed accurately and only needs a focus (Z) adjustment.
         """
         if self._tab_data_model.main.currentTarget.value:
             # Select the non-reflective streams visible in the view for targeting
@@ -1106,7 +1118,9 @@ class CorrelationPointsController:
             # Ensure multi-channel compatibility
             raw_multi = numpy.asarray([s.raw[0] for s in streams])
             shape_y, shape_x = raw_multi.shape[-2], raw_multi.shape[-1]
-            # Get boundary-safe slice & crop
+            # Get boundary-safe slice & crop. Always use the full x/y search range (needed to get a
+            # smooth, sub-pixel Z estimate) and the full Z-depth (the first, unrestricted dimension
+            # of roi below); only whether the refined x/y result is kept differs per refine mode.
             pixel_size = streams[0].getRawMetadata()[0][model.MD_PIXEL_SIZE][0]  # Always present, so direct indexing
             pixel_padding = int(REFINE_SEARCH_RANGE / pixel_size)
             y_start = max(0, target_y - pixel_padding)
@@ -1122,8 +1136,11 @@ class CorrelationPointsController:
             com_y_crop = com[1] + roi[1].start
             com_x_crop = com[2] + roi[2].start
             # Map back to physical coordinates using optimized X, Y, and Z
-            physical_coords = get_physical_3d_coordinates(streams[0],(com_x_crop, com_y_crop, com_z))
-            # Update the model with the refined 3D coordinates
+            physical_coords = get_physical_3d_coordinates(streams[0], (com_x_crop, com_y_crop, com_z))
+            if self.refine_mode_choice.GetStringSelection() == REFINE_MODE_Z:
+                # Z-only refinement: keep the original x/y position, only take the refined Z
+                physical_coords = (coords[0], coords[1], physical_coords[2])
+            # Update the model with the refined coordinates
             target_coords = self._tab_data_model.main.currentTarget.value.coordinates.value
             target_coords[:] = physical_coords[:]
 
