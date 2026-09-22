@@ -727,7 +727,7 @@ class CryoCorrelationPointsOverlay(WorldOverlay, DragMixin):
                                                     self.cnvs.scale,
                                                     offset=half_size_offset)
 
-                set_icon(self._feature_icons[target.type.value])
+                set_icon(self._feature_icons[target.type.value], target.type.value)
                 # Note: no label is drawn here, as it would overlap the placed fiducial's own
                 # label (the projection is intentionally shown at (about) the same position).
                 ctx.paint()
