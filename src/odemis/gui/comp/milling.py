@@ -23,7 +23,11 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 import logging
 import wx
 from odemis import gui, model
-from odemis.acq.milling.patterns import NotchPatternParameters, RulerPatternParameters
+from odemis.acq.milling.patterns import (
+    NotchPatternParameters,
+    RulerPatternParameters,
+    WaffleTrenchPatternParameters,
+)
 from odemis.acq.milling.tasks import  MillingTaskSettings
 from odemis.gui.comp.text import IntegerTextCtrl, UnitFloatCtrl
 from odemis.gui.comp.combo import ComboBox
@@ -71,6 +75,10 @@ class MillingTaskPanel(wx.Panel):
             "mode": {"label": "Milling mode"},
             "width": {"label": "Width", "accuracy": 2, "unit": "m"},
             "height": {"label": "Height", "accuracy": 2, "unit": "m"},
+            "top_width": {"label": "Top width", "accuracy": 2, "unit": "m"},
+            "top_height": {"label": "Top height", "accuracy": 2, "unit": "m"},
+            "bottom_width": {"label": "Bottom width", "accuracy": 2, "unit": "m"},
+            "bottom_height": {"label": "Bottom height", "accuracy": 2, "unit": "m"},
             "depth": {"label": "Depth", "accuracy": 2, "unit": "m"},
             "spacing": {"label": "Spacing", "accuracy": 2, "unit": "m"},
             "num_notches": {"label": "Notches"},
@@ -125,6 +133,8 @@ class MillingTaskPanel(wx.Panel):
             CONFIG["thickness"]["tooltip"] = "Thickness of all five segments."
             CONFIG["offset"]["tooltip"] = "Vertical loop offset from center; positive values move it upward."
             CONFIG["mirrored"]["tooltip"] = "Mirror the notch horizontally so the loop faces left."
+        elif isinstance(pattern, WaffleTrenchPatternParameters):
+            CONFIG["spacing"]["tooltip"] = "Clear distance between the top and bottom rectangles."
 
         for param in vars(pattern):
 

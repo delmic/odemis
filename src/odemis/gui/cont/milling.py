@@ -43,9 +43,9 @@ from odemis.acq.feature import (
 from odemis.acq.milling import millmng
 from odemis.acq.milling.millmng import MillingWorkflowTask, run_automated_milling
 from odemis.acq.milling.patterns import (
-    CompositeRectanglePatternParameters,
     NotchPatternParameters,
     RectanglePatternParameters,
+    RulerPatternParameters,
 )
 from odemis.acq.milling.tasks import MillingTaskSettings
 from odemis.gui.comp.milling import MillingTaskPanel
@@ -598,10 +598,11 @@ class MillingTaskController:
             if not task.selected:
                 continue
             for pattern in task.patterns:
-                # Composite patterns use one shared label instead of one per rectangle.
-                is_composite = isinstance(pattern, CompositeRectanglePatternParameters)
+                # Rulers and notches use one shared label instead of one per rectangle.
+                uses_shared_label = isinstance(
+                    pattern, (RulerPatternParameters, NotchPatternParameters))
                 for j, pshape in enumerate(pattern.generate()):
-                    name = task_name if j == 0 and not is_composite else None
+                    name = task_name if j == 0 and not uses_shared_label else None
                     shape = rectangle_pattern_to_shape(
                                             canvas=self.canvas,
                                             ref_img=feature.reference_image,
@@ -611,9 +612,9 @@ class MillingTaskController:
                                             show_spot_size_correction=(
                                                 pattern is self._active_spot_size_pattern
                                             ),
-                                            show_dimensions=not is_composite)
+                                            show_dimensions=not uses_shared_label)
                     self.rectangles_overlay.add_shape(shape)
-                if is_composite:
+                if uses_shared_label:
                     x, y = pos_to_absolute(pattern.center.value, feature.reference_image)
                     if isinstance(pattern, NotchPatternParameters):
                         size = units.readable_str(

@@ -26,6 +26,7 @@ from odemis.acq.milling.patterns import (
     NotchPatternParameters,
     RulerPatternParameters,
     TrenchPatternParameters,
+    WaffleTrenchPatternParameters,
 )
 from odemis.acq.milling.tasks import MillingTaskSettings, MillingSettings, load_milling_tasks, save_milling_tasks
 
@@ -178,6 +179,18 @@ class MillingTaskTestCase(unittest.TestCase):
         self.assertEqual(notch.milling.current.value, 0.3e-9)
         self.assertIsInstance(notch.patterns[0], NotchPatternParameters)
         self.assertEqual(len(notch.patterns[0].generate()), 5)
+
+    def test_default_waffle_trench_task(self) -> None:
+        """Load the optional waffle trench with asymmetric defaults."""
+        task = load_milling_tasks(DEFAULT_MILLING_TASKS_PATH)["Waffle Trench"]
+        pattern = task.patterns[0]
+
+        self.assertFalse(task.selected)
+        self.assertIsInstance(pattern, WaffleTrenchPatternParameters)
+        self.assertEqual((pattern.top_width.value, pattern.top_height.value),
+                         (22e-6, 37e-6))
+        self.assertEqual((pattern.bottom_width.value, pattern.bottom_height.value),
+                         (20e-6, 17e-6))
 
 
 if __name__ == "__main__":

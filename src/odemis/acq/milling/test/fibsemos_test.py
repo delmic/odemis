@@ -51,6 +51,7 @@ from odemis.acq.milling.patterns import (
     RectanglePatternParameters,
     RulerPatternParameters,
     TrenchPatternParameters,
+    WaffleTrenchPatternParameters,
 )
 from odemis.acq.milling.tasks import MillingSettings, MillingTaskSettings
 from odemis import model
@@ -358,6 +359,15 @@ class TestConvertMillingTasksToMillingStages(unittest.TestCase):
         pattern = NotchPatternParameters(
             width=3.5e-6, height=8.1e-6, depth=0.5e-6, gap=1.1e-6,
             thickness=0.2e-6, offset=-0.2e-6)
+
+        self.assert_composite_pattern_uses_one_stage(pattern)
+
+    def test_waffle_trench_uses_one_milling_stage(self) -> None:
+        """Send both waffle trench rectangles in one milling stage."""
+        pattern = WaffleTrenchPatternParameters(
+            top_width=22e-6, top_height=37e-6,
+            bottom_width=20e-6, bottom_height=17e-6,
+            depth=1e-6, spacing=3e-6)
 
         self.assert_composite_pattern_uses_one_stage(pattern)
 

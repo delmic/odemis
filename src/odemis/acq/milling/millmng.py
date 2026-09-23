@@ -48,7 +48,12 @@ from odemis.acq.feature import (
     REFERENCE_IMAGE_FILENAME,
 )
 from odemis.acq.milling.tasks import MillingTaskSettings
-from odemis.acq.milling.patterns import NotchPatternParameters, RectanglePatternParameters, RulerPatternParameters
+from odemis.acq.milling.patterns import (
+    NotchPatternParameters,
+    RectanglePatternParameters,
+    RulerPatternParameters,
+    WaffleTrenchPatternParameters,
+)
 from odemis.acq.milling.fibsemos import run_milling_tasks_fibsemos
 from odemis.acq.move import Posture, MicroscopePostureManager
 from odemis.acq.stream import FIBStream, SEMStream
@@ -281,9 +286,13 @@ def get_associated_tasks(wt: MillingWorkflowTask,
         if not task.selected:
             continue
 
-        # Rulers and notches always belong to rough milling, regardless of task name.
+        # Optional rectangle patterns always belong to rough milling, regardless of task name.
         is_rough_pattern = any(
-            isinstance(pattern, (RulerPatternParameters, NotchPatternParameters))
+            isinstance(pattern, (
+                RulerPatternParameters,
+                NotchPatternParameters,
+                WaffleTrenchPatternParameters,
+            ))
             for pattern in task.patterns)
         if is_rough_pattern:
             if wt is MillingWorkflowTask.RoughMilling:

@@ -265,6 +265,94 @@ class CompositeRectanglePatternParameters(MillingPatternParameters):
     """Marker base for patterns composed of rectangle milling shapes."""
 
 
+class WaffleTrenchPatternParameters(CompositeRectanglePatternParameters):
+    """Two independently sized rectangles separated by a centered opening."""
+
+    def __init__(self, top_width: float, top_height: float,
+                 bottom_width: float, bottom_height: float,
+                 depth: float, spacing: float,
+                 center: Tuple[float, float] = (0, 0),
+                 name: str = "Waffle Trench",
+                 spot_size_correction: float = 0.0) -> None:
+        """Initialize a waffle trench.
+
+        :param top_width: Width of the top rectangle.
+        :param top_height: Height of the top rectangle.
+        :param bottom_width: Width of the bottom rectangle.
+        :param bottom_height: Height of the bottom rectangle.
+        :param depth: Milling depth shared by both rectangles.
+        :param spacing: Clear distance between the rectangles.
+        :param center: Center of the opening between the rectangles.
+        :param name: Pattern name.
+        :param spot_size_correction: Beam spot size correction.
+        """
+        self.name = model.StringVA(name)
+        self.top_width = model.FloatContinuous(top_width, unit="m", range=(1e-9, 900e-6))
+        self.top_height = model.FloatContinuous(top_height, unit="m", range=(1e-9, 900e-6))
+        self.bottom_width = model.FloatContinuous(bottom_width, unit="m", range=(1e-9, 900e-6))
+        self.bottom_height = model.FloatContinuous(bottom_height, unit="m", range=(1e-9, 900e-6))
+        self.depth = model.FloatContinuous(depth, unit="m", range=(1e-9, 100e-6))
+        self.spacing = model.FloatContinuous(spacing, unit="m", range=(1e-9, 900e-6))
+        self.center = model.TupleContinuous(
+            center, unit="m", range=((-1e3, -1e3), (1e3, 1e3)), cls=(int, float))
+        self.spot_size_correction = model.FloatContinuous(
+            spot_size_correction, unit="m", range=(0, 900e-6))
+
+    def to_dict(self) -> dict:
+        """Serialize the waffle trench parameters."""
+        return {
+            "name": self.name.value,
+            "top_width": self.top_width.value,
+            "top_height": self.top_height.value,
+            "bottom_width": self.bottom_width.value,
+            "bottom_height": self.bottom_height.value,
+            "depth": self.depth.value,
+            "spacing": self.spacing.value,
+            "center_x": self.center.value[0],
+            "center_y": self.center.value[1],
+            "spot_size_correction": self.spot_size_correction.value,
+            "pattern": "waffle_trench",
+        }
+
+    @staticmethod
+    def from_dict(data: dict) -> 'WaffleTrenchPatternParameters':
+        """Restore waffle trench parameters from serialized data."""
+        return WaffleTrenchPatternParameters(
+            top_width=data["top_width"],
+            top_height=data["top_height"],
+            bottom_width=data["bottom_width"],
+            bottom_height=data["bottom_height"],
+            depth=data["depth"],
+            spacing=data["spacing"],
+            center=(data.get("center_x", 0), data.get("center_y", 0)),
+            name=data.get("name", "Waffle Trench"),
+            spot_size_correction=data.get("spot_size_correction", 0.0))
+
+    def generate(self) -> List[MillingPatternParameters]:
+        """Generate the top and bottom rectangles."""
+        center_x, center_y = self.center.value
+        top_center_y = center_y + self.spacing.value / 2 + self.top_height.value / 2
+        bottom_center_y = center_y - self.spacing.value / 2 - self.bottom_height.value / 2
+        return [
+            RectanglePatternParameters(
+                name=f"{self.name.value} (Top)",
+                width=self.top_width.value,
+                height=self.top_height.value,
+                depth=self.depth.value,
+                center=(center_x, top_center_y),
+                scan_direction="TopToBottom",
+                spot_size_correction=self.spot_size_correction.value),
+            RectanglePatternParameters(
+                name=f"{self.name.value} (Bottom)",
+                width=self.bottom_width.value,
+                height=self.bottom_height.value,
+                depth=self.depth.value,
+                center=(center_x, bottom_center_y),
+                scan_direction="BottomToTop",
+                spot_size_correction=self.spot_size_correction.value),
+        ]
+
+
 class RulerPatternParameters(CompositeRectanglePatternParameters):
     """Two mirrored rulers, with alternating horizontal notches bottom to top.
 
@@ -591,6 +679,7 @@ PATTERN_NAME_TO_CLASS = {
     "rectangle": RectanglePatternParameters,
     "trench": TrenchPatternParameters,
     "microexpansion": MicroexpansionPatternParameters,
+    "waffle_trench": WaffleTrenchPatternParameters,
     "ruler": RulerPatternParameters,
     "notch": NotchPatternParameters,
 }

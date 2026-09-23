@@ -68,6 +68,27 @@
       center_x: 0
       center_y: 0
       pattern: 'notch'
+'Waffle Trench':
+  name: 'Waffle Trench'
+  selected: false
+  milling:
+    current: 1.0e-9
+    voltage: 30000.0
+    field_of_view: 8e-05
+    mode: 'Serial'
+    channel: 'ion'
+  patterns:
+    - name: 'Waffle Trench'
+      top_width: 22.0e-06
+      top_height: 37.0e-06
+      bottom_width: 20.0e-06
+      bottom_height: 17.0e-06
+      depth: 1.0e-06
+      spacing: 3.0e-06
+      spot_size_correction: 0.0
+      center_x: 0
+      center_y: 0
+      pattern: 'waffle_trench'
 'Rough Milling 01':
   name: 'Rough Milling 01'
   milling:
