@@ -27,7 +27,11 @@ import wx
 
 import odemis.gui as gui
 import odemis.util.units as units
-from odemis.gui.comp.overlay._constants import LINE_WIDTH_THICK, LINE_WIDTH_THIN
+from odemis.gui.comp.overlay._constants import (
+    LINE_WIDTH_THICK,
+    LINE_WIDTH_THIN,
+    MILLING_LABEL_BACKGROUND_OPACITY,
+)
 from odemis.gui.comp.overlay.base import (
     SEL_MODE_NONE,
     SEL_MODE_ROTATION,
@@ -90,6 +94,8 @@ class RectangleOverlay(EditableShape, RectangleEditingMixin, WorldOverlay):
     The selected rectangle can be manipulated by dragging its edges or rotating it.
 
     """
+    LABEL_BACKGROUND_OPACITY = 1.0
+
     def __init__(self, cnvs, colour=theme.selection, show_selection_points: bool = True,
                  show_dimensions: bool = True):
         EditableShape.__init__(self, cnvs)
@@ -119,7 +125,7 @@ class RectangleOverlay(EditableShape, RectangleEditingMixin, WorldOverlay):
             colour=hex_to_frgb(theme.button_text_contrast),
             opacity=1.0,
             deg=None,
-            background=hex_to_frgba(theme.viewport_background),
+            background=hex_to_frgba(theme.viewport_background, self.LABEL_BACKGROUND_OPACITY),
         )
         self._side2_label = Label(
             text="",
@@ -130,7 +136,7 @@ class RectangleOverlay(EditableShape, RectangleEditingMixin, WorldOverlay):
             colour=hex_to_frgb(theme.button_text_contrast),
             opacity=1.0,
             deg=None,
-            background=hex_to_frgba(theme.viewport_background),
+            background=hex_to_frgba(theme.viewport_background, self.LABEL_BACKGROUND_OPACITY),
         )
         # Label for the rotation angle of the rectangle
         # Call draw_rotation_label to use it
@@ -143,7 +149,7 @@ class RectangleOverlay(EditableShape, RectangleEditingMixin, WorldOverlay):
             colour=hex_to_frgb(theme.button_text_contrast),
             opacity=1.0,
             deg=None,
-            background=hex_to_frgba(theme.viewport_background),
+            background=hex_to_frgba(theme.viewport_background, self.LABEL_BACKGROUND_OPACITY),
         )
         self._name_label = Label(
             text=self.name.value,
@@ -510,7 +516,7 @@ class RectangleOverlay(EditableShape, RectangleEditingMixin, WorldOverlay):
     def draw_name_label(self, ctx):
         self._name_label.text = self.name.value
         self._name_label.pos = self.cnvs.view_to_buffer(self.v_center)
-        self._name_label.background = hex_to_frgba(theme.viewport_background)
+        self._name_label.background = hex_to_frgba(theme.viewport_background, self.LABEL_BACKGROUND_OPACITY)
         self._name_label.draw(ctx)
 
     def draw(self, ctx, shift=(0, 0), scale=1.0, line_width=4):
@@ -570,6 +576,8 @@ class RectangleOverlay(EditableShape, RectangleEditingMixin, WorldOverlay):
 
 class MillingRectangleOverlay(RectangleOverlay):
     """Rectangle overlay that can show the estimated uncorrected opening."""
+
+    LABEL_BACKGROUND_OPACITY = MILLING_LABEL_BACKGROUND_OPACITY
 
     def __init__(self, *args, spot_size_correction: float = 0.0,
                  show_spot_size_correction: bool = False, **kwargs):
