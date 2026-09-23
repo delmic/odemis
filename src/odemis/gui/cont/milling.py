@@ -43,8 +43,9 @@ from odemis.acq.feature import (
 from odemis.acq.milling import millmng
 from odemis.acq.milling.millmng import MillingWorkflowTask, run_automated_milling
 from odemis.acq.milling.patterns import (
+    CompositeRectanglePatternParameters,
+    NotchPatternParameters,
     RectanglePatternParameters,
-    RulerPatternParameters,
 )
 from odemis.acq.milling.tasks import MillingTaskSettings
 from odemis.gui.comp.milling import MillingTaskPanel
@@ -270,15 +271,17 @@ class MillingTaskController:
 
             # pattern parameters
             for param in panel.pattern_parameters:
+                value = getattr(parameters, param)
+                event = wx.EVT_CHECKBOX if isinstance(value, model.BooleanVA) else wx.EVT_COMMAND_ENTER
                 _va_connector = VigilantAttributeConnector(
-                    getattr(parameters, param),
+                    value,
                     panel.ctrl_dict[param],
-                    events=wx.EVT_COMMAND_ENTER,
+                    events=event,
                 )
                 self.controls[task_name][f"{param}_connector"] = _va_connector
 
                 # VA connector, bind events
-                getattr(parameters, param).subscribe(self._on_patterns)
+                value.subscribe(self._on_patterns)
                 panel.ctrl_dict[param].Bind(
                     wx.EVT_SET_FOCUS,
                     lambda evt, pattern=parameters: self._on_pattern_control_interaction(evt, pattern),
@@ -595,10 +598,10 @@ class MillingTaskController:
             if not task.selected:
                 continue
             for pattern in task.patterns:
-                # Use one shared ruler label to avoid clutter from individual notch dimensions.
-                is_ruler = isinstance(pattern, RulerPatternParameters)
+                # Composite patterns use one shared label instead of one per rectangle.
+                is_composite = isinstance(pattern, CompositeRectanglePatternParameters)
                 for j, pshape in enumerate(pattern.generate()):
-                    name = task_name if j == 0 and not is_ruler else None
+                    name = task_name if j == 0 and not is_composite else None
                     shape = rectangle_pattern_to_shape(
                                             canvas=self.canvas,
                                             ref_img=feature.reference_image,
@@ -608,13 +611,29 @@ class MillingTaskController:
                                             show_spot_size_correction=(
                                                 pattern is self._active_spot_size_pattern
                                             ),
-                                            show_dimensions=not is_ruler)
+                                            show_dimensions=not is_composite)
                     self.rectangles_overlay.add_shape(shape)
-                if is_ruler:
+                if is_composite:
                     x, y = pos_to_absolute(pattern.center.value, feature.reference_image)
-                    height = units.readable_str(pattern.height.value, "m", sig=3)
+                    if isinstance(pattern, NotchPatternParameters):
+                        size = units.readable_str(
+                            (pattern.width.value, pattern.height.value), "m", sig=3
+                        ).replace(" x ", " × ")
+                        label = f"{task_name} · {size}"
+                        gap = units.readable_str(pattern.gap.value, "m", sig=3)
+                        gap_side = 1 if pattern.mirrored.value else -1
+                        gap_align = wx.ALIGN_LEFT if pattern.mirrored.value else wx.ALIGN_RIGHT
+                        self.rectangles_overlay.add_pattern_label(
+                            gap,
+                            (x + gap_side * pattern.width.value / 2,
+                             y + pattern.offset.value),
+                            align=gap_align | wx.ALIGN_CENTER_VERTICAL,
+                            offset=(gap_side * 8, 0))
+                    else:
+                        height = units.readable_str(pattern.height.value, "m", sig=3)
+                        label = f"{task_name} · {height}"
                     self.rectangles_overlay.add_pattern_label(
-                        f"{task_name} · {height}", (x, y + pattern.height.value / 2))
+                        label, (x, y + pattern.height.value / 2))
 
         # validate the patterns
         self._on_shapes_update(self.rectangles_overlay._shapes.value)

@@ -53,8 +53,8 @@ METEOR_FISBEM_CONFIG = CONFIG_PATH + "sim/meteor-fibsem-sim.odm.yaml"
 class TestAssociatedMillingTasks(unittest.TestCase):
     """Test milling task workflow association."""
 
-    def test_optional_ruler_in_rough_milling(self) -> None:
-        """Associate a selected ruler only once and only with rough milling."""
+    def test_optional_patterns_in_rough_milling(self) -> None:
+        """Associate optional ruler and notch patterns only with rough milling."""
         tasks = load_milling_tasks(DEFAULT_MILLING_TASKS_PATH)
         ruler = tasks["Ruler"]
         self.assertNotIn(ruler, get_associated_tasks(MillingWorkflowTask.RoughMilling, tasks))
@@ -66,6 +66,11 @@ class TestAssociatedMillingTasks(unittest.TestCase):
         self.assertEqual(rough_tasks.count(ruler), 1)
         self.assertLess(rough_tasks.index(ruler), rough_tasks.index(tasks["Rough Milling 01"]))
         self.assertNotIn(ruler, get_associated_tasks(MillingWorkflowTask.Polishing, tasks))
+
+        notch = tasks["Notch"]
+        notch.selected = True
+        self.assertIn(notch, get_associated_tasks(MillingWorkflowTask.RoughMilling, tasks))
+        self.assertNotIn(notch, get_associated_tasks(MillingWorkflowTask.Polishing, tasks))
 
 
 # NOTE: Require xt simulator to be running

@@ -54,7 +54,7 @@ class MillingTaskPanelTestCase(test.GuiTestCase):
         super().tearDown()
 
     def test_pattern_specific_controls(self) -> None:
-        """Show ruler-specific controls only on the ruler panel."""
+        """Show controls specific to composite milling patterns."""
         controls = self.controller.controls
         ruler_panel = controls["Ruler"]["panel"]
         self.assertIsInstance(ruler_panel.ctrl_dict["height"], UnitFloatCtrl)
@@ -63,6 +63,25 @@ class MillingTaskPanelTestCase(test.GuiTestCase):
         self.assertIsInstance(ruler_panel.ctrl_dict["spot_size_correction"], UnitFloatCtrl)
         self.assertIn("spot_size_correction_connector", controls["Ruler"])
         self.assertNotIn("rotation", ruler_panel.ctrl_dict)
+        notch_panel = controls["Notch"]["panel"]
+        self.assertEqual(
+            set(notch_panel.pattern_parameters),
+            {"width", "height", "depth", "gap", "thickness", "offset", "mirrored",
+             "spot_size_correction"})
+        self.assertTrue(all(isinstance(notch_panel.ctrl_dict[param], UnitFloatCtrl)
+                            for param in ("width", "height", "depth", "gap", "thickness", "offset",
+                                          "spot_size_correction")))
+        notch_panel.ctrl_dict["offset"].SetValue(0)
+        test.gui_loop()
+        self.assertEqual(notch_panel.ctrl_dict["offset"].get_value_str(), "0 µm")
+        self.assertIsInstance(notch_panel.ctrl_dict["mirrored"], wx.CheckBox)
+        self.assertIn("mirrored_connector", controls["Notch"])
+        mirror = notch_panel.ctrl_dict["mirrored"]
+        mirror.SetValue(True)
+        event = wx.CommandEvent(wx.EVT_CHECKBOX.typeId, mirror.Id)
+        event.SetEventObject(mirror)
+        mirror.GetEventHandler().ProcessEvent(event)
+        self.assertTrue(self.tasks["Notch"].patterns[0].mirrored.value)
         for name in ("Microexpansion", "Rough Milling 01", "Polishing 01"):
             self.assertNotIn("num_notches", controls[name]["panel"].ctrl_dict)
             self.assertEqual(set(controls[name]["panel"].pattern_parameters),

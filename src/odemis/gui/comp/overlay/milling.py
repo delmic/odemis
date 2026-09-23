@@ -32,16 +32,20 @@ class MillingShapesOverlay(ShapesOverlay):
         super().__init__(cnvs, shape_cls=RectangleOverlay)
         self._pattern_labels = []
 
-    def add_pattern_label(self, text: str, p_pos: Tuple[float, float]) -> None:
-        """Place a shared label just above the pattern's top center.
+    def add_pattern_label(self, text: str, p_pos: Tuple[float, float],
+                          align: int = wx.ALIGN_CENTRE_HORIZONTAL | wx.ALIGN_BOTTOM,
+                          offset: Tuple[int, int] = (0, -8)) -> None:
+        """Place a shared label at a physical position.
 
         :param text: Label text.
         :param p_pos: Label position in physical coordinates, in meters.
+        :param align: Label alignment relative to the position.
+        :param offset: Label offset in buffer pixels.
         """
         label = self.add_label(
-            text, align=wx.ALIGN_CENTRE_HORIZONTAL | wx.ALIGN_BOTTOM,
+            text, align=align,
             background=hex_to_frgba(theme.viewport_background, MILLING_LABEL_BACKGROUND_OPACITY))
-        self._pattern_labels.append((label, p_pos))
+        self._pattern_labels.append((label, p_pos, offset))
 
     def clear_labels(self) -> None:
         """Remove shape labels and shared pattern labels."""
@@ -58,7 +62,7 @@ class MillingShapesOverlay(ShapesOverlay):
         """
         super().draw(ctx, shift, scale)
         offset = self.cnvs.get_half_buffer_size()
-        for label, p_pos in self._pattern_labels:
+        for label, p_pos, label_offset in self._pattern_labels:
             x, y = self.cnvs.phys_to_buffer(p_pos, offset)
-            label.pos = (x, y - 8)
+            label.pos = (x + label_offset[0], y + label_offset[1])
             label.draw(ctx)

@@ -21,6 +21,7 @@ import logging
 import unittest
 import numpy
 from odemis.acq.milling.patterns import (
+    NotchPatternParameters,
     PATTERN_NAME_TO_CLASS,
     RectanglePatternParameters,
     TrenchPatternParameters,
@@ -383,6 +384,44 @@ class RulerPatternParametersTestCase(unittest.TestCase):
         self.assertEqual(self.pattern.num_notches.value, 21)
         with self.assertRaises(ValueError):
             RulerPatternParameters(width=2e-6, height=10e-9, depth=1e-6, spacing=1e-6)
+
+
+class NotchPatternParametersTestCase(unittest.TestCase):
+    """Test the five-segment notch geometry."""
+
+    def test_geometry_and_serialization(self) -> None:
+        """Generate the open loop and preserve it through serialization."""
+        pattern = NotchPatternParameters(
+            width=3.5e-6, height=8.1e-6, depth=0.5e-6, gap=1.1e-6,
+            thickness=0.2e-6, offset=-0.2e-6, center=(1e-6, -2e-6))
+        rectangles = pattern.generate()
+
+        self.assertEqual(len(rectangles), 5)
+        expected_sizes = [
+            (0.2e-6, 3.5e-6),
+            (3.5e-6, 0.2e-6),
+            (0.2e-6, 1.1e-6),
+            (3.5e-6, 0.2e-6),
+            (0.2e-6, 3.1e-6),
+        ]
+        for rectangle, expected_size in zip(rectangles, expected_sizes):
+            self.assertAlmostEqual(rectangle.width.value, expected_size[0])
+            self.assertAlmostEqual(rectangle.height.value, expected_size[1])
+        self.assertLess(rectangles[0].center.value[0], rectangles[2].center.value[0])
+        self.assertEqual(rectangles[0].center.value[0], rectangles[4].center.value[0])
+        self.assertTrue(all(isinstance(rectangle, RectanglePatternParameters)
+                            for rectangle in rectangles))
+
+        pattern.mirrored.value = True
+        mirrored = pattern.generate()
+        for original, flipped in zip(rectangles, mirrored):
+            self.assertAlmostEqual(flipped.center.value[0] - pattern.center.value[0],
+                                   pattern.center.value[0] - original.center.value[0])
+
+        restored = NotchPatternParameters.from_dict(pattern.to_dict())
+        self.assertEqual(restored.to_dict(), pattern.to_dict())
+        self.assertEqual([rectangle.to_dict() for rectangle in restored.generate()],
+                         [rectangle.to_dict() for rectangle in mirrored])
 
 
 if __name__ == '__main__':
