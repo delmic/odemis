@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """
 :created: 2024-02-02
-:author: Nandish Patel
-:copyright: © 2024 Nandish Patel, Delmic
+:author: Nandish Patel, Alexéy Ilyushkin
+:copyright: © 2024-2026 Nandish Patel, Alexéy Ilyushkin, Delmic
 
 This file is part of Odemis.
 
@@ -90,7 +90,8 @@ class RectangleOverlay(EditableShape, RectangleEditingMixin, WorldOverlay):
     The selected rectangle can be manipulated by dragging its edges or rotating it.
 
     """
-    def __init__(self, cnvs, colour=theme.selection, show_selection_points: bool = True):
+    def __init__(self, cnvs, colour=theme.selection, show_selection_points: bool = True,
+                 show_dimensions: bool = True):
         EditableShape.__init__(self, cnvs)
         RectangleEditingMixin.__init__(self, colour)
         # RectangleOverlay has attributes and methods of the "WorldOverlay" interface.
@@ -158,6 +159,7 @@ class RectangleOverlay(EditableShape, RectangleEditingMixin, WorldOverlay):
 
         # draw selection points on shape
         self._draw_selection_points = show_selection_points
+        self.show_dimensions = show_dimensions
 
     def to_dict(self) -> dict:
         """
@@ -544,7 +546,7 @@ class RectangleOverlay(EditableShape, RectangleEditingMixin, WorldOverlay):
                 self.draw_edges(ctx, b_point1, b_point2, b_point3, b_point4)
 
             # Side labels
-            if self.selected.value:
+            if self.selected.value and self.show_dimensions:
                 self.draw_side_labels(ctx, b_point1, b_point2, b_point3, b_point4)
 
             # Draw the rotation label or name label at the center

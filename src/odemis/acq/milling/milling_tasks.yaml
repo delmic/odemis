@@ -26,6 +26,26 @@
       center_x: 0
       center_y: 0
       pattern: 'microexpansion'
+'Ruler':
+  name: 'Ruler'
+  selected: false
+  milling:
+    current: 60.0e-12
+    voltage: 30000.0
+    field_of_view: 8e-05
+    mode: 'Serial'
+    channel: 'ion'
+  patterns:
+    - name: 'Ruler'
+      width: 2.0e-06
+      height: 1.0e-05
+      depth: 5.0e-07
+      spacing: 1.0e-05
+      num_notches: 11
+      spot_size_correction: 0.0
+      center_x: 0
+      center_y: 0
+      pattern: 'ruler'
 'Rough Milling 01':
   name: 'Rough Milling 01'
   milling:

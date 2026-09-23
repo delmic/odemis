@@ -2,9 +2,9 @@
 """
 Created on 3 April 2025
 
-@author: Patrick Cleeve
+@author: Patrick Cleeve, Alexéy Ilyushkin
 
-Copyright © 2025 Patrick Cleeve, Delmic
+Copyright © 2025-2026 Patrick Cleeve, Alexéy Ilyushkin, Delmic
 
 This file is part of Odemis.
 
@@ -34,6 +34,7 @@ from odemis.acq.milling.patterns import (
     MicroexpansionPatternParameters,
     MillingPatternParameters,
     RectanglePatternParameters,
+    RulerPatternParameters,
     TrenchPatternParameters,
 )
 from odemis.acq.milling.tasks import (
@@ -331,12 +332,22 @@ def convert_task_to_milling_stage(task: MillingTaskSettings) -> 'FibsemMillingSt
     return milling_stage
 
 def convert_milling_tasks_to_milling_stages(milling_tasks: List[MillingTaskSettings]) -> List['FibsemMillingStage']:
-    """Convert a list of Odemis milling tasks to fibsemOS milling stages."""
+    """Convert tasks to fibsemOS stages, expanding rulers into rectangle stages.
+
+    fibsemOS accepts one pattern per stage. Rulers use its existing Rectangle
+    pattern for every notch, so no additional fibsemOS primitive is required.
+    """
     milling_stages = []
 
     for task in milling_tasks:
-        milling_stage = convert_task_to_milling_stage(task)
-        milling_stages.append(milling_stage)
+        if not task.selected:
+            continue
+        for pattern in task.patterns:
+            patterns = pattern.generate() if isinstance(pattern, RulerPatternParameters) else [pattern]
+            for p in patterns:
+                name = task.name if len(task.patterns) == 1 and len(patterns) == 1 else f"{task.name}: {p.name.value}"
+                stage_task = MillingTaskSettings(milling=task.milling, patterns=[p], name=name)
+                milling_stages.append(convert_task_to_milling_stage(stage_task))
 
     return milling_stages
 

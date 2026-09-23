@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """
-@author: Patrick Cleeve
+@author: Patrick Cleeve, Alexéy Ilyushkin
 
-Copyright © 2025 Delmic
+Copyright © 2025-2026 Patrick Cleeve, Alexéy Ilyushkin, Delmic
 
 This file is part of Odemis.
 
@@ -48,7 +48,7 @@ from odemis.acq.feature import (
     REFERENCE_IMAGE_FILENAME,
 )
 from odemis.acq.milling.tasks import MillingTaskSettings
-from odemis.acq.milling.patterns import RectanglePatternParameters
+from odemis.acq.milling.patterns import RectanglePatternParameters, RulerPatternParameters
 from odemis.acq.milling.fibsemos import run_milling_tasks_fibsemos
 from odemis.acq.move import Posture, MicroscopePostureManager
 from odemis.acq.stream import FIBStream, SEMStream
@@ -281,12 +281,18 @@ def get_associated_tasks(wt: MillingWorkflowTask,
         if not task.selected:
             continue
 
-        if wt.value in task.name:
-            associated_tasks.append(task)
+        # Rulers always belong to rough milling, regardless of their task name.
+        is_ruler = any(isinstance(pattern, RulerPatternParameters) for pattern in task.patterns)
+        if is_ruler:
+            if wt is MillingWorkflowTask.RoughMilling:
+                associated_tasks.append(task)
+            continue
 
-        # special case for micro-expansion to associate with rough milling
+        # TODO: Replace name matching and special cases with explicit workflow assignments.
         if wt is MillingWorkflowTask.RoughMilling and "Microexpansion" in task.name:
-            associated_tasks.insert(0, task) # should be the first task
+            associated_tasks.insert(0, task)  # This must be the first task.
+        elif wt.value in task.name:
+            associated_tasks.append(task)
 
     return associated_tasks
 

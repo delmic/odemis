@@ -2,7 +2,9 @@
 """
 Created on Feb 2025
 
-Copyright © Delmic
+@author: Patrick Cleeve, Alexéy Ilyushkin
+
+Copyright © 2025-2026 Patrick Cleeve, Alexéy Ilyushkin, Delmic
 
 This file is part of Odemis.
 
@@ -45,6 +47,7 @@ except ImportError:
 from odemis.acq.milling.patterns import (
     MicroexpansionPatternParameters,
     RectanglePatternParameters,
+    RulerPatternParameters,
     TrenchPatternParameters,
 )
 from odemis.acq.milling.tasks import MillingSettings, MillingTaskSettings
@@ -300,6 +303,96 @@ class TestConvertMillingTasksToMillingStages(unittest.TestCase):
         # Check that each stage has a valid pattern conversion
         self.assertIsInstance(stages[0].pattern, BasePattern)
         self.assertIsInstance(stages[1].pattern, BasePattern)
+
+    def test_ruler_uses_only_rectangle_stages(self) -> None:
+        """Convert every ruler notch into a serializable rectangle stage."""
+        ruler = RulerPatternParameters(
+            width=2e-6, height=10e-6, depth=0.5e-6, spacing=10e-6,
+            num_notches=21, center=(3e-6, -4e-6))
+        milling = MillingSettings(current=60e-12, voltage=30000, field_of_view=80e-6)
+        task = MillingTaskSettings(name="Ruler", milling=milling, patterns=[ruler])
+        stages = convert_milling_tasks_to_milling_stages([task])
+        self.assertEqual(len(stages), 42)
+        self.assertEqual(len({stage.name for stage in stages}), 42)
+        for stage, rectangle in zip(stages, ruler.generate()):
+            self.assertIsInstance(stage.pattern, RectanglePattern)
+            shapes = stage.pattern.define()
+            self.assertEqual(len(shapes), 1)
+            shape = shapes[0]
+            self.assertEqual(shape.width, rectangle.width.value)
+            self.assertEqual(shape.height, rectangle.height.value)
+            self.assertEqual(shape.depth, rectangle.depth.value)
+            self.assertEqual(shape.centre_x, rectangle.center.value[0])
+            self.assertEqual(shape.centre_y, rectangle.center.value[1])
+            self.assertEqual(shape.rotation, 0)
+            self.assertEqual(stage.milling.milling_current, milling.current.value)
+            self.assertEqual(stage.alignment.enabled, milling.align.value)
+            # Serialized stages can also be read by unmodified fibsemOS.
+            restored = type(stage).from_dict(stage.to_dict())
+            self.assertEqual(restored.pattern.to_dict(), stage.pattern.to_dict())
+
+    def test_ruler_in_task_with_multiple_patterns(self) -> None:
+        """Convert a ruler within a task that contains other pattern types."""
+        milling = MillingSettings(current=60e-12, voltage=30000, field_of_view=80e-6, align=False)
+        ruler = RulerPatternParameters(width=2e-6, height=10e-6, depth=0.5e-6,
+                                       spacing=10e-6, num_notches=6)
+        task = MillingTaskSettings(name="Mixed", milling=milling,
+                                   patterns=[create_trench_pattern_params(), ruler,
+                                             create_rectangle_pattern_params()])
+        stages = convert_milling_tasks_to_milling_stages([task])
+        self.assertEqual(len(stages), 14)
+        self.assertIsInstance(stages[0].pattern, TrenchPattern)
+        self.assertTrue(all(isinstance(stage.pattern, RectanglePattern) for stage in stages[1:]))
+        self.assertTrue(all(not stage.alignment.enabled for stage in stages))
+        task.selected = False
+        self.assertEqual(convert_milling_tasks_to_milling_stages([task]), [])
+
+
+@unittest.skipUnless(fibsemos.FIBSEMOS_INSTALLED, "fibsemOS is not installed")
+class TestRulerSpotSizeCorrection(unittest.TestCase):
+    """Test ruler spot size correction during fibsemOS conversion."""
+
+    def setUp(self) -> None:
+        """Create a small corrected ruler task for each test."""
+        self.ruler = RulerPatternParameters(
+            width=2e-6, height=6e-6, depth=0.5e-6, spacing=10e-6,
+            num_notches=2, center=(3e-6, -4e-6), spot_size_correction=20e-9)
+        milling = MillingSettings(current=60e-12, voltage=30000, field_of_view=80e-6)
+        self.task = MillingTaskSettings(name="Ruler", milling=milling, patterns=[self.ruler])
+
+    def test_correction_reduces_notch_dimensions(self) -> None:
+        """Subtract the correction from each milled notch dimension."""
+        stages = convert_milling_tasks_to_milling_stages([self.task])
+        self.assertEqual(len(stages), 4)
+        for stage, rectangle in zip(stages, self.ruler.generate()):
+            self.assertAlmostEqual(stage.pattern.width, rectangle.width.value - 20e-9, places=15)
+            self.assertAlmostEqual(stage.pattern.height, rectangle.height.value - 20e-9, places=15)
+
+    def test_correction_preserves_depth_and_position(self) -> None:
+        """Keep notch depth and position unchanged after correction."""
+        stages = convert_milling_tasks_to_milling_stages([self.task])
+        for stage, rectangle in zip(stages, self.ruler.generate()):
+            self.assertEqual(stage.pattern.depth, rectangle.depth.value)
+            self.assertEqual((stage.pattern.point.x, stage.pattern.point.y), rectangle.center.value)
+
+    def test_correction_equal_to_notch_height_is_rejected(self) -> None:
+        """Reject a correction equal to the notch height."""
+        self.ruler.spot_size_correction.value = self.ruler.generate()[0].height.value
+        with self.assertRaises(ValueError):
+            convert_milling_tasks_to_milling_stages([self.task])
+
+    def test_correction_exceeding_notch_height_is_rejected(self) -> None:
+        """Reject a correction greater than the notch height."""
+        self.ruler.spot_size_correction.value = 1.25 * self.ruler.generate()[0].height.value
+        with self.assertRaises(ValueError):
+            convert_milling_tasks_to_milling_stages([self.task])
+
+    def test_correction_exceeding_short_notch_width_is_rejected(self) -> None:
+        """Reject a correction greater than a short notch width."""
+        self.ruler.width.value = 20e-9  # Long ticks are 20 nm, short ticks are 15 nm.
+        self.ruler.spot_size_correction.value = 16e-9
+        with self.assertRaises(ValueError):
+            convert_milling_tasks_to_milling_stages([self.task])
 
 
 class TestResolveFeatureReferenceImage(unittest.TestCase):
