@@ -14,6 +14,7 @@ from typing import Any, Tuple
 import cairo
 import wx
 
+from odemis.gui.comp.overlay._constants import MILLING_LABEL_BACKGROUND_OPACITY
 from odemis.gui.comp.overlay.rectangle import RectangleOverlay
 from odemis.gui.comp.overlay.shapes import ShapesOverlay
 from odemis.gui.layout import theme
@@ -39,7 +40,7 @@ class MillingShapesOverlay(ShapesOverlay):
         """
         label = self.add_label(
             text, align=wx.ALIGN_CENTRE_HORIZONTAL | wx.ALIGN_BOTTOM,
-            background=hex_to_frgba(theme.viewport_background, 0.5))
+            background=hex_to_frgba(theme.viewport_background, MILLING_LABEL_BACKGROUND_OPACITY))
         self._pattern_labels.append((label, p_pos))
 
     def clear_labels(self) -> None:

@@ -22,3 +22,5 @@ This file is part of Odemis.
 # used in rectangle, ellipse, polygon
 LINE_WIDTH_THIN = 2
 LINE_WIDTH_THICK = 5
+
+MILLING_LABEL_BACKGROUND_OPACITY = 0.5
