@@ -1,7 +1,7 @@
 """
-@author: Patrick Cleeve
+@author: Patrick Cleeve, Alexéy Ilyushkin
 
-Copyright © 2025 Delmic
+Copyright © 2025-2026 Patrick Cleeve, Alexéy Ilyushkin, Delmic
 
 This file is part of Odemis.
 
@@ -25,7 +25,7 @@ This module contains structures to define milling patterns.
 
 import math
 from abc import ABC, abstractmethod
-from typing import List
+from typing import List, Tuple
 
 from odemis import model
 
@@ -260,9 +260,143 @@ class MicroexpansionPatternParameters(MillingPatternParameters):
 
         return patterns
 
+
+class CompositeRectanglePatternParameters(MillingPatternParameters):
+    """Marker base for patterns composed of rectangle milling shapes."""
+
+
+class RulerPatternParameters(CompositeRectanglePatternParameters):
+    """Two mirrored rulers, with alternating horizontal notches bottom to top.
+
+    Width is the even-numbered notch length; odd-numbered notches are 3/4
+    of that length. Spacing is the gap between the inner edges of the
+    rulers. Height includes the full extent of the notches. Each notch is
+    one fifth of the pitch thick, so changing height scales the whole ruler.
+    Num_notches counts all notches on each side, including the zero mark.
+    """
+
+    def __init__(self, width: float, height: float, depth: float, spacing: float,
+                 num_notches: int = 11, center: Tuple[float, float] = (0, 0),
+                 name: str = "Ruler", spot_size_correction: float = 0.0) -> None:
+        """Initialize ruler pattern parameters.
+
+        :param width: Length of each long notch.
+        :param height: Overall ruler height.
+        :param depth: Milling depth of each notch.
+        :param spacing: Gap between the rulers' inner edges.
+        :param num_notches: Number of notches on each side.
+        :param center: Center of the complete ruler pattern.
+        :param name: Pattern name.
+        :param spot_size_correction: Beam spot size correction.
+        """
+        self.name = model.StringVA(name)
+        # Short notches must also meet the rectangle's minimum width of 1 nm.
+        self.width = model.FloatContinuous(width, unit="m", range=(2e-9, 900e-6))
+        self.height = model.FloatContinuous(height, unit="m", range=(6e-9, 900e-6),
+                                            setter=self._set_height)
+        self.depth = model.FloatContinuous(depth, unit="m", range=(1e-9, 100e-6))
+        self.spacing = model.FloatContinuous(spacing, unit="m", range=(1e-9, 900e-6))
+        self.num_notches = model.IntContinuous(num_notches, range=(2, 1000),
+                                              setter=self._set_num_notches)
+        self.center = model.TupleContinuous(center, unit="m", range=((-1e3, -1e3), (1e3, 1e3)), cls=(int, float))
+        self.spot_size_correction = model.FloatContinuous(spot_size_correction, unit="m", range=(0, 900e-6))
+        self._check_notch_height(height, num_notches)
+
+    @staticmethod
+    def _check_notch_height(height: float, num_notches: int) -> None:
+        """Validate that the generated notches meet the minimum height.
+
+        :param height: Overall ruler height.
+        :param num_notches: Number of notches on each side.
+        :raises ValueError: If a notch would be less than one nanometer high.
+        """
+        if height / (5 * num_notches - 4) < 1e-9:
+            raise ValueError("Ruler height is too small for this number of notches (minimum notch thickness is 1 nm)")
+
+    def _set_height(self, height: float) -> float:
+        """Validate and return a new ruler height.
+
+        :param height: Proposed ruler height.
+        :return: Validated ruler height.
+        """
+        self._check_notch_height(height, self.num_notches.value)
+        return height
+
+    def _set_num_notches(self, num_notches: int) -> int:
+        """Validate and return a new notch count.
+
+        :param num_notches: Proposed number of notches on each side.
+        :return: Validated notch count.
+        """
+        self._check_notch_height(self.height.value, num_notches)
+        return num_notches
+
+    def to_dict(self) -> dict:
+        """Serialize the ruler parameters.
+
+        :return: Serializable ruler parameters.
+        """
+        return {"name": self.name.value,
+                "width": self.width.value,
+                "height": self.height.value,
+                "depth": self.depth.value,
+                "spacing": self.spacing.value,
+                "num_notches": self.num_notches.value,
+                "center_x": self.center.value[0],
+                "center_y": self.center.value[1],
+                "spot_size_correction": self.spot_size_correction.value,
+                "pattern": "ruler"}
+
+    @staticmethod
+    def from_dict(data: dict) -> 'RulerPatternParameters':
+        """Create ruler parameters from serialized data.
+
+        :param data: Serialized ruler parameters.
+        :return: Restored ruler parameters.
+        """
+        return RulerPatternParameters(
+            width=data["width"],
+            height=data["height"],
+            depth=data["depth"],
+            spacing=data["spacing"],
+            num_notches=data.get("num_notches", 11),
+            center=(data.get("center_x", 0), data.get("center_y", 0)),
+            name=data.get("name", "Ruler"),
+            spot_size_correction=data.get("spot_size_correction", 0.0))
+
+    def generate(self) -> List[MillingPatternParameters]:
+        """Generate rectangles alternating between full and three-quarter width.
+
+        :return: Rectangle parameters for both sides of the ruler.
+        """
+        count = self.num_notches.value
+        notch_height = self.height.value / (5 * count - 4)
+        pitch = 5 * notch_height
+        center_x, center_y = self.center.value
+        bottom_y = center_y - (self.height.value - notch_height) / 2
+        patterns = []
+        for index in range(count):
+            width = self.width.value if index % 2 == 0 else self.width.value * 0.75
+
+            # All notches start at the inner edge and extend outwards.
+            offset_x = (self.spacing.value + width) / 2
+            for side, direction in (("Left", -1), ("Right", 1)):
+                patterns.append(RectanglePatternParameters(
+                    name=f"{self.name.value} ({side} {index})",
+                    width=width,
+                    height=notch_height,
+                    depth=self.depth.value,
+                    center=(center_x + direction * offset_x, bottom_y + index * pitch),
+                    rotation=0,
+                    scan_direction="TopToBottom",
+                    spot_size_correction=self.spot_size_correction.value))
+        return patterns
+
+
 # dictionary to map pattern names to pattern classes
 PATTERN_NAME_TO_CLASS = {
     "rectangle": RectanglePatternParameters,
     "trench": TrenchPatternParameters,
     "microexpansion": MicroexpansionPatternParameters,
+    "ruler": RulerPatternParameters,
 }

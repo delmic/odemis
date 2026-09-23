@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """
-@author: Patrick Cleeve
+@author: Patrick Cleeve, Alexéy Ilyushkin
 
-Copyright © 2024, Delmic
+Copyright © 2025-2026 Patrick Cleeve, Alexéy Ilyushkin, Delmic
 
 This file is part of Odemis.
 
@@ -20,7 +20,8 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 import os
 import logging
 import unittest
-from odemis.acq.milling.patterns import TrenchPatternParameters, MicroexpansionPatternParameters
+from odemis.acq.milling import DEFAULT_MILLING_TASKS_PATH
+from odemis.acq.milling.patterns import TrenchPatternParameters, MicroexpansionPatternParameters, RulerPatternParameters
 from odemis.acq.milling.tasks import MillingTaskSettings, MillingSettings, load_milling_tasks, save_milling_tasks
 
 logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)-15s: %(message)s")
@@ -144,6 +145,26 @@ class MillingTaskTestCase(unittest.TestCase):
         self.assertEqual(loaded_tasks["Microexpansion"].patterns[0].depth.value, microexpansion_task_settings.patterns[0].depth.value)
         self.assertEqual(loaded_tasks["Microexpansion"].patterns[0].spacing.value, microexpansion_task_settings.patterns[0].spacing.value)
         self.assertEqual(loaded_tasks["Microexpansion"].patterns[0].center.value, microexpansion_task_settings.patterns[0].center.value)
+
+    def test_ruler_task_roundtrip(self) -> None:
+        """Preserve ruler task parameters through YAML serialization."""
+        tasks = load_milling_tasks(DEFAULT_MILLING_TASKS_PATH)
+        ruler = tasks["Ruler"]
+        self.assertFalse(ruler.selected)
+        self.assertEqual(ruler.generate(), [])
+        self.assertIsInstance(ruler.patterns[0], RulerPatternParameters)
+        self.assertEqual(ruler.patterns[0].num_notches.value, 11)
+        ruler.selected = True
+        ruler.patterns[0].num_notches.value = 16
+        ruler.patterns[0].height.value = 8e-6
+        ruler.patterns[0].center.value = (1e-6, -2e-6)
+        ruler.patterns[0].spot_size_correction.value = 20e-9
+        save_milling_tasks(TASKS_PATH, tasks)
+        restored = load_milling_tasks(TASKS_PATH)["Ruler"]
+        self.assertEqual(restored.to_dict(), ruler.to_dict())
+        self.assertEqual(len(restored.generate()), 32)
+        self.assertEqual([p.to_dict() for p in restored.generate()],
+                         [p.to_dict() for p in ruler.generate()])
 
 
 if __name__ == "__main__":

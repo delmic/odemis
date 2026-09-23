@@ -2,7 +2,9 @@
 """
 Created on Apr 2025
 
-Copyright © Delmic
+@author: Patrick Cleeve, Alexéy Ilyushkin
+
+Copyright © 2025-2026 Patrick Cleeve, Alexéy Ilyushkin, Delmic
 
 This file is part of Odemis.
 
@@ -35,7 +37,7 @@ from odemis.acq.feature import (
     FEATURE_DEACTIVE,
 )
 from odemis.acq.milling import DEFAULT_MILLING_TASKS_PATH
-from odemis.acq.milling.millmng import MillingWorkflowTask, run_automated_milling, status_map
+from odemis.acq.milling.millmng import MillingWorkflowTask, get_associated_tasks, run_automated_milling, status_map
 from odemis.acq.milling.tasks import load_milling_tasks
 from odemis.acq.stream import FIBStream, SEMStream
 from odemis.util import testing
@@ -47,6 +49,24 @@ logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)s:%(lineno)d %
 
 CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
 METEOR_FISBEM_CONFIG = CONFIG_PATH + "sim/meteor-fibsem-sim.odm.yaml"
+
+class TestAssociatedMillingTasks(unittest.TestCase):
+    """Test milling task workflow association."""
+
+    def test_optional_ruler_in_rough_milling(self) -> None:
+        """Associate a selected ruler only once and only with rough milling."""
+        tasks = load_milling_tasks(DEFAULT_MILLING_TASKS_PATH)
+        ruler = tasks["Ruler"]
+        self.assertNotIn(ruler, get_associated_tasks(MillingWorkflowTask.RoughMilling, tasks))
+        ruler.selected = True
+        # Association follows the pattern type even if the user renames the task.
+        ruler.name = "Polishing Microexpansion ruler"
+        rough_tasks = get_associated_tasks(MillingWorkflowTask.RoughMilling, tasks)
+        self.assertIn(ruler, rough_tasks)
+        self.assertEqual(rough_tasks.count(ruler), 1)
+        self.assertLess(rough_tasks.index(ruler), rough_tasks.index(tasks["Rough Milling 01"]))
+        self.assertNotIn(ruler, get_associated_tasks(MillingWorkflowTask.Polishing, tasks))
+
 
 # NOTE: Require xt simulator to be running
 class TestAutomatedMillingManager(unittest.TestCase):

@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """
 :created: 2024-03-01
-:author: Nandish Patel
-:copyright: © 2024 Nandish Patel, Delmic
+:author: Nandish Patel, Alexéy Ilyushkin
+:copyright: © 2024-2026 Nandish Patel, Alexéy Ilyushkin, Delmic
 
 This file is part of Odemis.
 

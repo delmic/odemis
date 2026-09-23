@@ -2,9 +2,9 @@
 """
 Created on 09 Mar 2023
 
-@author: Canberk Akin
+@author: Canberk Akin, Alexéy Ilyushkin
 
-Copyright © 2023 Canberk Akin, Delmic
+Copyright © 2023-2026 Canberk Akin, Alexéy Ilyushkin, Delmic
 
 This file is part of Odemis.
 
@@ -43,15 +43,15 @@ from odemis.acq.feature import (
 from odemis.acq.milling import millmng
 from odemis.acq.milling.millmng import MillingWorkflowTask, run_automated_milling
 from odemis.acq.milling.patterns import (
-    MicroexpansionPatternParameters,
     RectanglePatternParameters,
-    TrenchPatternParameters,
+    RulerPatternParameters,
 )
 from odemis.acq.milling.tasks import MillingTaskSettings
 from odemis.gui.comp.milling import MillingTaskPanel
 from odemis.gui.comp.overlay.base import Vec
-from odemis.gui.comp.overlay.rectangle import MillingRectangleOverlay, RectangleOverlay
-from odemis.gui.comp.overlay.shapes import EditableShape, ShapesOverlay
+from odemis.gui.comp.overlay.milling import MillingShapesOverlay
+from odemis.gui.comp.overlay.rectangle import MillingRectangleOverlay
+from odemis.gui.comp.overlay.shapes import EditableShape
 from odemis.gui.conf import get_acqui_conf
 from odemis.gui.cont.features import save_project
 from odemis.gui.layout import theme
@@ -117,7 +117,8 @@ def rectangle_pattern_to_shape(canvas,
                         pattern: RectanglePatternParameters,
                         colour: str = theme.categorical_yellow,
                         name: str = None,
-                        show_spot_size_correction: bool = False) -> EditableShape:
+                        show_spot_size_correction: bool = False,
+                        show_dimensions: bool = True) -> EditableShape:
     """Convert a rectangle pattern to a shape"""
     rect = MillingRectangleOverlay(
         cnvs=canvas,
@@ -125,6 +126,7 @@ def rectangle_pattern_to_shape(canvas,
         show_selection_points=False,
         spot_size_correction=pattern.spot_size_correction.value,
         show_spot_size_correction=show_spot_size_correction,
+        show_dimensions=show_dimensions,
     )
     width = pattern.width.value
     height = pattern.height.value
@@ -183,10 +185,7 @@ class MillingTaskController:
         self._active_spot_size_pattern = None
 
         # pattern overlay
-        self.rectangles_overlay = ShapesOverlay(
-            cnvs=self.canvas,
-            shape_cls=RectangleOverlay,
-        )
+        self.rectangles_overlay = MillingShapesOverlay(cnvs=self.canvas)
         self.canvas.add_world_overlay(self.rectangles_overlay)
         self.canvas.Bind(wx.EVT_LEFT_DOWN, self.on_mouse_down) # bind the mouse down event
         self.canvas.Bind(wx.EVT_CHAR, self.on_char)
@@ -250,9 +249,6 @@ class MillingTaskController:
 
         # create the setting panels, and connectors
         self.controls: Dict[str, MillingTaskPanel] = {}
-        pattern_parameters = [
-            "width", "height", "depth", "spacing", "spot_size_correction"
-        ]
         milling_parameters = ["current", "align", "mode"]
 
         # Note: always create all the panels, but hide for which the task is not selected.
@@ -273,7 +269,7 @@ class MillingTaskController:
             self.controls[task_name]["panel"] = panel
 
             # pattern parameters
-            for param in pattern_parameters:
+            for param in panel.pattern_parameters:
                 _va_connector = VigilantAttributeConnector(
                     getattr(parameters, param),
                     panel.ctrl_dict[param],
@@ -349,13 +345,13 @@ class MillingTaskController:
                 if not task.selected:
                     continue
                 for pattern in task.patterns:
-                    if not isinstance(pattern, (RectanglePatternParameters,
-                                                TrenchPatternParameters,
-                                                MicroexpansionPatternParameters)):
-                        continue
-                    correction = pattern.spot_size_correction.value
-                    if correction >= min(pattern.width.value, pattern.height.value):
-                        return feature.name.value, task_name
+                    # Validate the actual milling rectangles, including the ruler's thin notches.
+                    for rectangle in pattern.generate():
+                        if not isinstance(rectangle, RectanglePatternParameters):
+                            continue
+                        correction = rectangle.spot_size_correction.value
+                        if correction >= min(rectangle.width.value, rectangle.height.value):
+                            return feature.name.value, task_name
         return None
 
     def _update_spot_size_validation_message(self) -> None:
@@ -599,9 +595,10 @@ class MillingTaskController:
             if not task.selected:
                 continue
             for pattern in task.patterns:
-                # logging.debug(f"{task_name}: {pattern.to_json()}")
+                # Use one shared ruler label to avoid clutter from individual notch dimensions.
+                is_ruler = isinstance(pattern, RulerPatternParameters)
                 for j, pshape in enumerate(pattern.generate()):
-                    name = task_name if j == 0 else None
+                    name = task_name if j == 0 and not is_ruler else None
                     shape = rectangle_pattern_to_shape(
                                             canvas=self.canvas,
                                             ref_img=feature.reference_image,
@@ -610,8 +607,14 @@ class MillingTaskController:
                                             name=name,
                                             show_spot_size_correction=(
                                                 pattern is self._active_spot_size_pattern
-                                            ))
+                                            ),
+                                            show_dimensions=not is_ruler)
                     self.rectangles_overlay.add_shape(shape)
+                if is_ruler:
+                    x, y = pos_to_absolute(pattern.center.value, feature.reference_image)
+                    height = units.readable_str(pattern.height.value, "m", sig=3)
+                    self.rectangles_overlay.add_pattern_label(
+                        f"{task_name} · {height}", (x, y + pattern.height.value / 2))
 
         # validate the patterns
         self._on_shapes_update(self.rectangles_overlay._shapes.value)
