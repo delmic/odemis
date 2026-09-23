@@ -46,6 +46,7 @@ except ImportError:
 
 from odemis.acq.milling.patterns import (
     MicroexpansionPatternParameters,
+    NotchPatternParameters,
     RectanglePatternParameters,
     RulerPatternParameters,
     TrenchPatternParameters,
@@ -346,6 +347,21 @@ class TestConvertMillingTasksToMillingStages(unittest.TestCase):
         self.assertTrue(all(not stage.alignment.enabled for stage in stages))
         task.selected = False
         self.assertEqual(convert_milling_tasks_to_milling_stages([task]), [])
+
+    def test_notch_uses_five_rectangle_stages(self) -> None:
+        """Convert the notch into five ordinary fibsemOS rectangle stages."""
+        notch = NotchPatternParameters(
+            width=3.5e-6, height=8.1e-6, depth=0.5e-6, gap=1.1e-6,
+            thickness=0.2e-6, offset=-0.2e-6)
+        task = MillingTaskSettings(
+            name="Notch",
+            milling=MillingSettings(current=60e-12, voltage=30000, field_of_view=80e-6),
+            patterns=[notch])
+
+        stages = convert_milling_tasks_to_milling_stages([task])
+
+        self.assertEqual(len(stages), 5)
+        self.assertTrue(all(isinstance(stage.pattern, RectanglePattern) for stage in stages))
 
 
 @unittest.skipUnless(fibsemos.FIBSEMOS_INSTALLED, "fibsemOS is not installed")

@@ -31,10 +31,10 @@ from typing import List, Optional, Union
 
 from odemis import model
 from odemis.acq.milling.patterns import (
+    CompositeRectanglePatternParameters,
     MicroexpansionPatternParameters,
     MillingPatternParameters,
     RectanglePatternParameters,
-    RulerPatternParameters,
     TrenchPatternParameters,
 )
 from odemis.acq.milling.tasks import (
@@ -332,10 +332,10 @@ def convert_task_to_milling_stage(task: MillingTaskSettings) -> 'FibsemMillingSt
     return milling_stage
 
 def convert_milling_tasks_to_milling_stages(milling_tasks: List[MillingTaskSettings]) -> List['FibsemMillingStage']:
-    """Convert tasks to fibsemOS stages, expanding rulers into rectangle stages.
+    """Convert tasks to fibsemOS stages, expanding composite rectangle patterns.
 
-    fibsemOS accepts one pattern per stage. Rulers use its existing Rectangle
-    pattern for every notch, so no additional fibsemOS primitive is required.
+    fibsemOS accepts one pattern per stage. Composite patterns use its existing
+    Rectangle pattern for every segment, so no additional primitive is required.
     """
     milling_stages = []
 
@@ -343,7 +343,9 @@ def convert_milling_tasks_to_milling_stages(milling_tasks: List[MillingTaskSetti
         if not task.selected:
             continue
         for pattern in task.patterns:
-            patterns = pattern.generate() if isinstance(pattern, RulerPatternParameters) else [pattern]
+            patterns = (pattern.generate()
+                        if isinstance(pattern, CompositeRectanglePatternParameters)
+                        else [pattern])
             for p in patterns:
                 name = task.name if len(task.patterns) == 1 and len(patterns) == 1 else f"{task.name}: {p.name.value}"
                 stage_task = MillingTaskSettings(milling=task.milling, patterns=[p], name=name)

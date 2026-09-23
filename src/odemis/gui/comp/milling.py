@@ -23,7 +23,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 import logging
 import wx
 from odemis import gui, model
-from odemis.acq.milling.patterns import RulerPatternParameters
+from odemis.acq.milling.patterns import NotchPatternParameters, RulerPatternParameters
 from odemis.acq.milling.tasks import  MillingTaskSettings
 from odemis.gui.comp.text import IntegerTextCtrl, UnitFloatCtrl
 from odemis.gui.comp.combo import ComboBox
@@ -74,6 +74,13 @@ class MillingTaskPanel(wx.Panel):
             "depth": {"label": "Depth", "accuracy": 2, "unit": "m"},
             "spacing": {"label": "Spacing", "accuracy": 2, "unit": "m"},
             "num_notches": {"label": "Notches"},
+            "gap": {"label": "Gap", "accuracy": 2, "unit": "m"},
+            "thickness": {"label": "Thickness", "accuracy": 2, "unit": "m"},
+            "offset": {
+                "label": "Loop offset", "accuracy": 2, "unit": "m",
+                "key_step_min": 1e-6,
+            },
+            "mirrored": {"label": "Mirror"},
             "spot_size_correction": {
                 "label": "Spot size correction",
                 "accuracy": 2,
@@ -111,6 +118,13 @@ class MillingTaskPanel(wx.Panel):
             CONFIG["height"]["tooltip"] = "Overall ruler length, including the first and last notches."
             CONFIG["spacing"]["tooltip"] = "Gap between the inner edges of the two rulers."
             CONFIG["num_notches"]["tooltip"] = "Notches on each side, starting at zero at the bottom and alternating long and short."
+        elif isinstance(pattern, NotchPatternParameters):
+            CONFIG["width"]["tooltip"] = "Overall width of the right-facing loop."
+            CONFIG["height"]["tooltip"] = "Overall height including both whiskers."
+            CONFIG["gap"]["tooltip"] = "Clear gap between the two horizontal segments."
+            CONFIG["thickness"]["tooltip"] = "Thickness of all five segments."
+            CONFIG["offset"]["tooltip"] = "Vertical loop offset from center; positive values move it upward."
+            CONFIG["mirrored"]["tooltip"] = "Mirror the notch horizontally so the loop faces left."
 
         for param in vars(pattern):
 

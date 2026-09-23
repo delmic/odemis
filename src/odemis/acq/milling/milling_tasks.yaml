@@ -46,6 +46,28 @@
       center_x: 0
       center_y: 0
       pattern: 'ruler'
+'Notch':
+  name: 'Notch'
+  selected: false
+  milling:
+    current: 0.3e-9
+    voltage: 30000.0
+    field_of_view: 8e-05
+    mode: 'Serial'
+    channel: 'ion'
+  patterns:
+    - name: 'Notch'
+      width: 3.5e-06
+      height: 8.1e-06
+      depth: 5.0e-07
+      gap: 1.1e-06
+      thickness: 0.2e-06
+      offset: -0.2e-06
+      mirrored: false
+      spot_size_correction: 0.0
+      center_x: 0
+      center_y: 0
+      pattern: 'notch'
 'Rough Milling 01':
   name: 'Rough Milling 01'
   milling:
