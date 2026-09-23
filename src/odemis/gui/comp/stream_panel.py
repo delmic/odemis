@@ -1117,13 +1117,11 @@ class StreamPanel(wx.Panel):
             conf = {}
 
         lbl_ctrl = self._add_side_label(label_text)
-        # wx.ALIGN_RIGHT has the effect of only highlighting the box on hover,
-        # which makes it less ugly with Ubuntu
         value_ctrl = wx.CheckBox(self._panel, wx.ID_ANY,
-                                 style=wx.ALIGN_RIGHT | wx.NO_BORDER,
+                                 style=wx.ALIGN_LEFT | wx.NO_BORDER,
                                  **conf)
         self.gb_sizer.Add(value_ctrl, (self.num_rows, 1), span=(1, 2),
-                          flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.TOP | wx.BOTTOM, border=5)
+                          flag=wx.ALIGN_CENTER_VERTICAL | wx.TOP | wx.BOTTOM | wx.RIGHT, border=5)
         value_ctrl.SetValue(value)
 
         return lbl_ctrl, value_ctrl
