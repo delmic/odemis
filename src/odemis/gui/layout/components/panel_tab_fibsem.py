@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 """
-Copyright © 2026 Delmic
+@author: Alexéy Ilyushkin
+
+Copyright © 2026 Alexéy Ilyushkin, Delmic
 
 This file is part of Odemis.
 
@@ -1007,6 +1009,42 @@ class PnlTabFibsem(wx.Panel):
                 border=self._theme.spacing_standard,
             )
             controls_sizer.Add((0, self._theme.spacing_standard))
+
+            with hbox() as movement_sizer:
+                self.chk_move_all_patterns = wx.CheckBox(
+                    controls_panel,
+                    label="Move all patterns",
+                )
+                self.chk_move_all_patterns.SetForegroundColour(self._theme.text_primary)
+                self.chk_move_all_patterns.SetBackgroundColour(self._theme.section_header)
+                self.chk_move_all_patterns.SetToolTip(
+                    "Apply Ctrl+Shift+click and Ctrl+arrow movement to every pattern."
+                )
+                movement_sizer.Add(
+                    self.chk_move_all_patterns,
+                    proportion=1,
+                    flag=wx.ALIGN_CENTER_VERTICAL,
+                )
+
+                self.btn_snap_patterns_to_feature = create_text_button(
+                    controls_panel,
+                    "Snap to Feature",
+                    height=24,
+                    text_colour=self._theme.button_text,
+                    contrast_text_colour=self._theme.button_text_contrast,
+                )
+                self.btn_snap_patterns_to_feature.SetToolTip(
+                    "Move every milling pattern back to the feature marker."
+                )
+                movement_sizer.Add(
+                    self.btn_snap_patterns_to_feature,
+                    flag=wx.ALIGN_CENTER_VERTICAL,
+                )
+            controls_sizer.Add(
+                movement_sizer,
+                flag=wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND,
+                border=self._theme.spacing_standard,
+            )
 
             self.btn_run_milling = create_text_button(
                 controls_panel,

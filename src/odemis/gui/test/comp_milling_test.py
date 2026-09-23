@@ -113,6 +113,31 @@ class MillingTaskPanelTestCase(test.GuiTestCase):
         test.gui_loop()
         self.assertEqual(controls["num_notches"].GetValue(), 11)
 
+    def test_pattern_movement_selection_and_snap(self) -> None:
+        """Move the highlighted pattern or stack and snap to the feature marker."""
+        task_list = wx.CheckListBox(self.panel, choices=list(self.tasks))
+        task_list.SetSelection(task_list.FindString("Ruler"))
+        move_all = wx.CheckBox(self.panel)
+        self.controller._panel.milling_task_chk_list = task_list
+        self.controller._panel.chk_move_all_patterns = move_all
+
+        self.assertEqual(
+            self.controller._get_patterns_for_manual_move(),
+            self.tasks["Ruler"].patterns)
+        move_all.SetValue(True)
+        self.assertEqual(
+            len(self.controller._get_patterns_for_manual_move()),
+            sum(len(task.patterns) for task in self.tasks.values()))
+
+        marker = (2e-6, -3e-6)
+        feature = SimpleNamespace(milling_feature_offset=model.TupleVA(marker))
+        self.controller._tab_data = SimpleNamespace(
+            main=SimpleNamespace(currentFeature=model.VigilantAttribute(feature)))
+        self.controller.allow_milling_pattern_move = True
+        self.controller.move_milling_tasks = Mock()
+        self.controller._snap_patterns_to_feature(None)
+        self.controller.move_milling_tasks.assert_called_once_with(marker)
+
 
 class MillingSpotSizeValidationTestCase(unittest.TestCase):
     """Check corrections against generated notch dimensions without a microscope."""

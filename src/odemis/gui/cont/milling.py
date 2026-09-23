@@ -43,6 +43,7 @@ from odemis.acq.feature import (
 from odemis.acq.milling import millmng
 from odemis.acq.milling.millmng import MillingWorkflowTask, run_automated_milling
 from odemis.acq.milling.patterns import (
+    MillingPatternParameters,
     NotchPatternParameters,
     RectanglePatternParameters,
     RulerPatternParameters,
@@ -194,6 +195,8 @@ class MillingTaskController:
         self.selected_tasks = model.ListVA([])  # List of strings, names of the selected milling tasks
         self._panel.milling_task_chk_list.Bind(wx.EVT_CHECKLISTBOX, handler=self._update_selected_tasks)
         self._panel.milling_task_chk_list.Bind(wx.EVT_LISTBOX, handler=self._on_milling_task_selected)
+        self._panel.btn_snap_patterns_to_feature.Bind(
+            wx.EVT_BUTTON, self._snap_patterns_to_feature)
 
         self._tab_data.main.currentFeature.subscribe(self._on_current_feature_changes, init=True)
 
@@ -231,6 +234,15 @@ class MillingTaskController:
         milling_tasks = feature.milling_tasks if feature else {}
         self.set_milling_tasks(milling_tasks)
         self._update_pattern_panels()
+        self._update_pattern_movement_controls()
+
+    def _update_pattern_movement_controls(self) -> None:
+        """Enable pattern movement controls when a feature can be edited."""
+        feature = self._tab_data.main.currentFeature.value
+        can_move = feature is not None and not self._tab_data.main.is_acquiring.value
+        self._panel.chk_move_all_patterns.Enable(can_move)
+        self._panel.btn_snap_patterns_to_feature.Enable(
+            can_move and feature.milling_feature_offset.value is not None)
 
     @call_in_wx_main
     def _update_pattern_panels(self) -> None:
@@ -426,8 +438,12 @@ class MillingTaskController:
 
             # TODO: validate if click is outside image bounds, don't move the pattern
             # TODO: validate whether the pattern is within the image bounds before moving it
-            # move selected stream to position
-            self.move_milling_tasks(pos_to_relative(p_pos, feature.reference_image))
+            patterns = self._get_patterns_for_manual_move()
+            if not patterns:
+                logging.info("Select a milling pattern before moving it.")
+                return
+            self._move_patterns(
+                patterns, pos_to_relative(p_pos, feature.reference_image))
             return
 
         # super event passthrough
@@ -456,7 +472,7 @@ class MillingTaskController:
         feature = self._tab_data.main.currentFeature.value
 
         # move if a reference image exists, because coordinate conversion from view pixels to physical
-        # metres relies on the MD_POS metadata stored in that image
+        # meters relies on the MD_POS metadata stored in that image
         if (ctrl_mod
                 and self.allow_milling_pattern_move
                 and feature and feature.reference_image is not None
@@ -472,22 +488,22 @@ class MillingTaskController:
             else:
                 view_dx = step_px
 
-            # All patterns across all tasks are shifted by the same view-space offset so
-            # their relative positions are preserved (the whole milling stack moves together).
-            for task in self.milling_tasks.values():
-                for pattern in task.patterns:
-                    selected_center_rel = pattern.center.value
-                    offset = active_canvas.get_half_buffer_size()
-                    center_phys = pos_to_absolute(selected_center_rel, ref_img)
-                    center_view = active_canvas.phys_to_view(center_phys, offset)
-                    new_center_view = (center_view[0] + view_dx, center_view[1])
-                    new_center_phys = active_canvas.view_to_phys(new_center_view, offset)
-                    logging.debug(f"Move milling pattern {pattern.name.value} horizontally from physical position"
-                                  f" {center_phys}, to new position {new_center_phys}")
+            patterns = self._get_patterns_for_manual_move()
+            if not patterns:
+                logging.info("Select a milling pattern before moving it.")
+                return
+            for pattern in patterns:
+                selected_center_rel = pattern.center.value
+                offset = active_canvas.get_half_buffer_size()
+                center_phys = pos_to_absolute(selected_center_rel, ref_img)
+                center_view = active_canvas.phys_to_view(center_phys, offset)
+                new_center_view = (center_view[0] + view_dx, center_view[1])
+                new_center_phys = active_canvas.view_to_phys(new_center_view, offset)
+                logging.debug(f"Move milling pattern {pattern.name.value} horizontally from physical position"
+                              f" {center_phys}, to new position {new_center_phys}")
 
-                    # move selected pattern to position
-                    relative_pos = pos_to_relative(new_center_phys, feature.reference_image)
-                    pattern.center.value = relative_pos
+                relative_pos = pos_to_relative(new_center_phys, feature.reference_image)
+                pattern.center.value = relative_pos
 
             save_project(self._tab_data.main)
             self.draw_milling_tasks()
@@ -543,25 +559,50 @@ class MillingTaskController:
         self.draw_milling_tasks()
         self._update_mill_btn()
 
-    def move_milling_tasks(self, pos: Tuple[float, float]):
-        """
-        Update only the milling patterns for the current feature.
+    def _get_patterns_for_manual_move(self) -> List[MillingPatternParameters]:
+        """Return the highlighted pattern, or all patterns in grouped movement mode."""
+        if self._panel.chk_move_all_patterns.GetValue():
+            return [pattern for task in self.milling_tasks.values()
+                    for pattern in task.patterns]
 
-        This is the independent Ctrl+Shift+click movement path and must not move
-        the feature marker.
-        :param pos: the position to draw the patterns at (in m, as relative coordinates to the center of the ion-beam FoV)
+        selection = self._panel.milling_task_chk_list.GetSelection()
+        if selection == wx.NOT_FOUND:
+            return []
+        task_name = self._panel.milling_task_chk_list.GetString(selection)
+        task = self.milling_tasks.get(task_name)
+        return list(task.patterns) if task and task.selected else []
+
+    def _move_patterns(self, patterns: List[MillingPatternParameters],
+                       pos: Tuple[float, float]) -> None:
+        """Move patterns to one position and persist the updated project."""
+        for pattern in patterns:
+            pattern.center.value = pos
+
+        save_project(self._tab_data.main)
+        self.draw_milling_tasks()
+
+    def move_milling_tasks(self, pos: Tuple[float, float]) -> None:
+        """Move every milling pattern for the current feature.
+
+        :param pos: Position relative to the center of the ion-beam field of view.
         """
         feature = self._tab_data.main.currentFeature.value
         if feature is None:
             logging.warning("Cannot move milling tasks without a selected feature.")
             return
 
-        for task in feature.milling_tasks.values():
-            for pattern in task.patterns:
-                pattern.center.value = pos
+        patterns = [pattern for task in feature.milling_tasks.values()
+                    for pattern in task.patterns]
+        self._move_patterns(patterns, pos)
 
-        save_project(self._tab_data.main)
-        self.draw_milling_tasks()
+    def _snap_patterns_to_feature(self, _: wx.Event) -> None:
+        """Move all milling patterns back to the feature marker."""
+        feature = self._tab_data.main.currentFeature.value
+        if (not self.allow_milling_pattern_move or feature is None
+                or feature.milling_feature_offset.value is None):
+            logging.warning("Cannot snap milling patterns without a feature marker.")
+            return
+        self.move_milling_tasks(feature.milling_feature_offset.value)
 
     def set_milling_feature_position(self,
                                      pos: Tuple[float, float],
@@ -573,6 +614,7 @@ class MillingTaskController:
             return
 
         feature.set_milling_feature_offset(pos, move_patterns=move_patterns)
+        self._update_pattern_movement_controls()
 
         save_project(self._tab_data.main)
         self.draw_milling_tasks()
@@ -747,6 +789,8 @@ class MillingTaskController:
         Called when is_acquiring changes
         Enable/Disable mill button
         """
+        self.allow_milling_pattern_move = not is_acquiring
+        self._update_pattern_movement_controls()
         self._update_mill_btn()
 
     @call_in_wx_main
