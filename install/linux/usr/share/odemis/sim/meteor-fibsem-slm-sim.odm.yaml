@@ -312,11 +312,12 @@
 #        address: 4,
         port: "/dev/fake6", # Simulator
         address: null, # Simulator
-        axes: ["s", "l"],
+        axes: ["l", "s"],
         # ustepsize: [5.9e-9, 5.9e-9], # m/µstep
         ustepsize: [0.1e-6, 0.1e-6],
         refproc: "Standard",
-        refswitch: {"s": 0, "l": 0},
+        refswitch: {"l": 0, "s": 0},
+        rng: [[-3.e-3, 125.5e-3],[-2.1e-3, 2.1e-3]],
     },
     metadata: {
         # Default position of the mirror engaged (will be improved during alignment)
@@ -414,8 +415,8 @@
              # pos (rad) -> m,m
              0.08: [414.e-9, 450.e-9], # FF01-432/36
              0.865398: [500.e-9, 530.e-9], # FF01-515/30
-             1.650796: [579.5e-9, 610.5e-9], # FF01-595/31
-             2.4361944: [663.e-9, 733.e-9], # FF02-698/70
+#             1.650796: [579.5e-9, 610.5e-9], # FF01-595/31
+#             2.4361944: [663.e-9, 733.e-9], # FF02-698/70
         },
         cycle: 6.283185, # position of ref switch (0) after a full turn
     },
@@ -525,7 +526,7 @@
 #        POS_ACTIVE_RANGE: {"x": [-2.1.e-3, 2.1.e-3], "y": [-30.e-3, 25.e-3], "z": [-11.e-3, 15.e-3]}
 #    },
     metadata: {
-        POS_ACTIVE_RANGE: {"x": [-2.1e-3, 2.1e-3], "y": [-30, 25], "z": [-11.e-3, 15.e-3]}
+        POS_ACTIVE_RANGE: {"x": [-2.1e-3, 2.1e-3], "y": [-100, 100], "z": [-10.e-3, 15.e-3]}
     },
 }
 

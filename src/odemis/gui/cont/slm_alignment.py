@@ -61,7 +61,7 @@ class SLMAlignmentController:
             hwemtvas=hwemtvas,
             hwdetvas=get_local_vas(self._main_data_model.ion_sed, self._main_data_model.hw_settings_config),
         )
-        fib_sc = self._panel.streambar_controller.addStream(self._fib_stream,
+        fib_sc = self._panel.streambar_controller.addStream(self._fib_stream, play=True,
                                                             add_to_view=self._tab_data_model.views.value[1])
         fib_sc.stream_panel.show_remove_btn(False)
 
@@ -85,7 +85,7 @@ class SLMAlignmentController:
                 detvas={"exposureTime"},
                 forcemd=fm_forced_md,
             )
-            slm_sc = self._panel.streambar_controller.addStream(self._slm_stream,
+            slm_sc = self._panel.streambar_controller.addStream(self._slm_stream, play=True,
                                                                 add_to_view=self._tab_data_model.views.value[0])
             slm_sc.stream_panel.show_remove_btn(False)
         else:
