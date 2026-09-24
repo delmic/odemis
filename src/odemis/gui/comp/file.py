@@ -160,7 +160,7 @@ class FileBrowser(wx.Panel):
             logging.debug("Clearing file control")
 
             self.file_path = None
-            self.text_ctrl.SetForegroundColour(theme.text_disabled)
+            self.text_ctrl.SetForegroundColour(theme.text_muted)
 
             self.text_ctrl.SetValue(self.label)
 

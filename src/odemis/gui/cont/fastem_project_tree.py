@@ -448,7 +448,7 @@ class NodeWindow(wx.Window):
         self.item_label = wx.StaticText(self, label=node.name)
         self.gauge = wx.Gauge(self, range=100, size=(100, 16))
         self.status_text = wx.StaticText(self, label="Open")
-        self.status_text.SetForegroundColour(theme.text_disabled)
+        self.status_text.SetForegroundColour(theme.text_muted)
 
         # Bind the checkbox event
         self.checkbox.Bind(wx.EVT_CHECKBOX, self.on_checkbox)

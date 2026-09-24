@@ -97,7 +97,7 @@ class InfoLegend(wx.Panel):
         )
 
         self.merge_slider.SetBackgroundColour(parent.GetBackgroundColour())
-        self.merge_slider.SetForegroundColour(theme.text_disabled)
+        self.merge_slider.SetForegroundColour(theme.text_muted)
         self.merge_slider.SetToolTip("Merge ratio")
 
         self.bmp_slider_left = wx.StaticBitmap(self,

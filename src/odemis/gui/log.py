@@ -129,7 +129,7 @@ class TextFieldHandler(logging.Handler):
         wx.TextAttr(theme.text_error, None),
         wx.TextAttr(theme.text_warning, None),
         wx.TextAttr(theme.field_foreground, None),
-        wx.TextAttr(theme.text_disabled, None),
+        wx.TextAttr(theme.text_muted, None),
     )
 
     def __init__(self):

@@ -480,7 +480,7 @@ class GridBase(Grid):
             attr = GridCellAttr()
             if col.is_read_only:
                 attr.SetReadOnly(True)
-                attr.SetTextColour(theme.text_disabled)
+                attr.SetTextColour(theme.text_muted)
             else:
                 attr.SetTextColour(theme.text_edit)
             self.SetColAttr(col.index, attr)
