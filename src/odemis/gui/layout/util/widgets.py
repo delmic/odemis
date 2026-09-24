@@ -23,6 +23,7 @@ import wx.adv
 
 from odemis.gui import img
 from odemis.gui.comp.buttons import ImageButton, ImageTextButton, ProgressRadioButton
+from odemis.gui.comp.foldpanelbar import FoldPanelBar, FoldPanelItem
 from odemis.gui.layout.util.fonts import set_font
 
 
@@ -235,6 +236,29 @@ def create_combo(
     if tooltip is not None:
         combo.SetToolTip(tooltip)
     return combo
+
+
+def create_fold_item(
+    fpb: FoldPanelBar,
+    label: str = "",
+    text_colour: str = "",
+    background_colour: str = "",
+    nocaption: bool = False,
+) -> FoldPanelItem:
+    """Create a fold-panel item populated with placeholder labels.
+
+    :param fpb: Parent fold-panel bar.
+    :param label: Caption label.
+    :param text_colour: Foreground colour.
+    :param background_colour: Background colour.
+    :param nocaption: Whether the item omits its caption bar.
+    :returns: Registered fold-panel item.
+    """
+    item = FoldPanelItem(fpb, label=label, nocaption=nocaption)
+    item.SetForegroundColour(text_colour)
+    item.SetBackgroundColour(background_colour)
+    fpb.add_item(item)
+    return item
 
 
 def size_window_to_available_space(win: wx.Window, parent: Optional[wx.Window]) -> None:

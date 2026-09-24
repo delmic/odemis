@@ -143,7 +143,7 @@ class FoldPanelItem(wx.Panel):
 
     def __init__(self, parent, id=-1, pos=(0, 0), size=wx.DefaultSize,
                  style=wx.TAB_TRAVERSAL | wx.NO_BORDER, label="",
-                 collapsed=False, nocaption=False):
+                 nocaption=False):
 
         wx.Panel.__init__(self, parent, id, pos, size, style)
         assert isinstance(parent, FoldPanelBar)
@@ -154,7 +154,7 @@ class FoldPanelItem(wx.Panel):
         self._caption_bar = None
 
         if not nocaption:
-            self._caption_bar = CaptionBar(self, label, collapsed)
+            self._caption_bar = CaptionBar(self, label, collapsed=False)
             main_sizer.Add(self._caption_bar, flag=wx.EXPAND | wx.BOTTOM, border=1)
 
         self._container = wx.Panel(self)
@@ -230,25 +230,6 @@ class FoldPanelItem(wx.Panel):
         for child in self._container.GetChildren():
             child.Destroy()
         self.Refresh()
-
-    def children_to_sizer(self):
-        """ Move all the children into the main sizer
-
-        This method is used by the XRC XML handler that constructs
-        :py:class:`FoldPanelItem`
-        objects, so the can just add children in the XRCed program, without
-        worrying or knowing about the main (private) sizer of this class.
-
-        """
-        for child in self.GetChildren():
-            if (child not in (self._caption_bar, self._container) and
-                    not self._container_sizer.GetItem(child)):
-                self.add_item(child)
-
-        if self._caption_bar and self._caption_bar.is_collapsed():
-            self.collapse()
-
-        self._container_sizer.Layout()
 
 
 class CaptionBar(wx.Window):

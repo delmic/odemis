@@ -26,7 +26,7 @@ from odemis.gui.comp.buttons import (
     ImageButton,
     ViewButton,
 )
-from odemis.gui.comp.foldpanelbar import FoldPanelBar, FoldPanelItem
+from odemis.gui.comp.foldpanelbar import FoldPanelBar
 from odemis.gui.comp.grid import ViewportGrid
 from odemis.gui.comp.stream_bar import StreamBar
 from odemis.gui.comp.text import UnitFloatCtrl
@@ -59,6 +59,7 @@ from odemis.gui.layout.util.fonts import set_font
 from odemis.gui.layout.util.sizers import hbox, vbox
 from odemis.gui.layout.util.widgets import (
     create_combo,
+    create_fold_item,
     create_icon_button,
     create_label,
     create_progress_button,
@@ -244,7 +245,12 @@ class PnlTabFibsem(wx.Panel):
 
         :param fold_bar: Parent fold-panel bar.
         """
-        feature_item = self._fold_item(fold_bar, "FEATURES")
+        feature_item = create_fold_item(
+            fold_bar,
+            "FEATURES",
+            text_colour=self._theme.button_text,
+            background_colour=self._theme.section_header,
+        )
         panel = wx.Panel(feature_item)
         panel.SetBackgroundColour(self._theme.background)
 
@@ -389,7 +395,12 @@ class PnlTabFibsem(wx.Panel):
 
         :param fold_bar: Parent fold-panel bar.
         """
-        item = self._fold_item(fold_bar, "STAGE POSITION")
+        item = create_fold_item(
+            fold_bar,
+            "STAGE POSITION",
+            text_colour=self._theme.button_text,
+            background_colour=self._theme.section_header,
+        )
         panel = wx.Panel(item)
         panel.SetForegroundColour(self._theme.text_muted)
         panel.SetBackgroundColour(self._theme.background)
@@ -563,9 +574,11 @@ class PnlTabFibsem(wx.Panel):
 
         :param fold_bar: Parent fold-panel bar.
         """
-        self.fp_settings_secom_optical = self._fold_item(
+        self.fp_settings_secom_optical = create_fold_item(
             fold_bar,
             LABEL_OPTICAL_SETTINGS,
+            text_colour=self._theme.button_text,
+            background_colour=self._theme.section_header,
         )
 
     def _build_streams_section(self, fold_bar: FoldPanelBar) -> None:
@@ -573,7 +586,12 @@ class PnlTabFibsem(wx.Panel):
 
         :param fold_bar: Parent fold-panel bar.
         """
-        self.fp_secom_streams = self._fold_item(fold_bar, LABEL_STREAMS)
+        self.fp_secom_streams = create_fold_item(
+            fold_bar,
+            LABEL_STREAMS,
+            text_colour=self._theme.button_text,
+            background_colour=self._theme.section_header,
+        )
         self.pnl_secom_streams = StreamBar(
             self.fp_secom_streams,
             size=(300, -1),
@@ -588,7 +606,12 @@ class PnlTabFibsem(wx.Panel):
 
         :param fold_bar: Parent fold-panel bar.
         """
-        self.fp_acquisitions = self._fold_item(fold_bar, LABEL_ACQUISITIONS)
+        self.fp_acquisitions = create_fold_item(
+            fold_bar,
+            LABEL_ACQUISITIONS,
+            text_colour=self._theme.button_text,
+            background_colour=self._theme.section_header,
+        )
         panel = wx.Panel(
             self.fp_acquisitions,
             size=(400, -1),
@@ -818,7 +841,12 @@ class PnlTabFibsem(wx.Panel):
 
         :param fold_bar: Parent fold-panel bar.
         """
-        self.fp_acquired = self._fold_item(fold_bar, LABEL_ACQUIRED)
+        self.fp_acquired = create_fold_item(
+            fold_bar,
+            LABEL_ACQUIRED,
+            text_colour=self._theme.button_text,
+            background_colour=self._theme.section_header,
+        )
         self.pnl_cryosecom_acquired = StreamBar(
             self.fp_acquired,
             size=(300, -1),
@@ -837,7 +865,12 @@ class PnlTabFibsem(wx.Panel):
 
         :param fold_bar: Parent fold-panel bar.
         """
-        self.fp_automation = self._fold_item(fold_bar, LABEL_MILLING)
+        self.fp_automation = create_fold_item(
+            fold_bar,
+            LABEL_MILLING,
+            text_colour=self._theme.button_text,
+            background_colour=self._theme.section_header,
+        )
         panel = wx.Panel(self.fp_automation)
         panel.SetForegroundColour(self._theme.button_text)
         panel.SetBackgroundColour(self._theme.section_header)
@@ -989,7 +1022,12 @@ class PnlTabFibsem(wx.Panel):
 
         :param fold_bar: Parent fold-panel bar.
         """
-        self.fp_milling = self._fold_item(fold_bar, LABEL_PATTERNS)
+        self.fp_milling = create_fold_item(
+            fold_bar,
+            LABEL_PATTERNS,
+            text_colour=self._theme.button_text,
+            background_colour=self._theme.section_header,
+        )
 
         controls_panel = wx.Panel(self.fp_milling)
         controls_panel.SetForegroundColour(self._theme.button_text)
@@ -1103,23 +1141,6 @@ class PnlTabFibsem(wx.Panel):
                 )
             sizer.Add(gauge_sizer, flag=wx.TOP, border=-8)
         return sizer
-
-    def _fold_item(
-        self,
-        fold_bar: FoldPanelBar,
-        label: str,
-    ) -> FoldPanelItem:
-        """Create and register a styled fold-panel item.
-
-        :param fold_bar: Parent fold-panel bar.
-        :param label: Caption label.
-        :returns: Registered fold-panel item.
-        """
-        item = FoldPanelItem(fold_bar, label=label)
-        item.SetForegroundColour(self._theme.button_text)
-        item.SetBackgroundColour(self._theme.section_header)
-        fold_bar.add_item(item)
-        return item
 
 
 if __name__ == "__main__":

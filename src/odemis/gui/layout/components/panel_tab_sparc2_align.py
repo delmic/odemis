@@ -30,7 +30,7 @@ from odemis.gui.comp.buttons import (
     ImageTextButton,
     ImageTextToggleButton,
 )
-from odemis.gui.comp.foldpanelbar import FoldPanelBar, FoldPanelItem
+from odemis.gui.comp.foldpanelbar import FoldPanelBar
 from odemis.gui.comp.grid import ViewportGrid
 from odemis.gui.comp.slider import UnitFloatSlider
 from odemis.gui.comp.stream_bar import StreamBar
@@ -49,7 +49,7 @@ from odemis.gui.layout.constants.strings import (
 from odemis.gui.layout.constants.themes import Theme
 from odemis.gui.layout.util.fonts import set_font
 from odemis.gui.layout.util.sizers import hbox, vbox
-from odemis.gui.layout.util.widgets import create_text_button
+from odemis.gui.layout.util.widgets import create_text_button, create_fold_item
 
 # (attribute name, label, icon file name, active icon file name, cellpos column)
 _MODE_BUTTONS: Tuple[Tuple[str, str, str, str, int], ...] = (
@@ -1128,12 +1128,14 @@ class PnlTabSparc2Align(wx.Panel):
             fold_bar.SetBackgroundColour(self._theme.background)
             sizer.Add(fold_bar, flag=wx.EXPAND)
 
-            self.fp_settings_ebeam_blanker = self._fold_item(
-                fold_bar, "ELECTRON PULSER"
-            )
+            self.fp_settings_ebeam_blanker = create_fold_item(fold_bar, "ELECTRON PULSER",
+                                                              text_colour=self._theme.button_text,
+                                                              background_colour=self._theme.section_header)
             self.fp_settings_ebeam_blanker.Hide()
 
-            optical_item = self._fold_item(fold_bar, "OPTICAL")
+            optical_item = create_fold_item(fold_bar, "OPTICAL",
+                                            text_colour=self._theme.button_text,
+                                            background_colour=self._theme.section_header)
             self.pnl_streams = StreamBar(optical_item, size=(300, -1))
             self.pnl_streams.SetForegroundColour(self._theme.text_muted)
             self.pnl_streams.SetBackgroundColour(self._theme.background)
@@ -1373,20 +1375,6 @@ class PnlTabSparc2Align(wx.Panel):
         if attribute is not None:
             setattr(self, attribute, button)
         return button
-
-    def _fold_item(self, fold_bar: FoldPanelBar, label: str) -> FoldPanelItem:
-        """Create and register a styled fold-panel item.
-
-        :param fold_bar: Parent fold-panel bar.
-        :param label: Caption label.
-        :returns: Registered fold-panel item.
-        """
-        item = FoldPanelItem(fold_bar, label=label)
-        item.SetForegroundColour(self._theme.button_text)
-        item.SetBackgroundColour(self._theme.section_header)
-        fold_bar.add_item(item)
-        return item
-
 
 if __name__ == "__main__":
     from odemis.gui.layout.util.preview import run_preview
