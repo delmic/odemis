@@ -735,6 +735,7 @@ class FastEMProjectManagerPanel:
         tab_data.shapes.subscribe(self._on_shapes, init=True)
         tab_data.current_project.subscribe(self._on_current_project)
         self.main_data.is_acquiring.subscribe(self._on_is_acquiring)
+        self.tab_data.is_acquisition_paused.subscribe(self._on_is_acquiring)
         self.main_data.user_hfw_sb.subscribe(self._on_user_hfw_sb)
         self.main_data.user_resolution_sb.subscribe(self._on_user_resolution_sb)
         self.tab_data.main.user_dwell_time_sb.subscribe(self._on_user_dwell_time_sb)
@@ -746,11 +747,16 @@ class FastEMProjectManagerPanel:
 
         :param is_acquiring: (bool) Flag indicating if acquisition is in progress.
         """
+        is_acquiring = self.main_data.is_acquiring.value
+        is_paused = self.tab_data.is_acquisition_paused.value
         enable_pnl = not is_acquiring
         enable_btn = enable_pnl and self.tab_data.active_project_tab.value != self.project_settings_tab
         self.panel.Enable(enable_pnl)
         self.toolbar.enable(enable_pnl)
         self._enable_tools(enable_btn)
+        if is_paused:
+            self.toolbar.enable_button(TOOL_ROI, True)
+            self.tab_data.tool.value = TOOL_ROI
 
     def _on_btn_export(self, _):
         """
