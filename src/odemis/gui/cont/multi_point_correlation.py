@@ -36,7 +36,7 @@ import wx
 
 from odemis import model, util
 from odemis.acq.align.tdct import _convert_das_to_numpy_stack, run_tdct_correlation
-from odemis.acq.feature import FIBFMCorrelationData, Target, TargetType
+from odemis.acq.feature import FIBFMCorrelationData, Target, TargetType, get_fiducial_colour
 from odemis.acq.move import Posture
 from odemis.acq.stream import StaticFluoStream, StaticSEMStream, StaticFIBStream, FluoStream
 from odemis.gui.cont.features import save_project
@@ -54,10 +54,31 @@ class GridColumns(Enum):
     Type = 0  # Column for "type"
     X = 1  # Column for "x"
     Y = 2  # Column for "y"
-    Z = 3  # Column for "z"
+    Z_Slice = 3  # Column for "z slice"
     Index = 4  # Column for "index"
 
 GRID_PRECISION = 2  # Number of decimal places to display in the grid
+
+# Relative width of each grid column, used to redistribute the available space when columns are
+# shown/hidden. Index and Type only need to fit a short number/label, so they are of different width
+# than the other (coordinate) columns.
+GRID_COLUMN_WIDTH_WEIGHTS = {
+    GridColumns.Index: 0.5,
+    GridColumns.Type: 0.8,
+}
+DEFAULT_GRID_COLUMN_WIDTH_WEIGHT = 1.0
+
+# Horizontal alignment of each grid column: Index and Type are short, and are centred, while the
+# numeric coordinate columns are right-aligned for easier reading/comparison of the digits.
+GRID_COLUMN_ALIGNMENTS = {
+    GridColumns.Index: wx.ALIGN_CENTRE,
+    GridColumns.Type: wx.ALIGN_CENTRE,
+}
+DEFAULT_GRID_COLUMN_ALIGNMENT = wx.ALIGN_RIGHT
+
+# Target types whose fiducial-index colour should be shown in the grid and the viewports, so that
+# a fiducial pair (FM + FIB, sharing the same index) can be visually matched across both.
+FIDUCIAL_INDEX_TARGET_TYPES = (TargetType.Fiducial, TargetType.FibFiducial)
 
 # Regex search pattern to distinguish between FIB and FM target. These targets can
 # have the same type of Fiducials but there is a prefix in the name to distinguish them.
@@ -68,19 +89,26 @@ RIM_COR_DEFAULT = 0.495  # See MD_RIM_COR. This value works fine for 50x objecti
 # conditions to convert between physical and pixel coordinate systems in order for multipoint correlation to operate.
 # For coordinate conversions, we assume the pixels in 3D are isosymmetric
 # i.e. size in pixel[0]=pixel[1]=pixel[2].
-REFINE_SEARCH_RANGE = 2.5e-6  # m, search range for fiducial refinement
+REFINE_SEARCH_RANGE = 1.5e-6  # m, search range for fiducial refinement
+
+REFINE_MODE_XYZ = "XYZ"
+REFINE_MODE_Z = "Z"
 
 # If the milling angle of a FIB image and an FM z-stack are below the tolerance, they are considered to be matching.
 MILLING_ANGLE_TOLERANCE = math.radians(0.1)  # Now 0.1 degree, but this depends on stage accuracy, so might need to update this later.
 
 
-def get_pixel_3d_coordinates(stream: FluoStream, p_pos: Tuple[float, float, float], check_bbox: bool = False) \
+def get_pixel_3d_coordinates(stream: FluoStream, p_pos: Tuple[float, float, float], check_bbox: bool = False,
+                             use_xy_pixel_size_for_z: bool = False) \
         -> Optional[Tuple[float, float, float]]:
     """
     Translate 3D physical coordinates into 3D pixel coordinates.
     :param stream: Stream which is used as reference for coordinate conversion
     :param p_pos: the position in physical coordinates (m). x and y are the sample position, z is the focus position
     :param check_bbox: if True, the function will return None if the position is outside of the image
+    :param use_xy_pixel_size_for_z: if True, the z pixel size (x/y pixel size, assumed isotropic)
+        is used instead of the actual z/slice pixel size, to compute z. This mimics how some other
+        software (e.g. 3DCT) computes it, and is only meant for comparison/debugging purposes.
     :returns: (x, y, z) in pixel coordinates or None if it's outside of the image. No boundary check is done
     """
     pixel_pos = stream.getPixelCoordinates(p_pos[:2], check_bbox=check_bbox)
@@ -97,17 +125,22 @@ def get_pixel_3d_coordinates(stream: FluoStream, p_pos: Tuple[float, float, floa
 
     tpos = md.get(model.MD_POS, (0, 0, 0))
     tpos_z = tpos[2] if len(tpos) >= 3 else 0.0
-    z = (p_pos[2] - tpos_z) / pxs[2]
+    z_pxs = pxs[0] if use_xy_pixel_size_for_z else pxs[2]
+    z = (p_pos[2] - tpos_z) / z_pxs
     pixel_pos = (pixel_pos[0], pixel_pos[1], z)
 
     return pixel_pos
 
-def get_physical_3d_coordinates(stream: FluoStream, pixel_pos: Tuple[float, float, float])\
+def get_physical_3d_coordinates(stream: FluoStream, pixel_pos: Tuple[float, float, float],
+                                use_xy_pixel_size_for_z: bool = False)\
                              -> Optional[Tuple[float, float, float]]:
     """
     Translate 3D pixel coordinates into 3D physical coordinates.
     :param stream: Stream which is used as reference for coordinate conversion
     :param pixel_pos: the position in pixel coordinates (x, y, z)
+    :param use_xy_pixel_size_for_z: if True, the z pixel size (x/y pixel size, assumed isotropic)
+        is used instead of the actual z/slice pixel size, to compute z. This mimics how some other
+        software (e.g. 3DCT) computes it, and is only meant for comparison/debugging purposes.
     :returns: the position in physical coordinates (x, y, z) in meters
     """
     p_pos = stream.getPhysicalCoordinates(pixel_pos[:2])
@@ -117,7 +150,8 @@ def get_physical_3d_coordinates(stream: FluoStream, pixel_pos: Tuple[float, floa
     tpos = md.get(model.MD_POS, (0, 0, 0))
     tpos_z = tpos[2] if len(tpos) >= 3 else 0.0
     # Account for slice thickness, aka, the z distance between slices
-    p_pos_z = pixel_pos[2] * pxs[2] + tpos_z
+    z_pxs = pxs[0] if use_xy_pixel_size_for_z else pxs[2]
+    p_pos_z = pixel_pos[2] * z_pxs + tpos_z
     return (p_pos[0], p_pos[1], p_pos_z)
 
 def update_feature_correlation_target(correlation_target: FIBFMCorrelationData,
@@ -217,6 +251,10 @@ class CorrelationPointsController:
 
         # Access the correlation points table (wxListCtrl)
         self.grid = self._panel.table_grid
+        # Guard flag: True while a currentTarget update is being driven by a grid row click, so
+        # that _on_current_target_changes does not re-select the row and collapse a multi-row
+        # selection made by the user (e.g. via shift-click).
+        self._grid_selection_in_progress = False
 
         # Access the Refine XYZ status text (to check if XYZ targeting is working or not)
         self.txt_refine_xyz_active = self._panel.txt_refine_xyz_active
@@ -224,6 +262,8 @@ class CorrelationPointsController:
         # Access the XYZ-targeting button
         self.xyz_targeting_btn = self._panel.btn_xyz_targeting
         self.xyz_targeting_btn.Bind(wx.EVT_BUTTON, self._on_xyz_targeting)
+        # Access the refine mode selector (XYZ vs Z-only refinement)
+        self.refine_mode_choice = self._panel.refine_mode_choice
         # Disable XYZ-targeting button if super z stream is available as XYZ-targeting is not required in that case
         self.has_super_z = model.BooleanVA(False)
         if self._tab_data_model.main.currentFeature.value.superz_stream_name:
@@ -238,17 +278,27 @@ class CorrelationPointsController:
 
         self.grid.CreateGrid(0, 5)
         self.grid.SetRowLabelSize(0)
-        self.grid.SetColLabelValue(GridColumns.Type.value, GridColumns.Type.name)
-        self.grid.SetColLabelValue(GridColumns.X.value, GridColumns.X.name)
-        self.grid.SetColLabelValue(GridColumns.Y.value, GridColumns.Y.name)
-        self.grid.SetColLabelValue(GridColumns.Z.value, GridColumns.Z.name)
-        self.grid.SetColLabelValue(GridColumns.Index.value, GridColumns.Index.name)
+        # Since the row label is hidden (size 0), wx can otherwise mis-detect mouse interactions
+        # near the row/col boundaries as a resize drag, and hit a C++ assertion when it can't
+        # determine which row/col is being resized. Disabling drag-resize avoids that entirely.
+        self.grid.DisableDragRowSize()
+        self.grid.DisableDragColSize()
+        # Allow selecting (and later deleting) multiple whole rows at once, e.g. via shift-click
+        self.grid.SetSelectionMode(wx.grid.Grid.GridSelectRows)
+        for col in GridColumns:
+            self.grid.SetColLabelValue(col.value, col.name.replace("_", " "))
+            attr = wx.grid.GridCellAttr()
+            attr.SetAlignment(GRID_COLUMN_ALIGNMENTS.get(col, DEFAULT_GRID_COLUMN_ALIGNMENT), wx.ALIGN_CENTRE)
+            self.grid.SetColAttr(col.value, attr)
         self.grid.Bind(wx.EVT_KEY_DOWN, self._on_key_down_grid)
         self.grid.EnableEditing(True)
 
         # Hide the z-column for the FIB-view FM workflow, since we only perform 2d correlation.
         if self.at_fib_view_fm.value:
-            self.hide_grid_column(GridColumns.Z.value)
+            self.grid.HideCol(GridColumns.Z_Slice.value)
+        # Deferred (via @call_in_wx_main) so the grid has been laid out and reports its real
+        # size, instead of a placeholder size from before the window/sizers were realized.
+        self._resize_grid_columns()
 
         # Parameters to keep track of the latest changes and process the correlation result with the latest change
         self.correlation_txt = self._panel.txt_correlation_rms
@@ -291,29 +341,33 @@ class CorrelationPointsController:
     def _update_refine_controls(self) -> None:
         if self.at_fib_view_fm.value:
             self.xyz_targeting_btn.Enable(False)
+            self.refine_mode_choice.Enable(False)
             self.txt_refine_xyz_active.SetLabel("")
             self.xyz_targeting_btn.SetToolTip("Refinement disabled when using FIB-view FM streams")
         elif self.has_super_z.value:
             self.xyz_targeting_btn.SetToolTip("Super Z information available, Refinement disabled")
             self.xyz_targeting_btn.Enable(False)
+            self.refine_mode_choice.Enable(False)
             self.txt_refine_xyz_active.SetLabel("Super Z information in use")
         elif TargetType.FibFiducial == self._tab_data_model.main.currentTarget.value.type.value:
             self.xyz_targeting_btn.Enable(False)
+            self.refine_mode_choice.Enable(False)
             self.txt_refine_xyz_active.SetLabel("")
             self.xyz_targeting_btn.SetToolTip("Refinement only available for non-reflective FM streams")
         else:
             self.xyz_targeting_btn.Enable(True)
+            self.refine_mode_choice.Enable(True)
             self.txt_refine_xyz_active.SetLabel("")
             self.xyz_targeting_btn.SetToolTip("Refine the position of the currently selected FM fiducial")
 
     @call_in_wx_main
-    def hide_grid_column(self, col_idx: int) -> None:
+    def _resize_grid_columns(self) -> None:
         """
-        Hides the provided grid column and redistributes the remaining column widths to fill the available space.
-        :param col_idx: Column index to hide
+        Redistributes the widths of the currently visible grid columns to fill the available
+        space, weighted by GRID_COLUMN_WIDTH_WEIGHTS (e.g. Index and Type are narrower, since
+        they only need to fit a short number/label). Deferred to the main loop (via
+        @call_in_wx_main), so the grid has already been laid out and reports its real size.
         """
-        # Hide the column
-        self.grid.HideCol(col_idx)
         # Gather only the columns that are currently visible
         visible_cols = [c for c in range(self.grid.GetNumberCols()) if self.grid.IsColShown(c)]
 
@@ -323,11 +377,13 @@ class CorrelationPointsController:
         # Determine usable display width
         grid_width, _ = self.grid.GetClientSize()
         usable_width = grid_width - self.grid.GetRowLabelSize()
-        # Divide width evenly (using integer division to avoid fractional pixels)
-        even_width = usable_width // len(visible_cols)
-        # Update sizes
-        for c in visible_cols:
-            self.grid.SetColSize(c, even_width)
+
+        weights = [GRID_COLUMN_WIDTH_WEIGHTS.get(GridColumns(c), DEFAULT_GRID_COLUMN_WIDTH_WEIGHT)
+                  for c in visible_cols]
+        unit_width = usable_width / sum(weights)
+        # Update sizes (integer division to avoid fractional pixels)
+        for c, weight in zip(visible_cols, weights):
+            self.grid.SetColSize(c, int(unit_width * weight))
 
         self.grid.ForceRefresh()
 
@@ -522,6 +578,7 @@ class CorrelationPointsController:
         except Exception:
             logging.exception("Failure in the correlation update")
 
+    @call_in_wx_main
     def _process_latest_change(self):
         """Process the latest change in the queue."""
         self.is_processing = True
@@ -530,12 +587,18 @@ class CorrelationPointsController:
         else:
             self._do_3d_correlation()
 
-        rms = self.correlation_target.correlation_result["output"]["error"]["rms_error"]
+        # rms_error, as computed by both _do_2d_correlation() and the 3DCT package (in
+        # _do_3d_correlation()), is a distance expressed in FIB pixels, not physical units.
+        # Convert it to metres using the FIB pixel size, so it can be displayed in a readable unit
+        # (e.g. µm) instead of a meaningless pixel count.
+        rms_px = self.correlation_target.correlation_result["output"]["error"]["rms_error"]
+        fib_pixel_size = self.correlation_target.fib_stream.getRawMetadata()[0][model.MD_PIXEL_SIZE][0]
+        rms_m = rms_px * fib_pixel_size
         wx.CallAfter(self.correlation_txt.SetLabel,
-                     f"Correlation RMS Deviation : {readable_str(rms, sig=3)}")
+                     f"Correlation RMS Deviation : {readable_str(rms_m, unit='m', sig=3)}")
 
         # Display the output in the relevant views
-        self._viewports[1].canvas.Refresh()
+        self._viewports[1].canvas.request_drawing_update()
         self.is_processing = False  # Mark that processing is complete
 
     def stop(self):
@@ -622,17 +685,24 @@ class CorrelationPointsController:
             fib_coords.append(fib_coord)
         fib_coords = numpy.array(fib_coords, dtype=numpy.float32)
         for fm_coord in self.correlation_target.fm_fiducials:
-            fm_coord_px = get_pixel_3d_coordinates(self.correlation_target.fm_streams[0], fm_coord.coordinates.value)
+            fm_coord_px = get_pixel_3d_coordinates(
+                self.correlation_target.fm_streams[0],
+                fm_coord.coordinates.value,
+                use_xy_pixel_size_for_z=True
+            )
             fm_coords.append(fm_coord_px)
         fm_coords = numpy.array(fm_coords, dtype=numpy.float32)
         poi_coord = self.correlation_target.fm_pois[0]
-        poi_coord_px = get_pixel_3d_coordinates(self.correlation_target.fm_streams[0], poi_coord.coordinates.value)
+        poi_coord_px = get_pixel_3d_coordinates(
+            self.correlation_target.fm_streams[0],
+            poi_coord.coordinates.value,
+            use_xy_pixel_size_for_z=True
+        )
         poi_coords.append(poi_coord_px)
         poi_coords = numpy.array(poi_coords, dtype=numpy.float32)
         # Fixing seed, and thus basically resetting randomness, to get more consistent results
         numpy.random.seed(0)
-        # Run the correlation. Note that our z pixel spacing for the fm_coords is not equal to x and y, but internal
-        # scaling in the affine registration logic should handle this just fine.
+
         self.correlation_target.correlation_result = run_tdct_correlation(fib_coords=fib_coords, fm_coords=fm_coords,
                                                                           poi_coords=poi_coords,
                                                                           fib_image=fib_da, fm_image=fm_image,
@@ -671,57 +741,101 @@ class CorrelationPointsController:
 
     def _on_delete_row(self, event) -> None:
         """
-        Deletes the currently selected row and clear the current target VA. Updates the correlation target based on the
-        latest changes.
+        Deletes the currently selected row(s) and clears the current target VA. If multiple rows
+        are selected in the grid (e.g. via shift-click), all corresponding targets are deleted
+        in one go. Updates the correlation target based on the latest changes.
         """
-        target = self._tab_data_model.main.currentTarget.value
-        if not target:
-            self.grid.ClearSelection()
-            return
+        selected_rows = self._get_selected_grid_rows()
 
-        # A surface fiducial is not present in the grid, so special case to just remove it from the targets
-        if target.type.value == TargetType.SurfaceFiducial:
-            logging.debug("Deleting Surface Fiducial")
-            try:
-                self._tab_data_model.main.targets.value.remove(target)
-            except ValueError:
-                logging.warning("Target surface fiducial %s not found in the targets list.", target.name.value)
+        if selected_rows:
+            # Resolve rows to targets before deleting anything, since removing a target from the
+            # .targets VA triggers the grid to be rebuilt, which would invalidate row indices.
+            targets_to_delete = []
+            for row in selected_rows:
+                for target in self._tab_data_model.main.targets.value:
+                    if self._selected_target_in_grid(target, row):
+                        targets_to_delete.append(target)
+                        break
+
+            for target in targets_to_delete:
+                logging.debug(f"Deleting target: {target.name.value}")
+                try:
+                    # The VA subscribers will take care of updating the grid
+                    self._tab_data_model.main.targets.value.remove(target)
+                except ValueError:
+                    logging.warning("Target %s not found in the targets list.", target.name.value)
             self._tab_data_model.main.currentTarget.value = None
         else:
-            # Find the row which contains the current target, and delete both the row and the target itself
-            for row in range(self.grid.GetNumberRows()):
-                if self._selected_target_in_grid(target, row):
-                    logging.debug(f"Deleting target: {target.name.value}")
-                    # The VA subcribers will take care of updating the grid
+            # No row explicitly selected in the grid (e.g. a Surface Fiducial, which has no grid
+            # row): fall back to deleting the current target.
+            target = self._tab_data_model.main.currentTarget.value
+            if not target:
+                self.grid.ClearSelection()
+                return
+
+            # A surface fiducial is not present in the grid, so special case to just remove it from the targets
+            if target.type.value == TargetType.SurfaceFiducial:
+                logging.debug("Deleting Surface Fiducial")
+                try:
                     self._tab_data_model.main.targets.value.remove(target)
-                    self._tab_data_model.main.currentTarget.value = None
-                    break
+                except ValueError:
+                    logging.warning("Target surface fiducial %s not found in the targets list.", target.name.value)
+                self._tab_data_model.main.currentTarget.value = None
+            else:
+                # Find the row which contains the current target, and delete both the row and the target itself
+                for row in range(self.grid.GetNumberRows()):
+                    if self._selected_target_in_grid(target, row):
+                        logging.debug(f"Deleting target: {target.name.value}")
+                        # The VA subcribers will take care of updating the grid
+                        self._tab_data_model.main.targets.value.remove(target)
+                        self._tab_data_model.main.currentTarget.value = None
+                        break
 
         self.correlation_target = update_feature_correlation_target(self.correlation_target, self._tab_data_model)
         if self.check_correlation_conditions():
             self._need_reprocessing()
 
     def _on_cell_selected(self, event) -> None:
-        """Highlight the selected row in the grid and update the current target."""
+        """Update the current target to match the (last) selected row in the grid."""
         row = event.GetRow()
-        for target in self._tab_data_model.main.targets.value:
-            if self._selected_target_in_grid(target, row):
-                self._tab_data_model.main.currentTarget.value = target
-                break
+        # Note: as of wxPython 4.1, when AppendRow() is called on an empty grid, this event is
+        # triggered with an invalid row (-1). We now temporarily unbind from this event when
+        # recreating the grid to avoid this, but also guard against it here just in case.
+        if row >= 0:
+            # Guard so _on_current_target_changes knows the currentTarget update below originated
+            # from a grid click, and must not call SelectRow() (which would collapse any
+            # multi-row selection the user just made, e.g. via shift-click).
+            self._grid_selection_in_progress = True
+            try:
+                for target in self._tab_data_model.main.targets.value:
+                    if self._selected_target_in_grid(target, row):
+                        self._tab_data_model.main.currentTarget.value = target
+                        break
+            finally:
+                self._grid_selection_in_progress = False
 
         for vp in self._viewports:
             vp.canvas.request_drawing_update()
 
-        # Highlight the selected row
-        # Note: as of wxPython 4.1, when AppendRow() is called on an empty grid, this event is
-        # triggered. This causes an error, as it's not possible to select a row in such case.
-        # We now temporarily unbind from this event when recreating the grid to avoid this, but also
-        # handle it explicitly just in case.
-        try:
-            self.grid.SelectRow(row)
-        except Exception as e:
-            logging.warning("Could not select row %s: %s", row, e)
+        # Note: the grid is in row-selection mode (GridSelectRows), so wx already takes care of
+        # highlighting the whole row, and of extending the selection to multiple rows on
+        # shift-click. We must not call self.grid.SelectRow() here, as that would collapse
+        # any existing multi-row selection down to just this row.
         event.Skip()
+
+    def _get_selected_grid_rows(self) -> List[int]:
+        """
+        Returns the sorted, deduplicated list of row indices currently selected in the grid.
+        Accounts for both individually selected rows and selected ranges/blocks (e.g.
+        shift-click or click-drag).
+
+        :return: list of row indices
+        """
+        rows = set(self.grid.GetSelectedRows())
+        for top_left, bottom_right in zip(self.grid.GetSelectionBlockTopLeft(),
+                                           self.grid.GetSelectionBlockBottomRight()):
+            rows.update(range(top_left.GetRow(), bottom_right.GetRow() + 1))
+        return sorted(rows)
 
     def _selected_target_in_grid(self, target: Target, row: int) -> bool:
         """
@@ -743,16 +857,16 @@ class CorrelationPointsController:
 
     def _on_cell_changing(self, event) -> None:
         """Update the target based on the cell change."""
-        col = event.GetCol()
+        column_index = event.GetCol()
         new_value = event.GetString()
-        col_name = self.grid.GetColLabelValue(col)
+        column = GridColumns(column_index)
         count_row_index = event.GetRow()
 
-        if col_name == GridColumns.Type.name:
+        if column == GridColumns.Type:
             wx.MessageBox("Type cannot be changed", "Invalid Input", wx.OK | wx.ICON_ERROR)
             event.Veto()
             return
-        elif col_name == GridColumns.Index.name:
+        elif column == GridColumns.Index:
             try:
                 current_name = self._tab_data_model.main.currentTarget.value.name.value
                 current_index = self._tab_data_model.main.currentTarget.value.index.value
@@ -787,11 +901,11 @@ class CorrelationPointsController:
                 event.Veto()  # Prevent the change
                 return
 
-        elif col_name in [GridColumns.X.name, GridColumns.Y.name, GridColumns.Z.name]:
+        elif column in [GridColumns.X, GridColumns.Y, GridColumns.Z_Slice]:
             x = float(self.grid.GetCellValue(count_row_index, GridColumns.X.value))
             y = float(self.grid.GetCellValue(count_row_index, GridColumns.Y.value))
             try:
-                if col_name == GridColumns.X.name:
+                if column == GridColumns.X:
                     if self._tab_data_model.main.currentTarget.value.type.value == TargetType.FibFiducial:
                         p_coord = self.correlation_target.fib_stream.getPhysicalCoordinates((float(new_value),
                                                                                              y))
@@ -800,14 +914,14 @@ class CorrelationPointsController:
                                                                                                 y))
                     self._tab_data_model.main.currentTarget.value.coordinates.value[0] = p_coord[0]
                     self._tab_data_model.main.currentTarget.value.coordinates.value[1] = p_coord[1]
-                if col_name == GridColumns.Y.name:
+                if column == GridColumns.Y:
                     if self._tab_data_model.main.currentTarget.value.type.value == TargetType.FibFiducial:
                         p_coord = self.correlation_target.fib_stream.getPhysicalCoordinates((x, float(new_value)))
                     else:
                         p_coord = self.correlation_target.fm_streams[0].getPhysicalCoordinates((x, float(new_value)))
                     self._tab_data_model.main.currentTarget.value.coordinates.value[0] = p_coord[0]
                     self._tab_data_model.main.currentTarget.value.coordinates.value[1] = p_coord[1]
-                elif col_name == GridColumns.Z.name and (
+                elif column == GridColumns.Z_Slice and (
                         self._tab_data_model.main.currentTarget.value.type.value != TargetType.FibFiducial):
                     self._tab_data_model.main.currentTarget.value.coordinates.value[2] = \
                     get_physical_3d_coordinates(self.correlation_target.fm_streams[0], (x, y, float(new_value)))[2]
@@ -824,10 +938,11 @@ class CorrelationPointsController:
         for vp in self._viewports:
             vp.canvas.request_drawing_update()
         # If the index column is modified, reorder the grid based on the index column
-        col = event.GetCol()
-        col_name = self.grid.GetColLabelValue(col)
-        if col_name == GridColumns.Index.name:
+        column_index = event.GetCol()
+        column = GridColumns(column_index)
+        if column == GridColumns.Index:
             self._reorder_grid()
+            self._apply_type_colours()
 
     @call_in_wx_main
     def _on_current_target_changes(self, target: Target) -> None:
@@ -869,10 +984,14 @@ class CorrelationPointsController:
                 # Reset refinement
                 target.needs_refinement.value = False
 
-        for row in range(self.grid.GetNumberRows()):
-            if self._selected_target_in_grid(target, row):
-                self.grid.SelectRow(row)
-                break
+        # Only force-select the row in the grid when the currentTarget change came from elsewhere
+        # (e.g. clicking a target in the viewport). If it came from a grid click itself, leave the
+        # grid's own selection alone, so multi-row selections (shift-click) are preserved.
+        if not self._grid_selection_in_progress:
+            for row in range(self.grid.GetNumberRows()):
+                if self._selected_target_in_grid(target, row):
+                    self.grid.SelectRow(row)
+                    break
 
         for vp in self._viewports:
             vp.canvas.request_drawing_update()
@@ -901,9 +1020,9 @@ class CorrelationPointsController:
                 else:
                     pixel_coords = get_pixel_3d_coordinates(self.correlation_target.fm_streams[0], target.coordinates.value)
                     if (self.grid.GetCellValue(row,
-                                               GridColumns.Z.value)) != f"{pixel_coords[2]:.{GRID_PRECISION}f}":
+                                               GridColumns.Z_Slice.value)) != f"{pixel_coords[2]:.{GRID_PRECISION}f}":
                         temp_check = True
-                    self.grid.SetCellValue(row, GridColumns.Z.value, f"{pixel_coords[2]:.{GRID_PRECISION}f}")
+                    self.grid.SetCellValue(row, GridColumns.Z_Slice.value, f"{pixel_coords[2]:.{GRID_PRECISION}f}")
                 # Get cell value
                 if (self.grid.GetCellValue(row, GridColumns.X.value) != f"{pixel_coords[0]:.{GRID_PRECISION}f}" or
                         self.grid.GetCellValue(row, GridColumns.Y.value) != f"{pixel_coords[1]:.{GRID_PRECISION}f}"):
@@ -944,10 +1063,10 @@ class CorrelationPointsController:
                 if target.type.value == TargetType.FibFiducial:
                     pixel_coords = self.correlation_target.fib_stream.getPixelCoordinates(
                         (target.coordinates.value[0], target.coordinates.value[1]), check_bbox=False)
-                    self.grid.SetCellValue(current_row_count, GridColumns.Z.value, "")
+                    self.grid.SetCellValue(current_row_count, GridColumns.Z_Slice.value, "")
                 else:
                     pixel_coords = get_pixel_3d_coordinates(self.correlation_target.fm_streams[0], target.coordinates.value)
-                    self.grid.SetCellValue(current_row_count, GridColumns.Z.value,
+                    self.grid.SetCellValue(current_row_count, GridColumns.Z_Slice.value,
                                            f"{pixel_coords[2]:.{GRID_PRECISION}f}")
                 # Set x and y position in the grid
                 self.grid.SetCellValue(current_row_count, GridColumns.X.value,
@@ -958,6 +1077,7 @@ class CorrelationPointsController:
                 self.grid.SetCellValue(current_row_count, GridColumns.Type.value, target.name.value)
 
             self._reorder_grid()
+            self._apply_type_colours()
         finally:
             self.grid.Bind(wx.grid.EVT_GRID_SELECT_CELL, self._on_cell_selected)
 
@@ -973,7 +1093,10 @@ class CorrelationPointsController:
     def _on_xyz_targeting(self, evt: Optional[wx.Event] = None) -> None:
         """
         Handle targeting when the targeting button is clicked, or automatically triggered for MIP streams.
-        Performs 3D Center of Mass targeting (X, Y, Z).
+        Performs center of mass targeting over the full 3D volume (X, Y, Z). Depending on the
+        selected refine mode, either the full 3D result is kept (XYZ), or only the refined Z
+        coordinate is kept and the x/y position is left untouched (Z), e.g. because it was already
+        placed accurately and only needs a focus (Z) adjustment.
         """
         if self._tab_data_model.main.currentTarget.value:
             # Select the non-reflective streams visible in the view for targeting
@@ -996,7 +1119,9 @@ class CorrelationPointsController:
             # Ensure multi-channel compatibility
             raw_multi = numpy.asarray([s.raw[0] for s in streams])
             shape_y, shape_x = raw_multi.shape[-2], raw_multi.shape[-1]
-            # Get boundary-safe slice & crop
+            # Get boundary-safe slice & crop. Always use the full x/y search range (needed to get a
+            # smooth, sub-pixel Z estimate) and the full Z-depth (the first, unrestricted dimension
+            # of roi below); only whether the refined x/y result is kept differs per refine mode.
             pixel_size = streams[0].getRawMetadata()[0][model.MD_PIXEL_SIZE][0]  # Always present, so direct indexing
             pixel_padding = int(REFINE_SEARCH_RANGE / pixel_size)
             y_start = max(0, target_y - pixel_padding)
@@ -1012,8 +1137,11 @@ class CorrelationPointsController:
             com_y_crop = com[1] + roi[1].start
             com_x_crop = com[2] + roi[2].start
             # Map back to physical coordinates using optimized X, Y, and Z
-            physical_coords = get_physical_3d_coordinates(streams[0],(com_x_crop, com_y_crop, com_z))
-            # Update the model with the refined 3D coordinates
+            physical_coords = get_physical_3d_coordinates(streams[0], (com_x_crop, com_y_crop, com_z))
+            if self.refine_mode_choice.GetStringSelection() == REFINE_MODE_Z:
+                # Z-only refinement: keep the original x/y position, only take the refined Z
+                physical_coords = (coords[0], coords[1], physical_coords[2])
+            # Update the model with the refined coordinates
             target_coords = self._tab_data_model.main.currentTarget.value.coordinates.value
             target_coords[:] = physical_coords[:]
 
@@ -1038,6 +1166,28 @@ class CorrelationPointsController:
         for row, row_data in enumerate(data):
             for col, value in enumerate(row_data):
                 self.grid.SetCellValue(row, col, str(value))
+
+    def _apply_type_colours(self) -> None:
+        """
+        Sets the text colour of the Type and Index columns for every row containing a fiducial
+        (FM or FIB), based on its index, so that a fiducial pair sharing the same index can be
+        visually matched at a glance, both in the grid and (see cryo_feature.py) in the viewports.
+        Non-fiducial rows (e.g. Point of Interest) are reset to the grid's default text colour.
+        Must be called whenever grid rows are (re)populated or reordered, since SetCellValue() does
+        not preserve/move cell attributes such as colour along with the row's content.
+        """
+        default_colour = self.grid.GetDefaultCellTextColour()
+        for row in range(self.grid.GetNumberRows()):
+            for target in self._tab_data_model.main.targets.value:
+                if self._selected_target_in_grid(target, row):
+                    if target.type.value in FIDUCIAL_INDEX_TARGET_TYPES:
+                        colour = wx.Colour(get_fiducial_colour(target.index.value))
+                    else:
+                        colour = default_colour
+                    self.grid.SetCellTextColour(row, GridColumns.Type.value, colour)
+                    self.grid.SetCellTextColour(row, GridColumns.Index.value, colour)
+                    break
+        self.grid.ForceRefresh()
 
     def _renumber_fm_fiducials_on_start(self) -> None:
         """

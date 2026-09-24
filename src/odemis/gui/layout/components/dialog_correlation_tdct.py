@@ -255,6 +255,18 @@ class TDCorrelationDialogBase(wx.Dialog):
             self.btn_xyz_targeting = wx.Button(parent, label="Refine")
             sizer.Add(self.btn_xyz_targeting)
 
+            self.refine_mode_choice = wx.Choice(parent, choices=["XYZ", "Z"])
+            self.refine_mode_choice.SetSelection(0)
+            self.refine_mode_choice.SetToolTip(
+                "XYZ: refine the full 3D position over the usual search range.\n"
+                "Z: only refine the Z position; the x/y position is left untouched."
+            )
+            sizer.Add(
+                self.refine_mode_choice,
+                flag=wx.ALIGN_CENTER_VERTICAL | wx.LEFT,
+                border=5,
+            )
+
             self.txt_refine_xyz_active = wx.StaticText(parent, label=" ")
             self.txt_refine_xyz_active.SetForegroundColour(self._theme.text_primary)
             self.txt_refine_xyz_active.Hide()
