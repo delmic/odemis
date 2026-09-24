@@ -201,7 +201,6 @@ else:
 #   the executable file.
 # * An instance of COLLECT creates the output folder from all the other parts.
 
-block_cipher = None
 use_upx = False
 
 a = Analysis(
@@ -225,9 +224,6 @@ a = Analysis(
     # For now, we explicitly remove the dependencies picked up due to matplotlib's backends
     excludes=["PyQt5", "PyQt4"],
     runtime_hooks=[],
-    win_no_prefer_redirects=False,
-    win_private_assemblies=False,
-    cipher=block_cipher
 )
 
 a.datas += get_gui_img()
@@ -235,7 +231,6 @@ a.datas += get_gui_img()
 pyz = PYZ(
     a.pure,
     a.zipped_data,
-    cipher=block_cipher
 )
 
 # For debug version change debug and console values to True. This will result in more
