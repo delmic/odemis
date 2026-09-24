@@ -39,7 +39,7 @@ class MillingSettings:
     def __init__(self, current: float, voltage: float, field_of_view: float, mode: str = "Serial", channel: str = "ion", align: bool = True):
         self.current = model.FloatContinuous(current, unit="A", range=(20e-12, 120e-9))
         self.voltage = model.FloatContinuous(voltage, unit="V", range=(0, 30e3))
-        self.field_of_view = model.FloatContinuous(field_of_view, unit="m", range=(50e-06, 960e-06))
+        self.field_of_view = model.FloatContinuous(field_of_view, unit="m", range=(1e-07, 960e-06))
         self.mode = model.StringEnumerated(mode, choices={"Serial", "Parallel"})
         self.channel = model.StringEnumerated(channel, choices={"ion"})
         self.align = model.BooleanVA(align) # align at the milling current

@@ -101,7 +101,7 @@
         FAV_SEM_POS_ACTIVE: {"rx": 0.6108652381980153, "rz": 0},  # pre-tilt 35°
         FAV_FIB_POS_ACTIVE: {"rx": 0.29670597283903605 , "rz": 3.141592653589793},
         FAV_MILL_POS_ACTIVE: {"mill_angle": 0.2443461, "rz": 0},  # milling angle (14°) is the angle between ion beam column and sample plane
-        FAV_SLM_POS_ACTIVE: {"rx": 0.2, "rz": 0},
+        FAV_SLM_POS_ACTIVE: {"rx": 0.2617993877991494, "rz": 0},  # rx 15°
     },
 }
 
@@ -298,12 +298,6 @@
 }
 
 ## Lens arm coincident component controlled by TMCM 6214
-# actuator, antibacklash actuator, the proper component with the role
-# copy of mirror seen in sparc
-
-# Controller for moving the 'Redux' stage
-# DIP must be configured with address 4 (= 0010000)
-# Note: the S axis can _only_ be moved when the l axis is near the active/engaged position
 "SLM Lens Arm": {
     class: tmcm.TMCLController,
     role: "lens-arm-coincident",
@@ -472,20 +466,13 @@
     },
 }
 
-# The lens-arm (l) and objective focus (z) are mechanically linked: moving the
-# "Linked LZ"/"SLM Alignment Stage" y axis always shifts l and z in opposite
-# directions. To always approach a target from the same mechanical side (and
-# so avoid a collision/backlash issue), whichever of l/z would move in the
-# positive direction is moved first, and the one moving in the negative
-# direction is moved last.
-# direction is moved last.
 "SLM LZ Forced Order": {
     class: actuator.ForcedOrderActuator,
     role: null,
     dependencies: {"slave": "SLM LZ Axes"},
     init: {
         backlash: {
-            # Only the sign matters: positive direction moves first.
+            # Only the sign matters: positive direction moves last.
             "l": -1,
             "z": -1,
         },
@@ -522,9 +509,6 @@
         inverted: ["x"],  # align.x = -s (negated mapping)
     },
     affects: ["SLM Camera"],
-#    metadata: {
-#        POS_ACTIVE_RANGE: {"x": [-2.1.e-3, 2.1.e-3], "y": [-30.e-3, 25.e-3], "z": [-11.e-3, 15.e-3]}
-#    },
     metadata: {
         POS_ACTIVE_RANGE: {"x": [-2.1e-3, 2.1e-3], "y": [-100, 100], "z": [-10.e-3, 15.e-3]}
     },

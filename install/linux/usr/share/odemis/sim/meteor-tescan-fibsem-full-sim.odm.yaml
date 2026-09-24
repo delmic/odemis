@@ -146,6 +146,7 @@
         FAV_SEM_POS_ACTIVE: {"rx": 0.698132, "rz": 1.815142}, # 40° tilt, 104° rotation
         # To compute the tilt angle: tilt = MillingAngle + PreTilt (40°) + ColumnTilt (55°) - 90
         FAV_MILL_POS_ACTIVE: { "mill_angle": 0.174532925, "rz": 1.815142 }, # Milling angle = 10°, 104° rotation
+        FAV_SLM_POS_ACTIVE: {"rx": 0.2617993877991494, "rz": 0},  # rx 15°
     },
 }
 
@@ -298,3 +299,220 @@
     },
     affects: ["Camera"],
 }
+
+"SLM Lens Arm": {
+    class: tmcm.TMCLController,
+    role: "lens-arm-coincident",
+    init: {
+#        port: "/dev/ttyTMCM*",
+#        address: 4,
+        port: "/dev/fake6", # Simulator
+        address: null, # Simulator
+        axes: ["l", "s"],
+        # ustepsize: [5.9e-9, 5.9e-9], # m/µstep
+        ustepsize: [0.1e-6, 0.1e-6],
+        refproc: "Standard",
+        refswitch: {"l": 0, "s": 0},
+        rng: [[-3.e-3, 125.5e-3],[-2.1e-3, 2.1e-3]],
+    },
+    metadata: {
+        # Default position of the mirror engaged (will be improved during alignment)
+        FAV_POS_ACTIVE: {"l": 122.2e-3, "s": 0},  # m, m
+        FAV_POS_DEACTIVE:{"l":-2.5e-3, "s": 0},
+    },
+}
+
+# SLM Optical path comp
+"SLM Light Source": {
+    class: omicronxx.HubxX,
+    role: light-coincident,
+    init: {
+        port: "/dev/fakehub", # Simulator
+        #port: "/dev/ttyFTDI*",
+        },
+    affects: ["SLM Camera"],
+}
+
+"SLM Optical Objective": {
+    class: static.OpticalLens,
+    role: lens-coincident,
+    init: {
+        mag: 84.0, # ratio, (actually of the complete light path)
+        na: 0.85, # ratio, numerical aperture
+        ri: 1.0, # ratio, refractive index
+    },
+    metadata: {
+        # Refractive index mismatch correction factor
+        RIM_COR : 0.495,  # generally for 50x lens use 0.495, 100x0.9 na use 0.6
+    },
+    affects: ["SLM Camera"]
+}
+
+# Normally a IDS uEye or Zyla
+# Axes: X is horizontal on screen (going left->right), physical: far->close when looking at the door
+#       Y is vertical on screen (going bottom->top), physical: left->right when looking at the door
+"SLM Camera": {
+    class: simcam.Camera,
+    role: ccd-coincident,
+    dependencies: {focus: "SLM Optical Focus"},
+    init: {
+        image: "andorcam2-fake-clara.tiff",
+        transp: [-1, 2], # To swap/invert axes
+    },
+    metadata: {
+        # To change what the "good" focus position is on the simulator
+        # It's needed for not using the initial value, which is at deactive position.
+         FAV_POS_ACTIVE: {'z': 1.7e-3},  # good focus position
+         ROTATION: 0,  # [rad] (=0°)
+    },
+}
+
+# Controller for the filter-wheel
+# DIP must be configured with address 7 (= 1110000)
+"SLM Optical Actuators": {
+    class: tmcm.TMCLController,
+    role: null,
+    init: {
+        port: "/dev/fake6", # Simulator
+        address: null, # Simulator
+        axes: ["fw"],
+        ustepsize: [1.227184e-3], # [rad/µstep]  fake value for simulator
+        rng: [[-14, 7]], # rad, more than 0->2 Pi, in order to allow one extra rotation in both direction, when quickly switching
+        unit: ["rad"],
+        refproc: "Standard",
+        refswitch: {"fw": 0}, #digital output used to switch on/off sensor
+        inverted: ["fw"], # for the filter wheel, the direction doesn't matter, as long as the positions are correct
+    },
+}
+
+"SLM AntiBacklash for Filter Wheel": {
+    class: actuator.AntiBacklashActuator,
+    role: null,
+    init: {
+        backlash: {
+            # Force every move to always finish in the same direction
+            "fw": 50.e-3,  # rad
+        },
+    },
+    dependencies: {"slave": "SLM Optical Actuators"},
+}
+
+"SLM Filter Wheel": {
+    class: actuator.FixedPositionsActuator,
+    role: filter-coincident,
+    dependencies: {"band": "SLM AntiBacklash for Filter Wheel"},
+    init: {
+        axis_name: "fw",
+        # This filter-wheel is made so that the light goes through two "holes":
+        # the filter, and the opposite hole (left empty). So although it has 8
+        # holes, it only supports 4 filters (from 0° to 135°), and there is no
+        # "fast-path" between the last filter and the first one.
+        positions: {
+             # pos (rad) -> m,m
+             0.08: [414.e-9, 450.e-9], # FF01-432/36
+             0.865398: [500.e-9, 530.e-9], # FF01-515/30
+#             1.650796: [579.5e-9, 610.5e-9], # FF01-595/31
+#             2.4361944: [663.e-9, 733.e-9], # FF02-698/70
+        },
+        cycle: 6.283185, # position of ref switch (0) after a full turn
+    },
+    # TODO: a way to indicate the best filter to use during alignement and brightfield? via some metadata?
+    affects: ["SLM Camera"],
+}
+
+# CLS3252dsc-1
+"SLM Optical Focus": {
+    class: smaract.MCS2,
+    role: focus-coincident,
+    init: {
+        locator: "fake",
+        ref_on_init: True,
+        # TODO: check speed/accel
+        speed: 0.003,  # m/s
+        accel: 0.003,  # m/s²
+        #hold_time: 5 # s, default = infinite
+        # TODO: check the ranges, and the channel
+        axes: {
+            'z': {
+                # -11.5mm is safely parked (FAV_POS_DEACTIVE)
+                # 1.7mm is typically in focus (FAV_POS_ACTIVE)
+                range: [-11.e-3, 15.e-3],
+                unit: 'm',
+                channel: 0,
+            },
+        },
+    },
+    metadata: {
+        # Loading position to retract lens
+        FAV_POS_DEACTIVE: {'z': -10.5e-3},
+        # Initial active position (close from the sample, but not too close, for safety)
+        FAV_POS_ACTIVE: {'z': 9.0e-3}
+    },
+    affects: ["SLM Camera"],
+}
+
+# Internal wrapper exposing lens-arm long axis and objective focus z as a
+# 2-axis stage for Y/Z linking.
+"SLM LZ Axes": {
+    class: actuator.MultiplexActuator,
+    role: null,
+    dependencies: {
+        "l": "SLM Lens Arm",
+        "z": "SLM Optical Focus",
+    },
+    init: {
+        axes_map: {
+            "l": "l",
+            "z": "z",
+        },
+    },
+}
+
+"SLM LZ Forced Order": {
+    class: actuator.ForcedOrderActuator,
+    role: null,
+    dependencies: {"slave": "SLM LZ Axes"},
+    init: {
+        backlash: {
+            # Only the sign matters: positive direction moves last.
+            "l": -1,
+            "z": -1,
+        },
+    },
+}
+
+"Linked LZ": {
+    class: actuator.ConvertStage,
+    role: null,
+    dependencies: {
+        "under": "SLM LZ Forced Order",
+    },
+    init: {
+      axes: [ "l", "z" ], # combines lens-arm l and objective z into linked Y transform
+        shear: [0, -1], # (0, -1/tan(45°)) 
+        scale: [-1.4142135623730951, -1], # (-1/sin(45°), -1)
+    },
+    }
+
+"SLM Alignment Stage": {
+    class: actuator.MultiplexActuator,
+    role: align-coincident,
+    dependencies: {
+        "x": "SLM Lens Arm",
+        "y": "Linked LZ",
+        "z": "Linked LZ",
+    },
+    init: {
+        axes_map: {
+            "x": "s", # direct mapping (negated via inverted below)
+            "y": "x", # linked combination of lens-arm l and objective z
+            "z": "y", # linked combination of lens-arm l and objective z
+        },
+        inverted: ["x"],  # align.x = -s (negated mapping)
+    },
+    affects: ["SLM Camera"],
+    metadata: {
+        POS_ACTIVE_RANGE: {"x": [-2.1e-3, 2.1e-3], "y": [-100, 100], "z": [-10.e-3, 15.e-3]}
+    },
+}
+

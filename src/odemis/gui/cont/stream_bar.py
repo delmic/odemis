@@ -2199,11 +2199,13 @@ class CryoStreamsController(SecomStreamsController):
         Returns detector, light source, filter and focuser.
         """
         if self._is_slm_posture():
+            logging.debug("SLM components enabled for imaging")
             ccd = getattr(self._main_data_model, "ccd_coincident", None)
             light = getattr(self._main_data_model, "light_coincident", None)
             light_filter = getattr(self._main_data_model, "filter_coincident", None)
             focuser = getattr(self._main_data_model, "focus_coincident", None)
             if all((ccd, light, light_filter, focuser)):
+                logging.debug("FM components enabled for imaging")
                 return ccd, light, light_filter, focuser
 
         return (

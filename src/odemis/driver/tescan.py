@@ -538,9 +538,11 @@ class SEM(model.HwComponent):
             # If there is an image center set by the sample stage in the posture manager,
             # make sure to update it with scanner translation and beam shift.
             phy_pos = metadata.get(model.MD_POS, (0, 0))
-            trans = self.pixelToPhy(pxs_pos)
-            shifted_pos = (phy_pos[0] + trans[0], phy_pos[1] + trans[1])
-            updated_phy_pos =  shifted_pos[0] - self.shift.value[0], shifted_pos[1] - self.shift.value[1]
+            trans = scanner.pixelToPhy(pxs_pos)
+            updated_phy_pos = (phy_pos[0] + trans[0], phy_pos[1] + trans[1])
+            # trans = self.pixelToPhy(pxs_pos)
+            # shifted_pos = (phy_pos[0] + trans[0], phy_pos[1] + trans[1])
+            # updated_phy_pos =  shifted_pos[0] - self.shift.value[0], shifted_pos[1] - self.shift.value[1]
 
             # update changed metadata
             metadata[model.MD_POS] = updated_phy_pos
