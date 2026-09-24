@@ -1230,7 +1230,7 @@ class StreamPanel(wx.Panel):
 
         # will contain both the combo box and the peak label
         exc_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        self.gb_sizer.Add(exc_sizer, (self.num_rows, 1), flag=wx.EXPAND)
+        self.gb_sizer.Add(exc_sizer, (self.num_rows, 1), span=(1, 2), flag=wx.EXPAND)
 
         if readonly:
             hw_set = wx.TextCtrl(self._panel, value=band, size=(-1, 16),
@@ -1247,8 +1247,17 @@ class StreamPanel(wx.Panel):
 
             exc_sizer.Add(hw_set, 1, border=5, flag=wx.ALL | wx.ALIGN_CENTRE_VERTICAL)
 
+        # Both controls have the same proportion in the BoxSizer, which makes its minimum size
+        # twice the one of the widest control. So to be able to shrink, both must have a small
+        # minimum size.
+        hw_set.SetMinSize((60, 16))
+
         # Label for peak information
-        lbl_peak = wx.StaticText(self._panel)
+        # The label must be allowed to shrink (ellipsized), otherwise its text forces
+        # the whole panel to be wider than the available space.
+        lbl_peak = wx.StaticText(self._panel, style=wx.ST_ELLIPSIZE_START | wx.ST_NO_AUTORESIZE)
+        lbl_peak.SetMinSize((1, -1))
+        lbl_peak.Show(False)  # shown only once it has some text (see update_peak_label_fit)
         exc_sizer.Add(lbl_peak, 1, border=5, flag=wx.ALL | wx.ALIGN_CENTRE_VERTICAL | wx.ALIGN_LEFT)
 
         if center_wl_color:
@@ -1257,10 +1266,9 @@ class StreamPanel(wx.Panel):
             # use the hardware setting
             btn_color = buttons.ColourButton(self._panel, -1, colour=center_wl_color,
                                               size=(18, 18))
-            self.gb_sizer.Add(btn_color,
-                              (self.num_rows, 2),
-                              flag=wx.RIGHT | wx.ALIGN_CENTRE_VERTICAL | wx.ALIGN_RIGHT,
-                              border=5)
+            # In the same sizer as the combobox, to use the full width of the row, while the
+            # button only takes its minimum width.
+            exc_sizer.Add(btn_color, 0, border=5, flag=wx.RIGHT | wx.ALIGN_CENTRE_VERTICAL)
         else:
             btn_color = None
 
