@@ -22,7 +22,7 @@ import wx
 
 import odemis.gui.layout as layout
 from odemis.gui.comp.buttons import ImageTextButton
-from odemis.gui.comp.foldpanelbar import FoldPanelBar, FoldPanelItem
+from odemis.gui.comp.foldpanelbar import FoldPanelBar
 from odemis.gui.comp.stream_bar import StreamBar
 from odemis.gui.comp.viewport import LiveViewport
 from odemis.gui.layout.constants.strings import (
@@ -212,30 +212,25 @@ class SecomAcqDialogBase(wx.Dialog):
 
         :param fold_bar: Parent fold-panel bar.
         """
-        self.fp_settings_secom_optical = self._fold_item(
-            fold_bar,
-            LABEL_OPTICAL_SETTINGS,
-        )
+        self.fp_settings_secom_optical = fold_bar.create_and_add_item(LABEL_OPTICAL_SETTINGS)
 
-        opt_streams_item = self._fold_item(fold_bar, nocaption=True)
+        opt_streams_item = fold_bar.create_and_add_item("", nocaption=True)
         self.pnl_opt_streams = self._stream_bar(opt_streams_item)
         opt_streams_item.add_item(self.pnl_opt_streams)
 
-        self.fp_settings_secom_sem = self._fold_item(
-            fold_bar,
-            LABEL_SEM_SETTINGS,
-        )
+        self.fp_settings_secom_sem = fold_bar.create_and_add_item(LABEL_SEM_SETTINGS)
 
-        streams_item = self._fold_item(fold_bar, LABEL_STREAMS)
+        streams_item = fold_bar.create_and_add_item(LABEL_STREAMS)
         self.pnl_secom_streams = self._stream_bar(
             streams_item,
             size=(300, -1),
         )
         streams_item.add_item(self.pnl_secom_streams)
 
-        fine_align_item = self._fold_item(fold_bar, nocaption=True)
-        fine_align_item.SetForegroundColour(self._theme.text_secondary)
-        fine_align_item.SetBackgroundColour(self._theme.background)
+        fine_align_item = fold_bar.create_and_add_item("",
+                                                       text_colour=self._theme.text_secondary,
+                                                       background_colour=self._theme.background,
+                                                       nocaption=True)
 
         self.chkbox_fine_align = wx.CheckBox(
             fine_align_item,
@@ -259,25 +254,6 @@ class SecomAcqDialogBase(wx.Dialog):
         stream_bar.SetForegroundColour(self._theme.text_muted)
         stream_bar.SetBackgroundColour(self._theme.background)
         return stream_bar
-
-    def _fold_item(
-        self,
-        fold_bar: FoldPanelBar,
-        label: str = "",
-        nocaption: bool = False,
-    ) -> FoldPanelItem:
-        """Create and register a styled fold-panel item.
-
-        :param fold_bar: Parent fold-panel bar.
-        :param label: Caption label.
-        :param nocaption: Whether the item omits its caption bar.
-        :returns: Registered fold-panel item.
-        """
-        item = FoldPanelItem(fold_bar, label=label, nocaption=nocaption)
-        item.SetForegroundColour(self._theme.button_text)
-        item.SetBackgroundColour(self._theme.section_header)
-        fold_bar.add_item(item)
-        return item
 
     def _build_gauge_panel(self) -> wx.Panel:
         """Build the acquisition progress gauge and estimate label.

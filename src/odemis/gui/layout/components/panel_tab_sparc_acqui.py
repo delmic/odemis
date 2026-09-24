@@ -23,7 +23,7 @@ import wx
 import odemis.gui.layout as layout
 from odemis.gui import img
 from odemis.gui.comp.buttons import ImageButton, ViewButton
-from odemis.gui.comp.foldpanelbar import CaptionBar, FoldPanelBar, FoldPanelItem
+from odemis.gui.comp.foldpanelbar import CaptionBar, FoldPanelBar
 from odemis.gui.comp.grid import ViewportGrid
 from odemis.gui.comp.stream_bar import StreamBar
 from odemis.gui.comp.viewport import (
@@ -258,17 +258,15 @@ class PnlTabSparcAcqui(wx.Panel):
             self.fpb_settings.SetBackgroundColour(self._theme.background)
             scroll_sizer.Add(self.fpb_settings, flag=wx.EXPAND)
 
-            self.fp_settings_gun_exciter = self._fold_item(
-                self.fpb_settings, "GUN EXCITER"
-            )
+            self.fp_settings_gun_exciter = self.fpb_settings.create_and_add_item("GUN EXCITER")
             self.fp_settings_gun_exciter.Hide()
 
-            self.fp_settings_ebeam_blanker = self._fold_item(
-                self.fpb_settings, "ELECTRON PULSER"
+            self.fp_settings_ebeam_blanker = self.fpb_settings.create_and_add_item(
+                "ELECTRON PULSER",
             )
             self.fp_settings_ebeam_blanker.Hide()
 
-            streams_item = self._fold_item(self.fpb_settings, LABEL_STREAMS)
+            streams_item = self.fpb_settings.create_and_add_item(LABEL_STREAMS)
             self.pnl_sparc_streams = self._stream_bar(
                 streams_item,
                 size=(300, -1),
@@ -279,25 +277,6 @@ class PnlTabSparcAcqui(wx.Panel):
         self.scr_win_right.SetSizer(scroll_sizer)
         self.scr_win_right.FitInside()
         return self.scr_win_right
-
-    def _fold_item(
-        self,
-        fold_bar: FoldPanelBar,
-        label: str = "",
-        nocaption: bool = False,
-    ) -> FoldPanelItem:
-        """Create and register a styled fold-panel item.
-
-        :param fold_bar: Parent fold-panel bar.
-        :param label: Caption label.
-        :param nocaption: Whether the item omits its caption bar.
-        :returns: Registered fold-panel item.
-        """
-        item = FoldPanelItem(fold_bar, label=label, nocaption=nocaption)
-        item.SetForegroundColour(self._theme.button_text)
-        item.SetBackgroundColour(self._theme.section_header)
-        fold_bar.add_item(item)
-        return item
 
     def _stream_bar(
         self,
