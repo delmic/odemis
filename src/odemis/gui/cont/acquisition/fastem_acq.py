@@ -64,6 +64,7 @@ from odemis.gui.cont.fastem_project_tree import (
     NodeType,
     NodeWindow,
 )
+from odemis.gui.layout.constants.strings import LABEL_RESUME
 from odemis.gui.model import CALIBRATION_1, CALIBRATION_2, CALIBRATION_3, STATE_OFF
 from odemis.gui.util import call_in_wx_main, get_picture_folder, wxlimit_invocation
 from odemis.gui.util.widgets import ProgressiveFutureConnector
@@ -538,7 +539,7 @@ class FastEMOverviewAcquiController(object):
         """
         if not self._is_paused:
             return  # Resumed or cancelled in the meantime; nothing to do.
-        self.btn_pause.SetLabel("Resume")
+        self.btn_pause.SetLabel(LABEL_RESUME)
         self.btn_pause.Enable()
         self.btn_cancel.Enable()
         _, remaining = self.acq_future.get_progress()
@@ -1816,7 +1817,7 @@ class FastEMMultiBeamAcquiController(object):
             return  # Resumed or cancelled in the meantime; nothing to do.
         self.main_tab_data.is_acquisition_paused.value = True
         self._enable_pending_roa_checkboxes(True)
-        self.btn_pause.SetLabel("Resume")
+        self.btn_pause.SetLabel(LABEL_RESUME)
         self.btn_pause.Enable()
         self.btn_cancel.Enable()
         _, remaining = self.acq_future.get_progress()
