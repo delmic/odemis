@@ -23,7 +23,7 @@ import wx
 import odemis.gui.layout as layout
 from odemis.gui import img
 from odemis.gui.comp.buttons import GraphicRadioButton, ImageButton, ImageTextButton
-from odemis.gui.comp.foldpanelbar import FoldPanelBar, FoldPanelItem
+from odemis.gui.comp.foldpanelbar import FoldPanelBar
 from odemis.gui.comp.slider import UnitFloatSlider
 from odemis.gui.comp.stream_bar import StreamBar
 from odemis.gui.comp.viewport import ARLiveViewport
@@ -36,6 +36,7 @@ from odemis.gui.layout.constants.strings import (
 from odemis.gui.layout.constants.themes import Theme
 from odemis.gui.layout.util.fonts import set_font
 from odemis.gui.layout.util.sizers import hbox, vbox
+from odemis.gui.layout.util.widgets import create_fold_item
 
 
 class PnlTabSparcAlign(wx.Panel):
@@ -457,11 +458,19 @@ class PnlTabSparcAlign(wx.Panel):
         fold_bar = FoldPanelBar(parent)
         fold_bar.SetBackgroundColour(self._theme.background)
 
-        self.fp_ma_settings_ar = self._fold_item(fold_bar, "ANGLE-RESOLVED")
+        self.fp_ma_settings_ar = create_fold_item(
+            fold_bar,
+            "ANGLE-RESOLVED",
+            text_colour=self._theme.button_text,
+            background_colour=self._theme.section_header,
+        )
 
-        streams_item = FoldPanelItem(fold_bar, nocaption=True)
-        streams_item.SetForegroundColour(self._theme.button_text)
-        streams_item.SetBackgroundColour(self._theme.section_header)
+        streams_item = create_fold_item(
+            fold_bar,
+            text_colour=self._theme.button_text,
+            background_colour=self._theme.section_header,
+            nocaption=True,
+        )
         self.pnl_sparc_align_streams = self._stream_bar(
             streams_item, size=(300, -1)
         )
@@ -478,7 +487,12 @@ class PnlTabSparcAlign(wx.Panel):
         """
         fold_bar = FoldPanelBar(parent)
         fold_bar.SetBackgroundColour(self._theme.background)
-        self.fp_ma_settings_spectrum = self._fold_item(fold_bar, "SPECTROMETER")
+        self.fp_ma_settings_spectrum = create_fold_item(
+            fold_bar,
+            "SPECTROMETER",
+            text_colour=self._theme.button_text,
+            background_colour=self._theme.section_header,
+        )
         return fold_bar
 
     def _radio_button(
@@ -569,23 +583,6 @@ class PnlTabSparcAlign(wx.Panel):
         stream_bar.SetForegroundColour(self._theme.text_muted)
         stream_bar.SetBackgroundColour(self._theme.background)
         return stream_bar
-
-    def _fold_item(
-        self,
-        fold_bar: FoldPanelBar,
-        label: str,
-    ) -> FoldPanelItem:
-        """Create and register a styled fold-panel item.
-
-        :param fold_bar: Parent fold-panel bar.
-        :param label: Caption label.
-        :returns: Registered fold-panel item.
-        """
-        item = FoldPanelItem(fold_bar, label=label)
-        item.SetForegroundColour(self._theme.button_text)
-        item.SetBackgroundColour(self._theme.section_header)
-        fold_bar.add_item(item)
-        return item
 
     def _actuator_panel(self, parent: wx.Window) -> wx.Panel:
         """Create a panel with the actuator group colours.

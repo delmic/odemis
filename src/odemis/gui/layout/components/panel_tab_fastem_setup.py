@@ -23,7 +23,7 @@ import wx
 import odemis.gui.layout as layout
 from odemis.gui import img
 from odemis.gui.comp.buttons import ImageTextButton
-from odemis.gui.comp.foldpanelbar import CaptionBar, FoldPanelBar, FoldPanelItem
+from odemis.gui.comp.foldpanelbar import CaptionBar, FoldPanelBar
 from odemis.gui.comp.stream_bar import StreamBar
 from odemis.gui.layout.constants.strings import (
     LABEL_CANCEL,
@@ -32,7 +32,7 @@ from odemis.gui.layout.constants.strings import (
 from odemis.gui.layout.constants.themes import Theme
 from odemis.gui.layout.util.fonts import set_font
 from odemis.gui.layout.util.sizers import hbox, vbox
-from odemis.gui.layout.util.widgets import create_text_button
+from odemis.gui.layout.util.widgets import create_fold_item, create_text_button
 
 
 class PnlTabFastemSetup(wx.Panel):
@@ -130,10 +130,12 @@ class PnlTabFastemSetup(wx.Panel):
             fold_bar.SetBackgroundColour(self._theme.background)
             scroll_sizer.Add(fold_bar, flag=wx.EXPAND)
 
-            sem_item = FoldPanelItem(fold_bar, label="SEM")
-            sem_item.SetForegroundColour(self._theme.button_text)
-            sem_item.SetBackgroundColour(self._theme.section_header)
-            fold_bar.add_item(sem_item)
+            sem_item = create_fold_item(
+                fold_bar,
+                "SEM",
+                text_colour=self._theme.button_text,
+                background_colour=self._theme.section_header,
+            )
 
             self.pnl_overview_streams = StreamBar(sem_item, size=(300, -1))
             self.pnl_overview_streams.SetForegroundColour(self._theme.text_muted)

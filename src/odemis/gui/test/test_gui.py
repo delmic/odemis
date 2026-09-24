@@ -25,6 +25,7 @@ from odemis.gui.comp.foldpanelbar import FoldPanelBar, FoldPanelItem
 from odemis.gui.comp.grid import ViewportGrid
 from odemis.gui.comp.stream_bar import StreamBar
 from odemis.gui.comp.text import SuggestTextCtrl, UnitFloatCtrl, UnitIntegerCtrl
+from odemis.gui.layout.util import widgets
 
 
 def _build_menu_bar() -> wx.MenuBar:
@@ -252,6 +253,7 @@ class FoldPanelBarFrame(wx.Frame):
 
         :returns: Scrolled window.
         """
+        # FIXME: it doesn't show scrollbar when the content is too big
         self.scrwin = wx.ScrolledWindow(self)
         self.scrwin.SetBackgroundColour("#A52A2A")
         self.scrwin.SetMinSize((100, 100))
@@ -271,7 +273,8 @@ class FoldPanelBarFrame(wx.Frame):
         self.fpb.SetBackgroundColour("#1E90FF")
 
         self.panel_1 = self._fold_item(self.fpb, "Test Panel 1", 2)
-        self.panel_2 = self._fold_item(self.fpb, "Test Panel 2", 10, collapsed=True)
+        self.panel_2 = self._fold_item(self.fpb, "Test Panel 2", 10)
+        self.panel_2.collapse()
         self.panel_3 = self._fold_item(self.fpb, "Test Panel 3", 6)
         return self.fpb
 
@@ -280,25 +283,20 @@ class FoldPanelBarFrame(wx.Frame):
         fpb: FoldPanelBar,
         label: str,
         label_count: int,
-        collapsed: bool = False,
     ) -> FoldPanelItem:
         """Create a fold-panel item populated with placeholder labels.
 
         :param fpb: Parent fold-panel bar.
         :param label: Caption label.
         :param label_count: Number of placeholder LABEL static texts to add.
-        :param collapsed: Whether the item starts collapsed.
         :returns: Registered fold-panel item.
         """
-        item = FoldPanelItem(fpb, label=label, collapsed=collapsed)
-        item.SetForegroundColour("#1A1A1A")
-        item.SetBackgroundColour("#666666")
-        font = item.GetFont()
-        font.SetPointSize(13)
-        item.SetFont(font)
+        item = widgets.create_fold_item(fpb, label,
+                                        text_colour="#1A1A1A",
+                                        background_colour="#666666")
         for _ in range(label_count):
             item.add_item(wx.StaticText(item, label="LABEL"))
-        fpb.add_item(item)
+
         return item
 
 

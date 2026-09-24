@@ -24,7 +24,7 @@ import wx.grid
 import odemis.gui.layout as layout
 from odemis.gui import img
 from odemis.gui.comp.buttons import ImageButton, ImageTextButton
-from odemis.gui.comp.foldpanelbar import FoldPanelBar, FoldPanelItem
+from odemis.gui.comp.foldpanelbar import FoldPanelBar
 from odemis.gui.comp.grid import ViewportGrid
 from odemis.gui.comp.stream_bar import StreamBar
 from odemis.gui.comp.viewport import MicroscopeViewport
@@ -36,7 +36,10 @@ from odemis.gui.layout.constants.strings import (
 from odemis.gui.layout.constants.themes import Theme
 from odemis.gui.layout.util.fonts import set_font
 from odemis.gui.layout.util.sizers import hbox, vbox
-from odemis.gui.layout.util.widgets import size_window_to_available_space
+from odemis.gui.layout.util.widgets import (
+    create_fold_item,
+    size_window_to_available_space,
+)
 
 
 class TDCorrelationDialogBase(wx.Dialog):
@@ -204,8 +207,11 @@ class TDCorrelationDialogBase(wx.Dialog):
 
         :param fold_bar: Parent fold-panel bar.
         """
-        self.fp_correlation_panel = FoldPanelItem(fold_bar, label="")
-        fold_bar.add_item(self.fp_correlation_panel)
+        self.fp_correlation_panel = create_fold_item(
+            fold_bar,
+            text_colour=self._theme.button_text,
+            background_colour=self._theme.section_header,
+        )
 
         pnl_correlation = wx.Panel(self.fp_correlation_panel)
 
@@ -271,18 +277,12 @@ class TDCorrelationDialogBase(wx.Dialog):
 
         :param fold_bar: Parent fold-panel bar.
         """
-        self.fp_correlation_streams = FoldPanelItem(
+        self.fp_correlation_streams = create_fold_item(
             fold_bar,
-            label=LABEL_STREAMS,
+            LABEL_STREAMS,
+            text_colour=self._theme.button_text,
+            background_colour=self._theme.section_header,
         )
-        self.fp_correlation_streams.SetForegroundColour(
-            self._theme.button_text
-        )
-        self.fp_correlation_streams.SetBackgroundColour(
-            self._theme.section_header
-        )
-        fold_bar.add_item(self.fp_correlation_streams)
-
         self.pnl_correlation_streams = StreamBar(
             self.fp_correlation_streams,
             size=(300, -1),

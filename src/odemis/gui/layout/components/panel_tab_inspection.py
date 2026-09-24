@@ -23,7 +23,7 @@ import wx
 import odemis.gui.layout as layout
 from odemis.gui import img
 from odemis.gui.comp.buttons import ImageButton, ViewButton
-from odemis.gui.comp.foldpanelbar import FoldPanelBar, FoldPanelItem
+from odemis.gui.comp.foldpanelbar import FoldPanelBar
 from odemis.gui.comp.grid import ViewportGrid
 from odemis.gui.comp.stream_bar import StreamBar
 from odemis.gui.comp.viewport import (
@@ -45,6 +45,7 @@ from odemis.gui.layout.constants.strings import (
 from odemis.gui.layout.constants.themes import Theme
 from odemis.gui.layout.util.sizers import hbox, vbox
 from odemis.gui.layout.util.widgets import (
+    create_fold_item,
     create_text_button,
 )
 
@@ -325,14 +326,24 @@ class PnlTabInspection(wx.Panel):
 
         :param fold_bar: Parent fold-panel bar.
         """
-        self.fp_fileinfo = self._fold_item(fold_bar, "FILE INFO")
+        self.fp_fileinfo = create_fold_item(
+            fold_bar,
+            "FILE INFO",
+            text_colour=self._theme.button_text,
+            background_colour=self._theme.section_header,
+        )
 
     def _build_streams_section(self, fold_bar: FoldPanelBar) -> None:
         """Build the analysis streams fold panel.
 
         :param fold_bar: Parent fold-panel bar.
         """
-        streams_item = self._fold_item(fold_bar, LABEL_STREAMS)
+        streams_item = create_fold_item(
+            fold_bar,
+            LABEL_STREAMS,
+            text_colour=self._theme.button_text,
+            background_colour=self._theme.section_header,
+        )
         self.pnl_inspection_streams = StreamBar(
             streams_item,
             size=(300, -1),
@@ -399,23 +410,6 @@ class PnlTabInspection(wx.Panel):
         viewport = cls(parent)
         viewport.Hide()
         return viewport
-
-    def _fold_item(
-        self,
-        fold_bar: FoldPanelBar,
-        label: str,
-    ) -> FoldPanelItem:
-        """Create and register a styled fold-panel item.
-
-        :param fold_bar: Parent fold-panel bar.
-        :param label: Caption label.
-        :returns: Registered fold-panel item.
-        """
-        item = FoldPanelItem(fold_bar, label=label)
-        item.SetForegroundColour(self._theme.button_text)
-        item.SetBackgroundColour(self._theme.section_header)
-        fold_bar.add_item(item)
-        return item
 
 
 if __name__ == "__main__":

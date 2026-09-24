@@ -22,7 +22,7 @@ import wx
 
 import odemis.gui.layout as layout
 from odemis.gui.comp.buttons import ViewButton
-from odemis.gui.comp.foldpanelbar import FoldPanelBar, FoldPanelItem
+from odemis.gui.comp.foldpanelbar import FoldPanelBar
 from odemis.gui.comp.grid import ViewportGrid
 from odemis.gui.comp.stream_bar import StreamBar
 from odemis.gui.comp.text import UnitFloatCtrl
@@ -38,6 +38,7 @@ from odemis.gui.layout.util.sizers import hbox, vbox
 from odemis.gui.layout.util.widgets import (
     create_chevron_button,
     create_combo,
+    create_fold_item,
     create_text_button,
 )
 
@@ -224,7 +225,12 @@ class PnlTabCorrelation(wx.Panel):
 
         :param fold_bar: Parent fold-panel bar.
         """
-        self.fp_correlation_streams = self._fold_item(fold_bar, LABEL_STREAMS)
+        self.fp_correlation_streams = create_fold_item(
+            fold_bar,
+            LABEL_STREAMS,
+            text_colour=self._theme.button_text,
+            background_colour=self._theme.section_header,
+        )
         self.pnl_correlation_streams = StreamBar(
             self.fp_correlation_streams,
             size=(300, -1),
@@ -248,9 +254,11 @@ class PnlTabCorrelation(wx.Panel):
 
         :param fold_bar: Parent fold-panel bar.
         """
-        self.fp_meteor_correlation = self._fold_item(
+        self.fp_meteor_correlation = create_fold_item(
             fold_bar,
             "CORRELATION CONTROLS",
+            text_colour=self._theme.button_text,
+            background_colour=self._theme.section_header,
         )
         panel = wx.Panel(self.fp_meteor_correlation)
         panel.SetBackgroundColour(self._theme.background)
@@ -445,23 +453,6 @@ class PnlTabCorrelation(wx.Panel):
         viewport.SetForegroundColour(self._theme.text_secondary)
         viewport.SetBackgroundColour(self._theme.viewport_background)
         return viewport
-
-    def _fold_item(
-        self,
-        fold_bar: FoldPanelBar,
-        label: str,
-    ) -> FoldPanelItem:
-        """Create and register a styled fold-panel item.
-
-        :param fold_bar: Parent fold-panel bar.
-        :param label: Caption label.
-        :returns: Registered fold-panel item.
-        """
-        item = FoldPanelItem(fold_bar, label=label)
-        item.SetForegroundColour(self._theme.button_text)
-        item.SetBackgroundColour(self._theme.section_header)
-        fold_bar.add_item(item)
-        return item
 
     def _checkbox(self, parent: wx.Window, label: str) -> wx.CheckBox:
         """Create a themed checkbox.
