@@ -608,7 +608,7 @@ class MeteorPostureManager(MicroscopePostureManager):
             return False
 
         stage_slm = stage_md[model.MD_FAV_SLM_POS_ACTIVE]
-        if not isNearPosition(pos, stage_slm, self.rotational_axes, atol_rotation=math.radians(3)):
+        if not isNearPosition(pos, stage_slm, self.rotational_axes, atol_rotation=math.radians(1.5)):
             return False
 
         slm_focus_active = self._slm_focus.getMetadata().get(model.MD_FAV_POS_ACTIVE)
@@ -811,13 +811,14 @@ class MeteorPostureManager(MicroscopePostureManager):
                                      sub_moves: List[Tuple[model.Component, Dict[str, float]]],
                                      engage: bool) -> List[Tuple[model.Component, Dict[str, float]]]:
         """
-        Append SLM lens/focus sub-moves and return the updated list.
+        Append SLM lens/focus sub-moves and return the updated list. If there is no SLM, nothing
+        will happen.
 
         :param sub_moves: Existing list of (component, move_dict) tuples.
         :param engage: True to engage (active), False to retract (deactive).
         :return: Updated sub_moves list.
         """
-        if not self._slm_available or self._slm_lens is None or self._slm_focus is None:
+        if Posture.SLM_IMAGING not in self.postures:
             return sub_moves
 
         lens_md = self._slm_lens.getMetadata()
@@ -839,10 +840,6 @@ class MeteorPostureManager(MicroscopePostureManager):
                 (self._slm_lens, {"l": lens_target.get("l")}),
                 (self._slm_lens, {"s": lens_target.get("s")}),
             ]
-
-        if any(move[next(iter(move))] is None for _, move in moves):
-            state = "active" if engage else "deactive"
-            raise ValueError(f"SLM {state} metadata is incomplete for lens/focus axes")
 
         sub_moves.extend(moves)
         return sub_moves

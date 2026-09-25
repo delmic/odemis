@@ -518,7 +518,7 @@ class LocalizationTab(Tab):
 
     def terminate(self):
         super(LocalizationTab, self).terminate()
-        self._stage.position.unsubscribe(self._on_current_posture)
+        self.main_data.posture_manager.current_posture.unsubscribe(self._on_current_posture)
         # make sure the streams are stopped
         for s in self.tab_data_model.streams.value:
             s.is_active.value = False

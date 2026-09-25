@@ -903,6 +903,7 @@ class Scanner(model.Emitter):
         return curr_shift
 
     def _updateShift(self) -> None:
+        """Update the shift VigilantAttribute with the current value from the Tescan device."""
         prev_shift = self.shift.value
 
         with self.parent._acq_progress_lock:
@@ -983,6 +984,7 @@ class Scanner(model.Emitter):
         self.updateMetadata({model.MD_BEAM_CURRENT: current})
 
     def _onShift(self, shift: Tuple[float, float]) -> None:
+        """Update the metadata when the shift value changes."""
         self.updateMetadata({model.MD_BEAM_SHIFT: shift})
 
     def _onRotation(self, rotation):

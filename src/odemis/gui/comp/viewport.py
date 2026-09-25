@@ -373,8 +373,8 @@ class MicroscopeViewport(ViewPort):
         if model.hasVA(tab_data, "zPos"):
             tab_data.zPos.subscribe(self._on_zPos_change, init=True)
 
-        main_data = getattr(tab_data, "main", None)
-        posture_manager = getattr(main_data, "posture_manager", None)
+        main_data = tab_data.main
+        posture_manager = main_data.posture_manager
         if posture_manager and self.bottom_legend:
             posture_manager.current_posture.subscribe(self._on_current_posture, init=True)
 

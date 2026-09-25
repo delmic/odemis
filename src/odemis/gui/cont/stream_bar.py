@@ -2321,7 +2321,7 @@ class CryoStreamsController(SecomStreamsController):
                     show = e.stream in ov_streams
                     e.Show(show)
                 else:
-                    show = e.stream in ov_streams
+                    show = e.stream not in ov_streams
                     e.Show(show)
 
                 # Show either the acquired FM or the acquired SLM streams, depending on the current posture.
@@ -2332,11 +2332,18 @@ class CryoStreamsController(SecomStreamsController):
 
                 e.Show(show)
             else:
-                is_slm_stream = self._is_slm_stream(e.stream)
-                is_slm_posture = self._is_slm_posture()
-                # It is True when (SLM strem + SLM posture) and (FM stream and FM posture)
-                # such that the compatible stream to the posture is shown
-                show = isinstance(e.stream, allowed_classes) and (is_slm_stream == is_slm_posture)
+                show = isinstance(e.stream, allowed_classes)
+
+                # Keep SEM and FIB live streams visible in the FIBSEM tab even while
+                # in SLM posture. Only optical streams should be filtered based on the
+                # active FM/SLM optics.
+                if show and not isinstance(e.stream, (acqstream.SEMStream, acqstream.FIBStream)):
+                    is_slm_stream = self._is_slm_stream(e.stream)
+                    is_slm_posture = self._is_slm_posture()
+                    # It is True when (SLM stream + SLM posture) and (FM stream + FM posture)
+                    # such that the compatible optical stream for the posture is shown.
+                    show = is_slm_stream == is_slm_posture
+
                 e.Show(show)
 
         self._stream_bar.fit_streams()
