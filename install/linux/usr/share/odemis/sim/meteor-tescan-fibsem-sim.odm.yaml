@@ -144,7 +144,6 @@
         FAV_SEM_POS_ACTIVE: {"rx": 0.698132, "rz": 1.815142}, # 40° tilt, 104° rotation
         # To compute the tilt angle: tilt = MillingAngle + PreTilt (40°) + ColumnTilt (55°) - 90
         FAV_MILL_POS_ACTIVE: {"mill_angle": 0.174532925, "rz": 1.815142}, # Milling angle = 10°, 104° rotation
-        FAV_SLM_POS_ACTIVE: {"rx": 0.2617993877991494, "rz": 0},  # rx 15°
     },
 }
 
@@ -309,7 +308,7 @@
     class: static.OpticalLens,
     role: lens-coincident,
     init: {
-        mag: 84.0, # ratio, (actually of the complete light path)
+        mag: 100.0, # ratio, (actually of the complete light path)
         na: 0.85, # ratio, numerical aperture
         ri: 1.0, # ratio, refractive index
     },
