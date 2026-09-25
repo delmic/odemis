@@ -345,7 +345,6 @@ class MeteorPostureManager(MicroscopePostureManager):
         stage_md = self.stage.getMetadata()
         self._slm_focus = None
         self._slm_lens = None
-        self._slm_axes_referenced = False
         self._slm_available = False
 
         if model.MD_FAV_SLM_POS_ACTIVE in stage_md:
@@ -353,8 +352,6 @@ class MeteorPostureManager(MicroscopePostureManager):
                 self._slm_focus = model.getComponent(role="focus-coincident")
                 self._slm_lens = model.getComponent(role="lens-arm-coincident")
                 self._slm_available = True
-                # if self._slm_lens.referenced.value:
-                #     self._slm_axes_referenced = True
             except LookupError:
                 logging.warning(
                     "SLM posture metadata is configured but focus-coincident/lens-arm-coincident components are missing"
@@ -794,18 +791,28 @@ class MeteorPostureManager(MicroscopePostureManager):
             Posture.UNKNOWN: tf_id
         }
 
-    def _ensure_slm_referenced(self) -> None:
-        """Reference SLM axes once before SLM posture movements."""
-        if not self._slm_available or self._slm_axes_referenced:
+    def _reference_slm_axes_before_engage(self, future) -> None:
+        """Reference the SLM axes immediately before every SLM engage."""
+        if Posture.SLM_IMAGING not in self.postures:
             return
 
-        logging.info("Referencing SLM axes before moving to SLM posture...")
-        for axis in ("l", "s"):
-            future = self._slm_lens.reference({axis})
-            future.result()
-        future = self._slm_focus.reference({"z"})
-        future.result()
-        self._slm_axes_referenced = True
+        logging.info("Referencing SLM axes before engaging SLM optics.")
+        for component, axes in (
+                (self._slm_lens, ("l", "s")),
+                (self._slm_focus, ("z",)),
+        ):
+            for axis in axes:
+                with future._task_lock:
+                    if future._task_state == CANCELLED:
+                        logging.info("SLM engage referencing cancelled before axis %s on %s", axis, component.name)
+                        raise CancelledError()
+                    logging.debug("Referencing SLM axis %s on %s", axis, component.name)
+                    future._running_subf = component.reference({axis})
+                future._running_subf.result()
+
+                if future._task_state == CANCELLED:
+                    logging.info("SLM engage referencing cancelled after axis %s on %s", axis, component.name)
+                    raise CancelledError()
 
     def _append_slm_lens_focus_moves(self,
                                      sub_moves: List[Tuple[model.Component, Dict[str, float]]],
@@ -1488,6 +1495,7 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
             # get the set point position
             current_position = self.stage.position.value
             target_position = self.get_target_position(target_posture)
+            slm_engage_index: Optional[int] = None
 
             # If at some "weird" position, it's quite unsafe. We consider the targets
             # LOADING and SEM_IMAGING safe to go. So if not going there, first pass
@@ -1587,6 +1595,7 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
                     # Engage the focuser
                     sub_moves.append((self.focus, focus_active))
                 elif target_posture == Posture.SLM_IMAGING:
+                    slm_engage_index = len(sub_moves)
                     # Engage the SLM lens and focus as last move
                     sub_moves = self._append_slm_lens_focus_moves(sub_moves, engage=True)
             else:
@@ -1594,7 +1603,9 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
 
             # run the moves
             logging.info("Moving from position {} to position {}.".format(current_posture, target_posture))
-            for component, sub_move in sub_moves:
+            for index, (component, sub_move) in enumerate(sub_moves):
+                if slm_engage_index is not None and index == slm_engage_index:
+                    self._reference_slm_axes_before_engage(future)
                 self._run_sub_move(future, component, sub_move)
 
         except CancelledError:
@@ -2658,6 +2669,7 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
 
             # get the set point position
             target_position = self.get_target_position(target_posture)
+            slm_engage_index: Optional[int] = None
 
             # In many cases, to move safely, we force the stage Z to go down first + extra margin,
             # do the actual moves, and then move back up. But on Tescan (stage-bare), the Z axis
@@ -2735,6 +2747,7 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
                     sub_moves.append((self.focus, focus_active))
 
                 if target_posture == Posture.SLM_IMAGING:
+                    slm_engage_index = len(sub_moves)
                     # Engage the SLM lens and focus as last move
                     sub_moves = self._append_slm_lens_focus_moves(sub_moves, engage=True)
             else:
@@ -2742,7 +2755,9 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
 
             # run the moves
             logging.info("Moving from position %s to position %s.",current_posture, target_posture)
-            for component, sub_move in sub_moves:
+            for index, (component, sub_move) in enumerate(sub_moves):
+                if slm_engage_index is not None and index == slm_engage_index:
+                    self._reference_slm_axes_before_engage(future)
                 self._run_sub_move(future, component, sub_move)
 
             # Handle shutter when transitioning to MILLING and SEM imaging positions, coming from FM.

@@ -1018,33 +1018,6 @@ class CryoChamberTab(Tab):
     def Show(self, show=True):
         Tab.Show(self, show=show)
 
-        if self._role in ["meteor", "mimas"] and show:
-            already_referenced = getattr(self.posture_manager, "_slm_axes_referenced", False)
-            if (not already_referenced
-                    and Posture.SLM_IMAGING in getattr(self.posture_manager, "postures", ())
-                    and hasattr(self.posture_manager, "_ensure_slm_referenced")):
-                # stage_md = self.tab_data_model.main.stage_bare.getMetadata()
-                # auto_ref = bool(stage_md.get("slm_auto_reference", False))
-                # if auto_ref:
-                #     pm._ensure_slm_referenced()
-                #     self._slm_reference_prompt_done = True
-                # else:
-                msg = (
-                    "SLM axes will be referenced during which it will make large movements. "
-                    "Please ensure the stage is at a safe location. Is it safe to continue?"
-                )
-                box = wx.MessageDialog(
-                    self.main_frame,
-                    message=msg,
-                    caption="Safe for Large Movement",
-                    style=wx.YES_NO | wx.ICON_QUESTION | wx.CENTER,
-                )
-                ans = box.ShowModal()
-                if ans == wx.ID_YES:
-                    self.posture_manager._ensure_slm_referenced()
-                else:
-                    wx.GetApp().ExitMainLoop()
-                    return
 
         # the first time the tab is shown, ask the user to create or load a project
         if self.IsShown() and not self._is_initial_project_ready:
