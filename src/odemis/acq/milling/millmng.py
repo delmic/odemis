@@ -360,9 +360,9 @@ class AutomatedMillingManager(object):
             logging.info(f"Starting {task_num}/{len(self.task_list)}: {self.current_workflow} for {len(self.features)} features...")
 
             current_posture = self.pm.get_current_posture()
-            if current_posture not in [Posture.SEM_IMAGING, Posture.MILLING]:
+            if current_posture not in [Posture.SEM_IMAGING, Posture.MILLING, Posture.TRENCHING]:
                 error_text = (f"Current posture is {current_posture}. "
-                               "Please switch to SEM_IMAGING or MILLING before starting automated milling.")
+                               "Please switch to SEM_IMAGING, MILLING, or TRENCHING before starting automated milling.")
                 logging.error(error_text)
                 raise ValueError(error_text)
 
