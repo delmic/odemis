@@ -90,6 +90,7 @@ COMPS_AFFECTED_ROLES = ["ccd", "e-beam", "ion-beam"]
 TFS_FIB_COLUMN_TILT = math.radians(52)
 TESCAN_FIB_COLUMN_TILT = math.radians(55)
 ZEISS_FIB_COLUMN_TILT = math.radians(54)
+TESCAN_SLM_COLUMN_TILT = math.radians(155)
 
 # These values might differ per system and would then require a configuration option per system.
 # Hardcoded for now. Note that these values correspond to the milling angle, and not the actual stage tilt.
@@ -343,22 +344,21 @@ class MeteorPostureManager(MicroscopePostureManager):
 
         # pre-tilt is required for milling posture, but not all systems have it
         stage_md = self.stage.getMetadata()
-        self._slm_focus = None
-        self._slm_lens = None
-        self._slm_available = False
-
-        if model.MD_FAV_SLM_POS_ACTIVE in stage_md:
-            try:
-                self._slm_focus = model.getComponent(role="focus-coincident")
-                self._slm_lens = model.getComponent(role="lens-arm-coincident")
-                self._slm_available = True
-            except LookupError:
-                logging.warning(
-                    "SLM posture metadata is configured but focus-coincident/lens-arm-coincident components are missing"
-                )
-
         md_calib = stage_md.get(model.MD_CALIB, {})
         self.pre_tilt = md_calib.get(model.MD_SAMPLE_PRE_TILT, None)
+        self._slm_focus = None
+        self._slm_arm = None
+        self._slm_available = False
+        self.slm_column_tilt = TESCAN_SLM_COLUMN_TILT
+
+        try:
+            self._slm_focus = model.getComponent(role="focus-coincident")
+            self._align_coincident = model.getComponent(role="align-coincident")
+            self._slm_arm = model.getComponent(role="lens-arm-coincident")
+            self._slm_available = True
+        except LookupError:
+            pass
+
         self.fib_column_tilt = TFS_FIB_COLUMN_TILT
         if self.pre_tilt is not None:
             self.fm_column_tilt = self.pre_tilt + stage_md.get(model.MD_FAV_FM_POS_ACTIVE)["rx"]
@@ -597,14 +597,11 @@ class MeteorPostureManager(MicroscopePostureManager):
         :param pos: the stage position
         :return: True if the stage is at the slm imaging posture
         """
-        if not self._slm_available:
+        if Posture.SLM_IMAGING not in self.postures:
             return False
 
-        stage_md = self.stage.getMetadata()
-        if model.MD_FAV_SLM_POS_ACTIVE not in stage_md:
-            return False
-
-        stage_slm = stage_md[model.MD_FAV_SLM_POS_ACTIVE]
+        stage_slm = self.get_posture_orientation(Posture.SLM_IMAGING)
+        logging.debug("Checking SLM posture against computed orientation: %s", stage_slm)
         if not isNearPosition(pos, stage_slm, self.rotational_axes, atol_rotation=math.radians(1.5)):
             return False
 
@@ -655,7 +652,11 @@ class MeteorPostureManager(MicroscopePostureManager):
             rx = self.calculate_stage_tilt(column_tilt=self.fm_column_tilt)
             return {"rx": rx, "rz": md["rz"]}
         elif posture == Posture.SLM_IMAGING:
-            return stage_md[model.MD_FAV_SLM_POS_ACTIVE]
+            md = stage_md[model.MD_FAV_MILL_POS_ACTIVE]
+            rx = self.calculate_slm_stage_tilt()
+            orientation = {"rx": rx, "rz": md["rz"]}
+            logging.debug("Computed SLM posture orientation: %s", orientation)
+            return orientation
         else:
             raise ValueError(f"posture {posture} not supported for orientation retrieval")
 
@@ -798,7 +799,7 @@ class MeteorPostureManager(MicroscopePostureManager):
 
         logging.info("Referencing SLM axes before engaging SLM optics.")
         for component, axes in (
-                (self._slm_lens, ("l", "s")),
+                (self._slm_arm, ("l", "s")),
                 (self._slm_focus, ("z",)),
         ):
             for axis in axes:
@@ -814,7 +815,7 @@ class MeteorPostureManager(MicroscopePostureManager):
                     logging.info("SLM engage referencing cancelled after axis %s on %s", axis, component.name)
                     raise CancelledError()
 
-    def _append_slm_lens_focus_moves(self,
+    def _append_slm_arm_focus_moves(self,
                                      sub_moves: List[Tuple[model.Component, Dict[str, float]]],
                                      engage: bool) -> List[Tuple[model.Component, Dict[str, float]]]:
         """
@@ -828,15 +829,15 @@ class MeteorPostureManager(MicroscopePostureManager):
         if Posture.SLM_IMAGING not in self.postures:
             return sub_moves
 
-        lens_md = self._slm_lens.getMetadata()
+        lens_md = self._slm_arm.getMetadata()
         focus_md = self._slm_focus.getMetadata()
 
         if engage:
             lens_target = lens_md.get(model.MD_FAV_POS_ACTIVE, {})
             focus_target = focus_md.get(model.MD_FAV_POS_ACTIVE, {})
             moves = [
-                (self._slm_lens, {"s": lens_target.get("s")}),
-                (self._slm_lens, {"l": lens_target.get("l")}),
+                (self._slm_arm, {"s": lens_target.get("s")}),
+                (self._slm_arm, {"l": lens_target.get("l")}),
                 (self._slm_focus, {"z": focus_target.get("z")}),
             ]
         else:
@@ -844,8 +845,8 @@ class MeteorPostureManager(MicroscopePostureManager):
             focus_target = focus_md.get(model.MD_FAV_POS_DEACTIVE, {})
             moves = [
                 (self._slm_focus, {"z": focus_target.get("z")}),
-                (self._slm_lens, {"l": lens_target.get("l")}),
-                (self._slm_lens, {"s": lens_target.get("s")}),
+                (self._slm_arm, {"l": lens_target.get("l")}),
+                (self._slm_arm, {"s": lens_target.get("s")}),
             ]
 
         sub_moves.extend(moves)
@@ -973,6 +974,9 @@ class MeteorPostureManager(MicroscopePostureManager):
 
         qpos = {"x": q[0], "y": q[1], "z": q[2]}
         return qpos
+
+    def calculate_slm_stage_tilt(self, column_tilt:float = TESCAN_SLM_COLUMN_TILT) -> float:
+        return self.pre_tilt + column_tilt - math.radians(180)
 
     def calculate_stage_tilt(
         self,
@@ -1507,7 +1511,7 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
                     target_pos_sem = self.get_target_position(Posture.SEM_IMAGING)
                     if not isNearPosition(self.focus.position.value, focus_deactive, self.focus.axes):
                         sub_moves.append((self.focus, focus_deactive))
-                    sub_moves = self._append_slm_lens_focus_moves(sub_moves, engage=False)
+                    sub_moves = self._append_slm_arm_focus_moves(sub_moves, engage=False)
                     sub_moves.append((self.stage, filter_dict({'x', 'y', 'z'}, target_pos_sem)))
                     sub_moves.append((self.stage, filter_dict({'rx', 'rz'}, target_pos_sem)))
 
@@ -1521,7 +1525,7 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
                 # Park the focuser for safety
                 if not isNearPosition(self.focus.position.value, focus_deactive, self.focus.axes):
                     sub_moves.append((self.focus, focus_deactive))
-                sub_moves = self._append_slm_lens_focus_moves(sub_moves, engage=False)
+                sub_moves = self._append_slm_arm_focus_moves(sub_moves, engage=False)
 
                 if (type(self) == MeteorTFS1PostureManager):
                     if current_posture == Posture.SEM_IMAGING and target_posture == Posture.FM_IMAGING:
@@ -1597,7 +1601,7 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
                 elif target_posture == Posture.SLM_IMAGING:
                     slm_engage_index = len(sub_moves)
                     # Engage the SLM lens and focus as last move
-                    sub_moves = self._append_slm_lens_focus_moves(sub_moves, engage=True)
+                    sub_moves = self._append_slm_arm_focus_moves(sub_moves, engage=True)
             else:
                 raise ValueError(f"Unsupported move to target {target_posture}")
 
@@ -2271,7 +2275,7 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
             tf_fib_view_fm = tf_id
 
         if self._slm_available:
-            rx_slm = stage_md[model.MD_FAV_SLM_POS_ACTIVE]["rx"]
+            rx_slm = self.get_posture_orientation(Posture.SLM_IMAGING)["rx"]
             tf_tilt = self._get_tilt_transformation(-pre_tilt, rx_slm)
             tf_slm = tf_reverse @ tf_tilt @ tf_sr
         else:
@@ -2692,7 +2696,7 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
                     target_pos_sem = self.get_target_position(Posture.SEM_IMAGING)
                     if not isNearPosition(self.focus.position.value, focus_deactive, self.focus.axes):
                         sub_moves.append((self.focus, focus_deactive))
-                    sub_moves = self._append_slm_lens_focus_moves(sub_moves, engage=False)
+                    sub_moves = self._append_slm_arm_focus_moves(sub_moves, engage=False)
                     sub_moves.append((self.stage, {'z': safety_z}))
                     sub_moves.append((self.stage, filter_dict({'x', 'y', 'rx', 'rz'}, target_pos_sem)))
                     # Don't move in Z of Posture.SEM_IMAGING, as it'll move down first to safety_z later
@@ -2712,7 +2716,7 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
                 # Park the focuser for safety
                 if not isNearPosition(self.focus.position.value, focus_deactive, self.focus.axes):
                     sub_moves.append((self.focus, focus_deactive))
-                sub_moves = self._append_slm_lens_focus_moves(sub_moves, engage=False)
+                sub_moves = self._append_slm_arm_focus_moves(sub_moves, engage=False)
 
                 if current_posture == Posture.MILLING:
                     # Store current milling angle, to go back to that same position next time
@@ -2749,7 +2753,7 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
                 if target_posture == Posture.SLM_IMAGING:
                     slm_engage_index = len(sub_moves)
                     # Engage the SLM lens and focus as last move
-                    sub_moves = self._append_slm_lens_focus_moves(sub_moves, engage=True)
+                    sub_moves = self._append_slm_arm_focus_moves(sub_moves, engage=True)
             else:
                 raise ValueError(f"Unsupported move to target {target_posture}")
 
