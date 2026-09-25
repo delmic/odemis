@@ -817,6 +817,22 @@ class Sparc2ExtSpecPathTestCase(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.optmngr.setPath("ErrorMode").result()
 
+    def test_in_affected(self):
+        """
+        Test the _in_affected method of the OpticalPathManager, which checks if a given actuator is affected by a given mode.
+        """
+        # Direct
+        self.assertTrue(self.optmngr._in_affected("Camera", {"Camera"}))
+        # Indirect
+        self.assertTrue(self.optmngr._in_affected("Camera", {"Spec CCD Flipper"}))
+        # Multiple affected
+        self.assertTrue(self.optmngr._in_affected("Camera", {"Integrated Spectrometer", "Spec CCD Flipper"}))
+        # Indirect, by 2 steps
+        self.assertTrue(self.optmngr._in_affected("Camera", {"Spectrometer Selector"}))
+
+        # Not affected
+        self.assertFalse(self.optmngr._in_affected("Spectral Camera", {"Integrated Spectrometer", "Spec CCD Flipper"}))
+
     def test_set_path(self):
         """
         Test setting modes that do exist. We expect all modes to be available

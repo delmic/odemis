@@ -839,22 +839,24 @@ class OpticalPathManager:
         for comp in self._actuators:
             # TODO: pre-cache this as comp/target -> axis/pos
             # TODO: don't do moves already done
-
-            # TODO: extend the path computation to "for every actuator which _affects_
-            # the target, move if position known, and update path to that actuator"?
-            # Eg, this would improve path computation on SPARCv2 with fiber aligner
             mv = {}
+
+            # Look for axes which are defined as choices, corresponding to pos->[affected components]
             for an, ad in comp.axes.items():
                 if hasattr(ad, "choices") and isinstance(ad.choices, dict):
                     for pos, value in ad.choices.items():
-                        if target in value:
+                        if not isinstance(value, (list, set)):
+                            continue
+                        if self._in_affected(target, set(value)):
                             # set the position so it points to the target
                             mv[an] = pos
 
+            # Look for the active/deactive positions: FAV_POS_(DE)ACTIVE_DEST should contain a list
+            # of the affected components, and FAV_POS_(DE)ACTIVE should contain the axis position.
             comp_md = comp.getMetadata()
-            if target in comp_md.get(model.MD_FAV_POS_ACTIVE_DEST, {}):
+            if self._in_affected(target, set(comp_md.get(model.MD_FAV_POS_ACTIVE_DEST, {}))):
                 mv.update(comp_md[model.MD_FAV_POS_ACTIVE])
-            elif target in comp_md.get(model.MD_FAV_POS_DEACTIVE_DEST, {}):
+            elif self._in_affected(target, set(comp_md.get(model.MD_FAV_POS_DEACTIVE_DEST, {}))):
                 mv.update(comp_md[model.MD_FAV_POS_DEACTIVE])
 
             if mv:
@@ -975,13 +977,24 @@ class OpticalPathManager:
         except KeyError:
             raise KeyError("Metadata %s does not exist in component %s" % (md_name, comp.name))
 
-    def affects(self, affecting, affected):
+    def _in_affected(self, target: str, affected: set[str], _visited=None) -> bool:
         """
-        Returns True if "affecting" component affects -directly of indirectly-
-        the "affected" component
-        affecting (str): component name
-        affected (str): component name
-        return bool
+        Returns True if the component "target" is listed directly or indirectly in the affected set.
+        :param target: name of the component to check
+        :param affected: set of affected component names
+        :return: True if target is affected, False otherwise
+        """
+        for comp in affected:
+            if self.affects(comp, target):
+                return True
+        return False
+
+    def affects(self, affecting: str, affected: str) -> bool:
+        """
+        Returns True if "affecting" component affects (directly of indirectly) the "affected" component
+        :param affecting: component name
+        :param affected: component name
+        :return: True if affecting affects the affected (including when affecting == affected), False otherwise
         """
         path = self.findPath(affecting, affected)
         if path is None:
