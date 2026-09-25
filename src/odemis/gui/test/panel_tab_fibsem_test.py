@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 """
-Copyright © 2026 Delmic
+@author: Alexéy Ilyushkin
+
+Copyright © 2026 Alexéy Ilyushkin, Delmic
 
 This file is part of Odemis.
 
@@ -113,6 +115,8 @@ class PnlTabFibsemTest(unittest.TestCase):
             "txt_automated_milling_status",
             "fp_milling",
             "milling_task_chk_list",
+            "chk_move_all_patterns",
+            "btn_snap_patterns_to_feature",
             "btn_run_milling",
             "txt_milling_est_time",
             "gauge_milling_series",
@@ -148,6 +152,11 @@ class PnlTabFibsemTest(unittest.TestCase):
         self.assertFalse(self.panel.gauge_milling_series.IsShown())
         self.assertFalse(self.panel.txt_milling_series_left_time.IsShown())
         self.assertFalse(self.panel.btn_milling_cancel.IsShown())
+        self.assertEqual(
+            self.panel.chk_move_all_patterns.GetForegroundColour(),
+            wx.Colour(layout.theme.text_primary),
+        )
+        self.assertEqual(self.panel.btn_snap_patterns_to_feature.GetLabel(), "Snap to Feature")
         self.assertEqual(self.panel.gauge_cryosecom_acq.GetRange(), 100)
         self.assertEqual(self.panel.gauge_automated_milling.GetRange(), 100)
         self.assertEqual(self.panel.gauge_milling_series.GetRange(), 100)
@@ -161,6 +170,7 @@ class PnlTabFibsemTest(unittest.TestCase):
             self.panel.btn_switch_sem_imaging,
             self.panel.btn_switch_milling,
             self.panel.btn_acquire_overview,
+            self.panel.btn_snap_patterns_to_feature,
         )
         contrasting_buttons = (
             self.panel.btn_feature_save_position,

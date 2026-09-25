@@ -2,9 +2,9 @@
 """
 Created on 09 Mar 2023
 
-@author: Canberk Akin
+@author: Canberk Akin, Alexéy Ilyushkin
 
-Copyright © 2023 Canberk Akin, Delmic
+Copyright © 2023-2026 Canberk Akin, Alexéy Ilyushkin, Delmic
 
 This file is part of Odemis.
 
@@ -43,15 +43,18 @@ from odemis.acq.feature import (
 from odemis.acq.milling import millmng
 from odemis.acq.milling.millmng import MillingWorkflowTask, run_automated_milling
 from odemis.acq.milling.patterns import (
-    MicroexpansionPatternParameters,
+    CorrelationPatternParameters,
+    MillingPatternParameters,
+    NotchPatternParameters,
     RectanglePatternParameters,
-    TrenchPatternParameters,
+    RulerPatternParameters,
 )
 from odemis.acq.milling.tasks import MillingTaskSettings
 from odemis.gui.comp.milling import MillingTaskPanel
 from odemis.gui.comp.overlay.base import Vec
-from odemis.gui.comp.overlay.rectangle import MillingRectangleOverlay, RectangleOverlay
-from odemis.gui.comp.overlay.shapes import EditableShape, ShapesOverlay
+from odemis.gui.comp.overlay.milling import MillingShapesOverlay
+from odemis.gui.comp.overlay.rectangle import MillingRectangleOverlay
+from odemis.gui.comp.overlay.shapes import EditableShape
 from odemis.gui.conf import get_acqui_conf
 from odemis.gui.cont.features import save_project
 from odemis.gui.layout import theme
@@ -117,7 +120,8 @@ def rectangle_pattern_to_shape(canvas,
                         pattern: RectanglePatternParameters,
                         colour: str = theme.categorical_yellow,
                         name: str = None,
-                        show_spot_size_correction: bool = False) -> EditableShape:
+                        show_spot_size_correction: bool = False,
+                        show_dimensions: bool = True) -> EditableShape:
     """Convert a rectangle pattern to a shape"""
     rect = MillingRectangleOverlay(
         cnvs=canvas,
@@ -125,6 +129,7 @@ def rectangle_pattern_to_shape(canvas,
         show_selection_points=False,
         spot_size_correction=pattern.spot_size_correction.value,
         show_spot_size_correction=show_spot_size_correction,
+        show_dimensions=show_dimensions,
     )
     width = pattern.width.value
     height = pattern.height.value
@@ -147,7 +152,8 @@ def rectangle_pattern_to_shape(canvas,
     rect._points = rect.get_physical_sel()
     rect.points.value = rect._points
 
-    # rect.set_rotation(math.radians(45)) #  TODO: how to rotate the shape?
+    if pattern.rotation.value:
+        rect.set_rotation(pattern.rotation.value)
 
     return rect
 
@@ -183,10 +189,7 @@ class MillingTaskController:
         self._active_spot_size_pattern = None
 
         # pattern overlay
-        self.rectangles_overlay = ShapesOverlay(
-            cnvs=self.canvas,
-            shape_cls=RectangleOverlay,
-        )
+        self.rectangles_overlay = MillingShapesOverlay(cnvs=self.canvas)
         self.canvas.add_world_overlay(self.rectangles_overlay)
         self.canvas.Bind(wx.EVT_LEFT_DOWN, self.on_mouse_down) # bind the mouse down event
         self.canvas.Bind(wx.EVT_CHAR, self.on_char)
@@ -194,6 +197,8 @@ class MillingTaskController:
         self.selected_tasks = model.ListVA([])  # List of strings, names of the selected milling tasks
         self._panel.milling_task_chk_list.Bind(wx.EVT_CHECKLISTBOX, handler=self._update_selected_tasks)
         self._panel.milling_task_chk_list.Bind(wx.EVT_LISTBOX, handler=self._on_milling_task_selected)
+        self._panel.btn_snap_patterns_to_feature.Bind(
+            wx.EVT_BUTTON, self._snap_patterns_to_feature)
 
         self._tab_data.main.currentFeature.subscribe(self._on_current_feature_changes, init=True)
 
@@ -231,6 +236,15 @@ class MillingTaskController:
         milling_tasks = feature.milling_tasks if feature else {}
         self.set_milling_tasks(milling_tasks)
         self._update_pattern_panels()
+        self._update_pattern_movement_controls()
+
+    def _update_pattern_movement_controls(self) -> None:
+        """Enable pattern movement controls when a feature can be edited."""
+        feature = self._tab_data.main.currentFeature.value
+        can_move = feature is not None and not self._tab_data.main.is_acquiring.value
+        self._panel.chk_move_all_patterns.Enable(can_move)
+        self._panel.btn_snap_patterns_to_feature.Enable(
+            can_move and feature.milling_feature_offset.value is not None)
 
     @call_in_wx_main
     def _update_pattern_panels(self) -> None:
@@ -250,9 +264,6 @@ class MillingTaskController:
 
         # create the setting panels, and connectors
         self.controls: Dict[str, MillingTaskPanel] = {}
-        pattern_parameters = [
-            "width", "height", "depth", "spacing", "spot_size_correction"
-        ]
         milling_parameters = ["current", "align", "mode"]
 
         # Note: always create all the panels, but hide for which the task is not selected.
@@ -273,16 +284,18 @@ class MillingTaskController:
             self.controls[task_name]["panel"] = panel
 
             # pattern parameters
-            for param in pattern_parameters:
+            for param in panel.pattern_parameters:
+                value = getattr(parameters, param)
+                event = wx.EVT_CHECKBOX if isinstance(value, model.BooleanVA) else wx.EVT_COMMAND_ENTER
                 _va_connector = VigilantAttributeConnector(
-                    getattr(parameters, param),
+                    value,
                     panel.ctrl_dict[param],
-                    events=wx.EVT_COMMAND_ENTER,
+                    events=event,
                 )
                 self.controls[task_name][f"{param}_connector"] = _va_connector
 
                 # VA connector, bind events
-                getattr(parameters, param).subscribe(self._on_patterns)
+                value.subscribe(self._on_patterns)
                 panel.ctrl_dict[param].Bind(
                     wx.EVT_SET_FOCUS,
                     lambda evt, pattern=parameters: self._on_pattern_control_interaction(evt, pattern),
@@ -349,13 +362,13 @@ class MillingTaskController:
                 if not task.selected:
                     continue
                 for pattern in task.patterns:
-                    if not isinstance(pattern, (RectanglePatternParameters,
-                                                TrenchPatternParameters,
-                                                MicroexpansionPatternParameters)):
-                        continue
-                    correction = pattern.spot_size_correction.value
-                    if correction >= min(pattern.width.value, pattern.height.value):
-                        return feature.name.value, task_name
+                    # Validate the actual milling rectangles, including the ruler's thin notches.
+                    for rectangle in pattern.generate():
+                        if not isinstance(rectangle, RectanglePatternParameters):
+                            continue
+                        correction = rectangle.spot_size_correction.value
+                        if correction >= min(rectangle.width.value, rectangle.height.value):
+                            return feature.name.value, task_name
         return None
 
     def _update_spot_size_validation_message(self) -> None:
@@ -427,8 +440,12 @@ class MillingTaskController:
 
             # TODO: validate if click is outside image bounds, don't move the pattern
             # TODO: validate whether the pattern is within the image bounds before moving it
-            # move selected stream to position
-            self.move_milling_tasks(pos_to_relative(p_pos, feature.reference_image))
+            patterns = self._get_patterns_for_manual_move()
+            if not patterns:
+                logging.info("Select a milling pattern before moving it.")
+                return
+            self._move_patterns(
+                patterns, pos_to_relative(p_pos, feature.reference_image))
             return
 
         # super event passthrough
@@ -457,7 +474,7 @@ class MillingTaskController:
         feature = self._tab_data.main.currentFeature.value
 
         # move if a reference image exists, because coordinate conversion from view pixels to physical
-        # metres relies on the MD_POS metadata stored in that image
+        # meters relies on the MD_POS metadata stored in that image
         if (ctrl_mod
                 and self.allow_milling_pattern_move
                 and feature and feature.reference_image is not None
@@ -473,22 +490,22 @@ class MillingTaskController:
             else:
                 view_dx = step_px
 
-            # All patterns across all tasks are shifted by the same view-space offset so
-            # their relative positions are preserved (the whole milling stack moves together).
-            for task in self.milling_tasks.values():
-                for pattern in task.patterns:
-                    selected_center_rel = pattern.center.value
-                    offset = active_canvas.get_half_buffer_size()
-                    center_phys = pos_to_absolute(selected_center_rel, ref_img)
-                    center_view = active_canvas.phys_to_view(center_phys, offset)
-                    new_center_view = (center_view[0] + view_dx, center_view[1])
-                    new_center_phys = active_canvas.view_to_phys(new_center_view, offset)
-                    logging.debug(f"Move milling pattern {pattern.name.value} horizontally from physical position"
-                                  f" {center_phys}, to new position {new_center_phys}")
+            patterns = self._get_patterns_for_manual_move()
+            if not patterns:
+                logging.info("Select a milling pattern before moving it.")
+                return
+            for pattern in patterns:
+                selected_center_rel = pattern.center.value
+                offset = active_canvas.get_half_buffer_size()
+                center_phys = pos_to_absolute(selected_center_rel, ref_img)
+                center_view = active_canvas.phys_to_view(center_phys, offset)
+                new_center_view = (center_view[0] + view_dx, center_view[1])
+                new_center_phys = active_canvas.view_to_phys(new_center_view, offset)
+                logging.debug(f"Move milling pattern {pattern.name.value} horizontally from physical position"
+                              f" {center_phys}, to new position {new_center_phys}")
 
-                    # move selected pattern to position
-                    relative_pos = pos_to_relative(new_center_phys, feature.reference_image)
-                    pattern.center.value = relative_pos
+                relative_pos = pos_to_relative(new_center_phys, feature.reference_image)
+                pattern.center.value = relative_pos
 
             save_project(self._tab_data.main)
             self.draw_milling_tasks()
@@ -544,25 +561,50 @@ class MillingTaskController:
         self.draw_milling_tasks()
         self._update_mill_btn()
 
-    def move_milling_tasks(self, pos: Tuple[float, float]):
-        """
-        Update only the milling patterns for the current feature.
+    def _get_patterns_for_manual_move(self) -> List[MillingPatternParameters]:
+        """Return the highlighted pattern, or all patterns in grouped movement mode."""
+        if self._panel.chk_move_all_patterns.GetValue():
+            return [pattern for task in self.milling_tasks.values()
+                    for pattern in task.patterns]
 
-        This is the independent Ctrl+Shift+click movement path and must not move
-        the feature marker.
-        :param pos: the position to draw the patterns at (in m, as relative coordinates to the center of the ion-beam FoV)
+        selection = self._panel.milling_task_chk_list.GetSelection()
+        if selection == wx.NOT_FOUND:
+            return []
+        task_name = self._panel.milling_task_chk_list.GetString(selection)
+        task = self.milling_tasks.get(task_name)
+        return list(task.patterns) if task and task.selected else []
+
+    def _move_patterns(self, patterns: List[MillingPatternParameters],
+                       pos: Tuple[float, float]) -> None:
+        """Move patterns to one position and persist the updated project."""
+        for pattern in patterns:
+            pattern.center.value = pos
+
+        save_project(self._tab_data.main)
+        self.draw_milling_tasks()
+
+    def move_milling_tasks(self, pos: Tuple[float, float]) -> None:
+        """Move every milling pattern for the current feature.
+
+        :param pos: Position relative to the center of the ion-beam field of view.
         """
         feature = self._tab_data.main.currentFeature.value
         if feature is None:
             logging.warning("Cannot move milling tasks without a selected feature.")
             return
 
-        for task in feature.milling_tasks.values():
-            for pattern in task.patterns:
-                pattern.center.value = pos
+        patterns = [pattern for task in feature.milling_tasks.values()
+                    for pattern in task.patterns]
+        self._move_patterns(patterns, pos)
 
-        save_project(self._tab_data.main)
-        self.draw_milling_tasks()
+    def _snap_patterns_to_feature(self, _: wx.Event) -> None:
+        """Move all milling patterns back to the feature marker."""
+        feature = self._tab_data.main.currentFeature.value
+        if (not self.allow_milling_pattern_move or feature is None
+                or feature.milling_feature_offset.value is None):
+            logging.warning("Cannot snap milling patterns without a feature marker.")
+            return
+        self.move_milling_tasks(feature.milling_feature_offset.value)
 
     def set_milling_feature_position(self,
                                      pos: Tuple[float, float],
@@ -574,6 +616,7 @@ class MillingTaskController:
             return
 
         feature.set_milling_feature_offset(pos, move_patterns=move_patterns)
+        self._update_pattern_movement_controls()
 
         save_project(self._tab_data.main)
         self.draw_milling_tasks()
@@ -599,9 +642,12 @@ class MillingTaskController:
             if not task.selected:
                 continue
             for pattern in task.patterns:
-                # logging.debug(f"{task_name}: {pattern.to_json()}")
+                # Composite glyph patterns use one shared label instead of one per rectangle.
+                uses_shared_label = isinstance(
+                    pattern, (CorrelationPatternParameters, RulerPatternParameters,
+                              NotchPatternParameters))
                 for j, pshape in enumerate(pattern.generate()):
-                    name = task_name if j == 0 else None
+                    name = task_name if j == 0 and not uses_shared_label else None
                     shape = rectangle_pattern_to_shape(
                                             canvas=self.canvas,
                                             ref_img=feature.reference_image,
@@ -610,8 +656,35 @@ class MillingTaskController:
                                             name=name,
                                             show_spot_size_correction=(
                                                 pattern is self._active_spot_size_pattern
-                                            ))
+                                            ),
+                                            show_dimensions=not uses_shared_label)
                     self.rectangles_overlay.add_shape(shape)
+                if uses_shared_label:
+                    x, y = pos_to_absolute(pattern.center.value, feature.reference_image)
+                    if isinstance(pattern, CorrelationPatternParameters):
+                        size = units.readable_str(
+                            (pattern.width.value, pattern.height.value), "m", sig=3
+                        ).replace(" x ", " × ")
+                        label = f"{task_name} · {size}"
+                    elif isinstance(pattern, NotchPatternParameters):
+                        size = units.readable_str(
+                            (pattern.width.value, pattern.height.value), "m", sig=3
+                        ).replace(" x ", " × ")
+                        label = f"{task_name} · {size}"
+                        gap = units.readable_str(pattern.gap.value, "m", sig=3)
+                        gap_side = 1 if pattern.mirrored.value else -1
+                        gap_align = wx.ALIGN_LEFT if pattern.mirrored.value else wx.ALIGN_RIGHT
+                        self.rectangles_overlay.add_pattern_label(
+                            gap,
+                            (x + gap_side * pattern.width.value / 2,
+                             y + pattern.offset.value),
+                            align=gap_align | wx.ALIGN_CENTER_VERTICAL,
+                            offset=(gap_side * 8, 0))
+                    else:
+                        height = units.readable_str(pattern.height.value, "m", sig=3)
+                        label = f"{task_name} · {height}"
+                    self.rectangles_overlay.add_pattern_label(
+                        label, (x, y + pattern.height.value / 2))
 
         # validate the patterns
         self._on_shapes_update(self.rectangles_overlay._shapes.value)
@@ -724,6 +797,8 @@ class MillingTaskController:
         Called when is_acquiring changes
         Enable/Disable mill button
         """
+        self.allow_milling_pattern_move = not is_acquiring
+        self._update_pattern_movement_controls()
         self._update_mill_btn()
 
     @call_in_wx_main

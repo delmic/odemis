@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """
-@author: Patrick Cleeve
+@author: Patrick Cleeve, Alexéy Ilyushkin
 
-Copyright © 2025 Delmic
+Copyright © 2025-2026 Patrick Cleeve, Alexéy Ilyushkin, Delmic
 
 This file is part of Odemis.
 
@@ -48,7 +48,13 @@ from odemis.acq.feature import (
     REFERENCE_IMAGE_FILENAME,
 )
 from odemis.acq.milling.tasks import MillingTaskSettings
-from odemis.acq.milling.patterns import RectanglePatternParameters
+from odemis.acq.milling.patterns import (
+    CorrelationPatternParameters,
+    NotchPatternParameters,
+    RectanglePatternParameters,
+    RulerPatternParameters,
+    WaffleTrenchPatternParameters,
+)
 from odemis.acq.milling.fibsemos import run_milling_tasks_fibsemos
 from odemis.acq.move import Posture, MicroscopePostureManager
 from odemis.acq.stream import FIBStream, SEMStream
@@ -281,12 +287,25 @@ def get_associated_tasks(wt: MillingWorkflowTask,
         if not task.selected:
             continue
 
-        if wt.value in task.name:
-            associated_tasks.append(task)
+        # Optional rectangle patterns always belong to rough milling, regardless of task name.
+        is_rough_pattern = any(
+            isinstance(pattern, (
+                CorrelationPatternParameters,
+                RulerPatternParameters,
+                NotchPatternParameters,
+                WaffleTrenchPatternParameters,
+            ))
+            for pattern in task.patterns)
+        if is_rough_pattern:
+            if wt is MillingWorkflowTask.RoughMilling:
+                associated_tasks.append(task)
+            continue
 
-        # special case for micro-expansion to associate with rough milling
+        # TODO: Replace name matching and special cases with explicit workflow assignments.
         if wt is MillingWorkflowTask.RoughMilling and "Microexpansion" in task.name:
-            associated_tasks.insert(0, task) # should be the first task
+            associated_tasks.insert(0, task)  # This must be the first task.
+        elif wt.value in task.name:
+            associated_tasks.append(task)
 
     return associated_tasks
 
@@ -341,9 +360,9 @@ class AutomatedMillingManager(object):
             logging.info(f"Starting {task_num}/{len(self.task_list)}: {self.current_workflow} for {len(self.features)} features...")
 
             current_posture = self.pm.get_current_posture()
-            if current_posture not in [Posture.SEM_IMAGING, Posture.MILLING]:
+            if current_posture not in [Posture.SEM_IMAGING, Posture.MILLING, Posture.TRENCHING]:
                 error_text = (f"Current posture is {current_posture}. "
-                               "Please switch to SEM_IMAGING or MILLING before starting automated milling.")
+                               "Please switch to SEM_IMAGING, MILLING, or TRENCHING before starting automated milling.")
                 logging.error(error_text)
                 raise ValueError(error_text)
 

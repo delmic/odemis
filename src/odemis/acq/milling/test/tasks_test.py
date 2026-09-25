@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """
-@author: Patrick Cleeve
+@author: Patrick Cleeve, Alexéy Ilyushkin
 
-Copyright © 2024, Delmic
+Copyright © 2025-2026 Patrick Cleeve, Alexéy Ilyushkin, Delmic
 
 This file is part of Odemis.
 
@@ -20,7 +20,15 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 import os
 import logging
 import unittest
-from odemis.acq.milling.patterns import TrenchPatternParameters, MicroexpansionPatternParameters
+from odemis.acq.milling import DEFAULT_MILLING_TASKS_PATH
+from odemis.acq.milling.patterns import (
+    CorrelationPatternParameters,
+    MicroexpansionPatternParameters,
+    NotchPatternParameters,
+    RulerPatternParameters,
+    TrenchPatternParameters,
+    WaffleTrenchPatternParameters,
+)
 from odemis.acq.milling.tasks import MillingTaskSettings, MillingSettings, load_milling_tasks, save_milling_tasks
 
 logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)-15s: %(message)s")
@@ -144,6 +152,59 @@ class MillingTaskTestCase(unittest.TestCase):
         self.assertEqual(loaded_tasks["Microexpansion"].patterns[0].depth.value, microexpansion_task_settings.patterns[0].depth.value)
         self.assertEqual(loaded_tasks["Microexpansion"].patterns[0].spacing.value, microexpansion_task_settings.patterns[0].spacing.value)
         self.assertEqual(loaded_tasks["Microexpansion"].patterns[0].center.value, microexpansion_task_settings.patterns[0].center.value)
+
+    def test_ruler_task_roundtrip(self) -> None:
+        """Preserve ruler task parameters through YAML serialization."""
+        tasks = load_milling_tasks(DEFAULT_MILLING_TASKS_PATH)
+        ruler = tasks["Ruler"]
+        self.assertFalse(ruler.selected)
+        self.assertEqual(ruler.generate(), [])
+        self.assertIsInstance(ruler.patterns[0], RulerPatternParameters)
+        self.assertEqual(ruler.patterns[0].num_notches.value, 11)
+        ruler.selected = True
+        ruler.patterns[0].num_notches.value = 16
+        ruler.patterns[0].height.value = 8e-6
+        ruler.patterns[0].center.value = (1e-6, -2e-6)
+        ruler.patterns[0].spot_size_correction.value = 20e-9
+        save_milling_tasks(TASKS_PATH, tasks)
+        restored = load_milling_tasks(TASKS_PATH)["Ruler"]
+        self.assertEqual(restored.to_dict(), ruler.to_dict())
+        self.assertEqual(len(restored.generate()), 32)
+        self.assertEqual([p.to_dict() for p in restored.generate()],
+                         [p.to_dict() for p in ruler.generate()])
+
+    def test_default_notch_task(self) -> None:
+        """Load the optional default notch as five rectangles."""
+        notch = load_milling_tasks(DEFAULT_MILLING_TASKS_PATH)["Notch"]
+        self.assertFalse(notch.selected)
+        self.assertEqual(notch.milling.current.value, 0.3e-9)
+        self.assertIsInstance(notch.patterns[0], NotchPatternParameters)
+        self.assertEqual(len(notch.patterns[0].generate()), 5)
+
+    def test_default_correlation_task(self) -> None:
+        """Load the optional full-field correlation pattern."""
+        task = load_milling_tasks(DEFAULT_MILLING_TASKS_PATH)["Correlation (NП+LT)"]
+        pattern = task.patterns[0]
+
+        self.assertFalse(task.selected)
+        self.assertEqual(task.milling.current.value, 60e-9)
+        self.assertEqual(task.milling.field_of_view.value, 960e-6)
+        self.assertIsInstance(pattern, CorrelationPatternParameters)
+        self.assertEqual((pattern.width.value, pattern.height.value),
+                         (900e-6, 700e-6))
+        self.assertEqual(len(pattern.generate()), 12)
+
+    def test_default_waffle_trench_task(self) -> None:
+        """Load the optional waffle trench with asymmetric defaults."""
+        task = load_milling_tasks(DEFAULT_MILLING_TASKS_PATH)["Waffle Trench"]
+        pattern = task.patterns[0]
+
+        self.assertFalse(task.selected)
+        self.assertIsInstance(pattern, WaffleTrenchPatternParameters)
+        self.assertEqual((pattern.top_width.value, pattern.top_height.value),
+                         (22e-6, 37e-6))
+        self.assertEqual((pattern.bottom_width.value, pattern.bottom_height.value),
+                         (20e-6, 17e-6))
 
 
 if __name__ == "__main__":

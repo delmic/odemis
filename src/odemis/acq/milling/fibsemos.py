@@ -2,9 +2,9 @@
 """
 Created on 3 April 2025
 
-@author: Patrick Cleeve
+@author: Patrick Cleeve, Alexéy Ilyushkin
 
-Copyright © 2025 Patrick Cleeve, Delmic
+Copyright © 2025-2026 Patrick Cleeve, Alexéy Ilyushkin, Delmic
 
 This file is part of Odemis.
 
@@ -31,6 +31,8 @@ from typing import List, Optional, Union
 
 from odemis import model
 from odemis.acq.milling.patterns import (
+    CompositeRectanglePatternParameters,
+    CorrelationPatternParameters,
     MicroexpansionPatternParameters,
     MillingPatternParameters,
     RectanglePatternParameters,
@@ -68,6 +70,7 @@ try:
         FibsemImage,
         FibsemImageMetadata,
         FibsemRectangle,
+        FibsemRectangleSettings,
         BeamType,
         ImageSettings,
         MicroscopeState,
@@ -79,6 +82,39 @@ except ImportError as e:
     FIBSEMOS_INSTALLED = False
 
 _persistent_millmng: Optional["FibsemOSMillingTaskManager"] = None
+_MILLING_FOV_MARGIN = 0.01
+
+
+if FIBSEMOS_INSTALLED:
+    class _RectanglePatternGroup(RectanglePattern):
+        """Expose several fibsemOS rectangles as one executable pattern."""
+
+        def __init__(self, rectangles: List['RectanglePattern']) -> None:
+            """Initialize the group from ordinary rectangle patterns.
+
+            :param rectangles: Rectangle patterns drawn in one milling stage.
+            """
+            if not rectangles:
+                raise ValueError("A rectangle pattern group cannot be empty.")
+            first = rectangles[0]
+            super().__init__(
+                point=first.point,
+                width=first.width,
+                height=first.height,
+                depth=first.depth,
+                rotation=first.rotation,
+                time=first.time,
+                passes=first.passes,
+                scan_direction=first.scan_direction,
+                cross_section=first.cross_section,
+            )
+            self.rectangles = rectangles
+
+        def define(self) -> List['FibsemRectangleSettings']:
+            """Return all rectangle settings for one fibsemOS milling run."""
+            self.shapes = [shape for rectangle in self.rectangles
+                           for shape in rectangle.define()]
+            return self.shapes
 
 
 def _get_reference_image(feature: CryoFeature) -> model.DataArray:
@@ -330,13 +366,65 @@ def convert_task_to_milling_stage(task: MillingTaskSettings) -> 'FibsemMillingSt
     )
     return milling_stage
 
+
+def _convert_composite_pattern_to_milling_stage(
+        task: MillingTaskSettings,
+        pattern: CompositeRectanglePatternParameters,
+        name: str) -> 'FibsemMillingStage':
+    """Convert a composite rectangle pattern into one fibsemOS milling stage.
+
+    :param task: Task supplying the shared milling and alignment settings.
+    :param pattern: Composite pattern whose generated rectangles belong to the stage.
+    :param name: Milling stage name.
+    :return: One stage that draws and mills every generated rectangle together.
+    """
+    rectangles = [_convert_rectangle_pattern(rectangle)
+                  for rectangle in pattern.generate()]
+    milling = convert_milling_settings(task.milling)
+    if isinstance(pattern, CorrelationPatternParameters):
+        center_x, center_y = pattern.center.value
+        required_fov = 2 * max(
+            abs(center_x) + pattern.width.value / 2,
+            abs(center_y) + pattern.height.value / 2,
+        )
+        minimum_fov = required_fov * (1 + _MILLING_FOV_MARGIN)
+        maximum_fov = task.milling.field_of_view.range[1]
+        if minimum_fov > maximum_fov:
+            raise ValueError(
+                f"Correlation pattern requires a {minimum_fov:g} m milling field including its safety margin, "
+                f"which does not fit inside the maximum {maximum_fov:g} m field of view."
+            )
+        if minimum_fov >= milling.hfw:
+            milling.hfw = maximum_fov
+    return FibsemMillingStage(
+        name=name,
+        milling=milling,
+        pattern=_RectanglePatternGroup(rectangles),
+        patterns=rectangles,
+        alignment=MillingAlignment(enabled=task.milling.align.value),
+    )
+
+
 def convert_milling_tasks_to_milling_stages(milling_tasks: List[MillingTaskSettings]) -> List['FibsemMillingStage']:
-    """Convert a list of Odemis milling tasks to fibsemOS milling stages."""
+    """Convert tasks to fibsemOS milling stages.
+
+    Each composite rectangle pattern shares one stage and milling run.
+    """
     milling_stages = []
 
     for task in milling_tasks:
-        milling_stage = convert_task_to_milling_stage(task)
-        milling_stages.append(milling_stage)
+        if not task.selected:
+            continue
+        for pattern in task.patterns:
+            name = (task.name if len(task.patterns) == 1
+                    else f"{task.name}: {pattern.name.value}")
+            if isinstance(pattern, CompositeRectanglePatternParameters):
+                milling_stages.append(
+                    _convert_composite_pattern_to_milling_stage(task, pattern, name))
+            else:
+                stage_task = MillingTaskSettings(
+                    milling=task.milling, patterns=[pattern], name=name)
+                milling_stages.append(convert_task_to_milling_stage(stage_task))
 
     return milling_stages
 
