@@ -694,8 +694,10 @@ class Scanner(model.Emitter):
         # self.depthOfField = model.FloatContinuous(1e-6, range=(0, 1e9),
         #                                           unit="m", readonly=True)
 
-        shift = self._device_handler.GetImageShift() * 1e-3
-        self.shift = model.TupleContinuous(shift, ((-1e-3, -1e-3), (1e-3, 1e-3)), cls=(int, float), unit="m",
+        # shift = self._device_handler.GetImageShift() * 1e-3
+        shift_mm = self._device_handler.GetImageShift()
+        shift = [v * 1e-3 for v in shift_mm]
+        self.shift = model.ListContinuous(shift, ((-1e-3, -1e-3), (1e-3, 1e-3)), cls=(int, float), unit="m",
                                            setter=self._setShift)
         self.shift.subscribe(self._onShift, init=True)
 
@@ -894,15 +896,19 @@ class Scanner(model.Emitter):
         """
         with self.parent._acq_progress_lock:
             # to mm to comply with Tescan API
-            self._device_handler.SetImageShift(value * 1e3)
-            curr_shift = self._device_handler.GetImageShift() * 1e-3
+            self._device_handler.SetImageShift(value[0] * 1e3, value[1] * 1e3)
+            shift_mm = self._device_handler.GetImageShift()
+            curr_shift = [v * 1e-3 for v in shift_mm]
+            # curr_shift = self._device_handler.GetImageShift() * 1e-3
         return curr_shift
 
     def _updateShift(self) -> None:
         prev_shift = self.shift.value
 
         with self.parent._acq_progress_lock:
-            new_shift = self._device_handler.GetImageShift() * 1e-3
+            shift_mm = self._device_handler.GetImageShift()
+            new_shift = [v * 1e-3 for v in shift_mm]
+            # new_shift = self._device_handler.GetImageShift() * 1e-3
 
         if prev_shift != new_shift:
             self.shift._value = new_shift
