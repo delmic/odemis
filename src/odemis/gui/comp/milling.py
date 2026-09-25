@@ -24,6 +24,7 @@ import logging
 import wx
 from odemis import gui, model
 from odemis.acq.milling.patterns import (
+    CorrelationPatternParameters,
     NotchPatternParameters,
     RulerPatternParameters,
     WaffleTrenchPatternParameters,
@@ -75,6 +76,7 @@ class MillingTaskPanel(wx.Panel):
             "mode": {"label": "Milling mode"},
             "width": {"label": "Width", "accuracy": 2, "unit": "m"},
             "height": {"label": "Height", "accuracy": 2, "unit": "m"},
+            "marker_length": {"label": "Marker length", "accuracy": 2, "unit": "m"},
             "top_width": {"label": "Top width", "accuracy": 2, "unit": "m"},
             "top_height": {"label": "Top height", "accuracy": 2, "unit": "m"},
             "bottom_width": {"label": "Bottom width", "accuracy": 2, "unit": "m"},
@@ -126,6 +128,11 @@ class MillingTaskPanel(wx.Panel):
             CONFIG["height"]["tooltip"] = "Overall ruler length, including the first and last notches."
             CONFIG["spacing"]["tooltip"] = "Gap between the inner edges of the two rulers."
             CONFIG["num_notches"]["tooltip"] = "Notches on each side, starting at zero at the bottom and alternating long and short."
+        elif isinstance(pattern, CorrelationPatternParameters):
+            CONFIG["width"]["tooltip"] = "Overall width of the five-marker correlation pattern."
+            CONFIG["height"]["tooltip"] = "Overall height of the five-marker correlation pattern."
+            CONFIG["marker_length"]["tooltip"] = "Length of each bar forming a marker."
+            CONFIG["thickness"]["tooltip"] = "Thickness of each bar forming a marker."
         elif isinstance(pattern, NotchPatternParameters):
             CONFIG["width"]["tooltip"] = "Overall width of the right-facing loop."
             CONFIG["height"]["tooltip"] = "Overall height including both whiskers."

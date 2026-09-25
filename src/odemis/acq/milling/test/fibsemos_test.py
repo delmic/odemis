@@ -46,6 +46,7 @@ except ImportError:
 
 from odemis.acq.milling.patterns import (
     CompositeRectanglePatternParameters,
+    CorrelationPatternParameters,
     MicroexpansionPatternParameters,
     NotchPatternParameters,
     RectanglePatternParameters,
@@ -308,7 +309,7 @@ class TestConvertMillingTasksToMillingStages(unittest.TestCase):
         self.assertIsInstance(stages[1].pattern, BasePattern)
 
     def assert_composite_pattern_uses_one_stage(
-            self, pattern: CompositeRectanglePatternParameters) -> None:
+            self, pattern: CompositeRectanglePatternParameters) -> 'FibsemMillingStage':
         """Assert that all generated rectangles share one milling stage."""
         milling = MillingSettings(
             current=60e-12, voltage=30000, field_of_view=80e-6, align=True)
@@ -327,6 +328,7 @@ class TestConvertMillingTasksToMillingStages(unittest.TestCase):
                             for rectangle in stage.patterns))
         self.assertEqual(stage.milling.milling_current, milling.current.value)
         self.assertEqual(stage.alignment.enabled, milling.align.value)
+        return stage
 
     def test_ruler_uses_one_milling_stage(self) -> None:
         """Send all ruler rectangles in one milling stage."""
@@ -361,6 +363,15 @@ class TestConvertMillingTasksToMillingStages(unittest.TestCase):
             thickness=0.2e-6, offset=-0.2e-6)
 
         self.assert_composite_pattern_uses_one_stage(pattern)
+
+    def test_correlation_pattern_uses_one_milling_stage(self) -> None:
+        """Send all correlation markers in one milling stage."""
+        pattern = CorrelationPatternParameters(
+            width=900e-6, height=700e-6, marker_length=75e-6,
+            thickness=4e-6, depth=3e-6)
+
+        stage = self.assert_composite_pattern_uses_one_stage(pattern)
+        self.assertEqual(stage.milling.hfw, 960e-6)
 
     def test_waffle_trench_uses_one_milling_stage(self) -> None:
         """Send both waffle trench rectangles in one milling stage."""

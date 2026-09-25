@@ -43,6 +43,7 @@ from odemis.acq.feature import (
 from odemis.acq.milling import millmng
 from odemis.acq.milling.millmng import MillingWorkflowTask, run_automated_milling
 from odemis.acq.milling.patterns import (
+    CorrelationPatternParameters,
     MillingPatternParameters,
     NotchPatternParameters,
     RectanglePatternParameters,
@@ -151,7 +152,8 @@ def rectangle_pattern_to_shape(canvas,
     rect._points = rect.get_physical_sel()
     rect.points.value = rect._points
 
-    # rect.set_rotation(math.radians(45)) #  TODO: how to rotate the shape?
+    if pattern.rotation.value:
+        rect.set_rotation(pattern.rotation.value)
 
     return rect
 
@@ -640,9 +642,10 @@ class MillingTaskController:
             if not task.selected:
                 continue
             for pattern in task.patterns:
-                # Rulers and notches use one shared label instead of one per rectangle.
+                # Composite glyph patterns use one shared label instead of one per rectangle.
                 uses_shared_label = isinstance(
-                    pattern, (RulerPatternParameters, NotchPatternParameters))
+                    pattern, (CorrelationPatternParameters, RulerPatternParameters,
+                              NotchPatternParameters))
                 for j, pshape in enumerate(pattern.generate()):
                     name = task_name if j == 0 and not uses_shared_label else None
                     shape = rectangle_pattern_to_shape(
@@ -658,7 +661,12 @@ class MillingTaskController:
                     self.rectangles_overlay.add_shape(shape)
                 if uses_shared_label:
                     x, y = pos_to_absolute(pattern.center.value, feature.reference_image)
-                    if isinstance(pattern, NotchPatternParameters):
+                    if isinstance(pattern, CorrelationPatternParameters):
+                        size = units.readable_str(
+                            (pattern.width.value, pattern.height.value), "m", sig=3
+                        ).replace(" x ", " × ")
+                        label = f"{task_name} · {size}"
+                    elif isinstance(pattern, NotchPatternParameters):
                         size = units.readable_str(
                             (pattern.width.value, pattern.height.value), "m", sig=3
                         ).replace(" x ", " × ")

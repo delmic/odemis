@@ -22,6 +22,7 @@ import logging
 import unittest
 from odemis.acq.milling import DEFAULT_MILLING_TASKS_PATH
 from odemis.acq.milling.patterns import (
+    CorrelationPatternParameters,
     MicroexpansionPatternParameters,
     NotchPatternParameters,
     RulerPatternParameters,
@@ -179,6 +180,19 @@ class MillingTaskTestCase(unittest.TestCase):
         self.assertEqual(notch.milling.current.value, 0.3e-9)
         self.assertIsInstance(notch.patterns[0], NotchPatternParameters)
         self.assertEqual(len(notch.patterns[0].generate()), 5)
+
+    def test_default_correlation_task(self) -> None:
+        """Load the optional full-field correlation pattern."""
+        task = load_milling_tasks(DEFAULT_MILLING_TASKS_PATH)["Correlation (NП+LT)"]
+        pattern = task.patterns[0]
+
+        self.assertFalse(task.selected)
+        self.assertEqual(task.milling.current.value, 60e-9)
+        self.assertEqual(task.milling.field_of_view.value, 960e-6)
+        self.assertIsInstance(pattern, CorrelationPatternParameters)
+        self.assertEqual((pattern.width.value, pattern.height.value),
+                         (900e-6, 700e-6))
+        self.assertEqual(len(pattern.generate()), 12)
 
     def test_default_waffle_trench_task(self) -> None:
         """Load the optional waffle trench with asymmetric defaults."""

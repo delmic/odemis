@@ -21,6 +21,7 @@ import logging
 import unittest
 import numpy
 from odemis.acq.milling.patterns import (
+    CorrelationPatternParameters,
     NotchPatternParameters,
     PATTERN_NAME_TO_CLASS,
     RectanglePatternParameters,
@@ -385,6 +386,41 @@ class RulerPatternParametersTestCase(unittest.TestCase):
         self.assertEqual(self.pattern.num_notches.value, 21)
         with self.assertRaises(ValueError):
             RulerPatternParameters(width=2e-6, height=10e-9, depth=1e-6, spacing=1e-6)
+
+
+class CorrelationPatternParametersTestCase(unittest.TestCase):
+    """Test correlation marker geometry and serialization."""
+
+    def test_geometry_and_serialization(self) -> None:
+        """Generate five glyphs spanning the requested pattern bounds."""
+        pattern = CorrelationPatternParameters(
+            width=900e-6, height=800e-6, marker_length=75e-6,
+            thickness=4e-6, depth=3e-6, center=(10e-6, -20e-6),
+            spot_size_correction=20e-9)
+        rectangles = pattern.generate()
+
+        self.assertEqual(len(rectangles), 12)
+        self.assertTrue(all(isinstance(rectangle, RectanglePatternParameters)
+                            for rectangle in rectangles))
+        self.assertTrue(all(rectangle.depth.value == 3e-6 for rectangle in rectangles))
+        self.assertTrue(all(rectangle.spot_size_correction.value == 20e-9
+                            for rectangle in rectangles))
+        self.assertEqual(sum(rectangle.rotation.value != 0 for rectangle in rectangles), 1)
+        left = min(rectangle.center.value[0] - rectangle.width.value / 2
+                   for rectangle in rectangles)
+        right = max(rectangle.center.value[0] + rectangle.width.value / 2
+                    for rectangle in rectangles)
+        bottom = min(rectangle.center.value[1] - rectangle.height.value / 2
+                     for rectangle in rectangles)
+        top = max(rectangle.center.value[1] + rectangle.height.value / 2
+                  for rectangle in rectangles)
+        self.assertAlmostEqual(right - left, 900e-6)
+        self.assertAlmostEqual(top - bottom, 800e-6)
+
+        restored = CorrelationPatternParameters.from_dict(pattern.to_dict())
+        self.assertEqual(restored.to_dict(), pattern.to_dict())
+        self.assertEqual([rectangle.to_dict() for rectangle in restored.generate()],
+                         [rectangle.to_dict() for rectangle in rectangles])
 
 
 class NotchPatternParametersTestCase(unittest.TestCase):

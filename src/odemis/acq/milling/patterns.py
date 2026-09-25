@@ -481,6 +481,159 @@ class RulerPatternParameters(CompositeRectanglePatternParameters):
         return patterns
 
 
+class CorrelationPatternParameters(CompositeRectanglePatternParameters):
+    """Five large fiducial glyphs for correlating optical and FIB-SEM images."""
+
+    _DIMENSIONS = ("width", "height", "marker_length", "thickness")
+
+    def __init__(self, width: float, height: float, marker_length: float,
+                 thickness: float, depth: float,
+                 center: Tuple[float, float] = (0, 0),
+                 name: str = "Correlation (NП+LT)",
+                 spot_size_correction: float = 0.0) -> None:
+        """Initialize a correlation pattern.
+
+        :param width: Overall distance from the left to right pattern edge.
+        :param height: Overall distance from the bottom to top pattern edge.
+        :param marker_length: Length of each bar forming a fiducial glyph.
+        :param thickness: Thickness of every bar.
+        :param depth: Milling depth of every bar.
+        :param center: Center of the complete pattern.
+        :param name: Pattern name.
+        :param spot_size_correction: Beam spot size correction.
+        """
+        self.name = model.StringVA(name)
+        self.width = model.FloatContinuous(
+            width, unit="m", range=(1e-9, 900e-6), setter=self._set_width)
+        self.height = model.FloatContinuous(
+            height, unit="m", range=(1e-9, 900e-6), setter=self._set_height)
+        self.marker_length = model.FloatContinuous(
+            marker_length, unit="m", range=(1e-9, 900e-6),
+            setter=self._set_marker_length)
+        self.thickness = model.FloatContinuous(
+            thickness, unit="m", range=(1e-9, 900e-6),
+            setter=self._set_thickness)
+        self.depth = model.FloatContinuous(depth, unit="m", range=(1e-9, 100e-6))
+        self.center = model.TupleContinuous(
+            center, unit="m", range=((-1e3, -1e3), (1e3, 1e3)), cls=(int, float))
+        self.spot_size_correction = model.FloatContinuous(
+            spot_size_correction, unit="m", range=(0, 900e-6))
+        self._check_geometry(width, height, marker_length, thickness)
+
+    @staticmethod
+    def _check_geometry(width: float, height: float, marker_length: float,
+                        thickness: float) -> None:
+        """Validate that all glyphs fit inside the requested bounds."""
+        if thickness >= marker_length:
+            raise ValueError("Correlation marker thickness must be less than its length")
+        if marker_length > width or marker_length > height:
+            raise ValueError("Correlation markers must fit inside the complete pattern")
+
+    def _set_dimension(self, parameter: str, value: float) -> float:
+        """Validate and return a changed geometry dimension."""
+        values = {}
+        for name in self._DIMENSIONS:
+            if name == parameter:
+                values[name] = value
+            elif hasattr(self, name):
+                values[name] = getattr(self, name).value
+        if len(values) == len(self._DIMENSIONS):
+            self._check_geometry(**values)
+        return value
+
+    def _set_width(self, value: float) -> float:
+        """Validate a changed overall width."""
+        return self._set_dimension("width", value)
+
+    def _set_height(self, value: float) -> float:
+        """Validate a changed overall height."""
+        return self._set_dimension("height", value)
+
+    def _set_marker_length(self, value: float) -> float:
+        """Validate a changed marker length."""
+        return self._set_dimension("marker_length", value)
+
+    def _set_thickness(self, value: float) -> float:
+        """Validate a changed marker thickness."""
+        return self._set_dimension("thickness", value)
+
+    def to_dict(self) -> dict:
+        """Serialize the correlation pattern parameters."""
+        return {
+            "name": self.name.value,
+            "width": self.width.value,
+            "height": self.height.value,
+            "marker_length": self.marker_length.value,
+            "thickness": self.thickness.value,
+            "depth": self.depth.value,
+            "center_x": self.center.value[0],
+            "center_y": self.center.value[1],
+            "spot_size_correction": self.spot_size_correction.value,
+            "pattern": "correlation",
+        }
+
+    @staticmethod
+    def from_dict(data: dict) -> 'CorrelationPatternParameters':
+        """Create correlation pattern parameters from serialized data."""
+        return CorrelationPatternParameters(
+            width=data["width"],
+            height=data["height"],
+            marker_length=data["marker_length"],
+            thickness=data["thickness"],
+            depth=data["depth"],
+            center=(data.get("center_x", 0), data.get("center_y", 0)),
+            name=data.get("name", "Correlation (NП+LT)"),
+            spot_size_correction=data.get("spot_size_correction", 0.0))
+
+    def generate(self) -> List[MillingPatternParameters]:
+        """Generate the pi, N, cross, upper-right L, and upward-tail T glyphs."""
+        length = self.marker_length.value
+        thickness = self.thickness.value
+        half_length = length / 2
+        edge_offset_x = (self.width.value - length) / 2
+        edge_offset_y = (self.height.value - length) / 2
+        center_x, center_y = self.center.value
+
+        horizontal_top = (length, thickness, 0, half_length - thickness / 2, 0)
+        horizontal_middle = (length, thickness, 0, 0, 0)
+        horizontal_bottom = (length, thickness, 0, -half_length + thickness / 2, 0)
+        vertical_left = (thickness, length, -half_length + thickness / 2, 0, 0)
+        vertical_middle = (thickness, length, 0, 0, 0)
+        vertical_right = (thickness, length, half_length - thickness / 2, 0, 0)
+        diagonal_span = length / math.sqrt(2)
+        n_vertical_left = (thickness, length, -diagonal_span / 2, 0, 0)
+        n_vertical_right = (thickness, length, diagonal_span / 2, 0, 0)
+        diagonal_rising = (length, thickness, 0, 0, math.pi / 4)
+        glyphs = (
+            ("Pi", -edge_offset_x, edge_offset_y,
+             (horizontal_top, vertical_left, vertical_right)),
+            ("N", -edge_offset_x, -edge_offset_y,
+             (n_vertical_left, diagonal_rising, n_vertical_right)),
+            ("Cross", 0, 0,
+             (horizontal_middle, vertical_middle)),
+            ("Upper-right L", edge_offset_x, edge_offset_y,
+             (horizontal_top, vertical_right)),
+            ("Upward-tail T", edge_offset_x, -edge_offset_y,
+             (horizontal_bottom, vertical_middle)),
+        )
+
+        rectangles = []
+        for glyph_name, glyph_x, glyph_y, bars in glyphs:
+            for index, (width, height, offset_x, offset_y, rotation) in enumerate(
+                    bars, start=1):
+                rectangles.append(RectanglePatternParameters(
+                    name=f"{self.name.value} ({glyph_name} {index})",
+                    width=width,
+                    height=height,
+                    depth=self.depth.value,
+                    center=(center_x + glyph_x + offset_x,
+                            center_y + glyph_y + offset_y),
+                    rotation=rotation,
+                    scan_direction="TopToBottom",
+                    spot_size_correction=self.spot_size_correction.value))
+        return rectangles
+
+
 class NotchPatternParameters(CompositeRectanglePatternParameters):
     """Five connected rectangles forming one right-facing square-wave loop."""
 
@@ -681,5 +834,6 @@ PATTERN_NAME_TO_CLASS = {
     "microexpansion": MicroexpansionPatternParameters,
     "waffle_trench": WaffleTrenchPatternParameters,
     "ruler": RulerPatternParameters,
+    "correlation": CorrelationPatternParameters,
     "notch": NotchPatternParameters,
 }

@@ -79,6 +79,13 @@ class TestAssociatedMillingTasks(unittest.TestCase):
         self.assertNotIn(waffle_trench,
                          get_associated_tasks(MillingWorkflowTask.Polishing, tasks))
 
+        correlation = tasks["Correlation (NП+LT)"]
+        correlation.selected = True
+        self.assertIn(correlation,
+                      get_associated_tasks(MillingWorkflowTask.RoughMilling, tasks))
+        self.assertNotIn(correlation,
+                         get_associated_tasks(MillingWorkflowTask.Polishing, tasks))
+
 
 # NOTE: Require xt simulator to be running
 class TestAutomatedMillingManager(unittest.TestCase):

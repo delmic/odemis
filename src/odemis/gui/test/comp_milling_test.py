@@ -87,6 +87,11 @@ class MillingTaskPanelTestCase(test.GuiTestCase):
             set(waffle_panel.pattern_parameters),
             {"top_width", "top_height", "bottom_width", "bottom_height",
              "depth", "spacing", "spot_size_correction"})
+        correlation_panel = controls["Correlation (NП+LT)"]["panel"]
+        self.assertEqual(
+            set(correlation_panel.pattern_parameters),
+            {"width", "height", "marker_length", "thickness", "depth",
+             "spot_size_correction"})
         for name in ("Microexpansion", "Rough Milling 01", "Polishing 01"):
             self.assertNotIn("num_notches", controls[name]["panel"].ctrl_dict)
             self.assertEqual(set(controls[name]["panel"].pattern_parameters),
