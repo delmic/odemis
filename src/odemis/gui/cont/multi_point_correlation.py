@@ -255,7 +255,7 @@ class CorrelationPointsController:
 
         # Access the XYZ-targeting button
         self.xyz_targeting_btn = self._panel.btn_xyz_targeting
-        self.xyz_targeting_btn.Bind(wx.EVT_BUTTON, self._on_xyz_targeting)
+        self.xyz_targeting_btn.Bind(wx.EVT_BUTTON, self._on_refine)
         # Access the refine mode selector (XYZ vs Z-only refinement)
         self.refine_mode_choice = self._panel.refine_mode_choice
         # Disable XYZ-targeting button if super z stream is available as XYZ-targeting is not required in that case
@@ -961,7 +961,7 @@ class CorrelationPointsController:
         if not self.has_super_z.value and not self.at_fib_view_fm.value and (target.type.value in self.grid_targets):
             if target.needs_refinement.value and TargetType.FibFiducial != target.type.value:
                 if mip_enabled:
-                    self._on_xyz_targeting()
+                    self._com_refinement(target)
                 # When there is just one stream without MIP, use the currently selected z index
                 elif len(visible_streams) == 1 and hasattr(visible_streams[0], "zIndex"):
                     # We only care about z, so pass placeholders for x and y
@@ -991,7 +991,25 @@ class CorrelationPointsController:
         :param coordinates: the coordinates of the current target
         """
         target = self._tab_data_model.main.currentTarget.value
-        temp_check = False
+        coords_changed = self._update_grid_row_from_target(target)
+
+        self.correlation_target = update_feature_correlation_target(self.correlation_target,
+                                                                    self._tab_data_model)
+
+        if self.check_correlation_conditions() and (coords_changed or target.type.value == TargetType.SurfaceFiducial):
+            self._need_reprocessing()
+
+        for vp in self._viewports:
+            vp.canvas.request_drawing_update()
+
+    def _update_grid_row_from_target(self, target: Target) -> bool:
+        """
+        Update the grid row(s) matching the given target with its current coordinates.
+
+        :param target: the target whose coordinates should be reflected in the grid
+        :return: True if any cell value in the grid was actually changed, False otherwise
+        """
+        coords_changed = False
         for row in range(self.grid.GetNumberRows()):
             if self._selected_target_in_grid(target, row):
                 if target.type.value == TargetType.FibFiducial:
@@ -1001,23 +1019,15 @@ class CorrelationPointsController:
                     pixel_coords = get_pixel_3d_coordinates(self.correlation_target.fm_streams[0], target.coordinates.value)
                     if (self.grid.GetCellValue(row,
                                                GridColumns.Z_Slice.value)) != f"{pixel_coords[2]:.{GRID_PRECISION}f}":
-                        temp_check = True
+                        coords_changed = True
                     self.grid.SetCellValue(row, GridColumns.Z_Slice.value, f"{pixel_coords[2]:.{GRID_PRECISION}f}")
                 # Get cell value
                 if (self.grid.GetCellValue(row, GridColumns.X.value) != f"{pixel_coords[0]:.{GRID_PRECISION}f}" or
                         self.grid.GetCellValue(row, GridColumns.Y.value) != f"{pixel_coords[1]:.{GRID_PRECISION}f}"):
-                    temp_check = True
+                    coords_changed = True
                 self.grid.SetCellValue(row, GridColumns.X.value, f"{pixel_coords[0]:.{GRID_PRECISION}f}")
                 self.grid.SetCellValue(row, GridColumns.Y.value, f"{pixel_coords[1]:.{GRID_PRECISION}f}")
-
-        self.correlation_target = update_feature_correlation_target(self.correlation_target,
-                                                                    self._tab_data_model)
-
-        if self.check_correlation_conditions() and (temp_check or target.type.value == TargetType.SurfaceFiducial):
-            self._need_reprocessing()
-
-        for vp in self._viewports:
-            vp.canvas.request_drawing_update()
+        return coords_changed
 
     @call_in_wx_main
     def _on_target_changes(self, targets: List[Target]) -> None:
@@ -1070,60 +1080,93 @@ class CorrelationPointsController:
         for vp in self._viewports:
             vp.canvas.request_drawing_update()
 
-    def _on_xyz_targeting(self, evt: Optional[wx.Event] = None) -> None:
+    def _on_refine(self, *args):
         """
-        Handle targeting when the targeting button is clicked, or automatically triggered for MIP streams.
-        Performs center of mass targeting over the full 3D volume (X, Y, Z). Depending on the
+        Handle refinement when the refinement button is clicked. Handles all the selected rows.
+        """
+        selected_rows = self._get_selected_grid_rows()
+        targets_to_refine = []
+        if selected_rows:
+            for row in selected_rows:
+                for target in self._tab_data_model.main.targets.value:
+                    if (self._selected_target_in_grid(target, row)):
+                        targets_to_refine.append(target)
+                        break
+        else:
+            current_target = self._tab_data_model.main.currentTarget.value
+            targets_to_refine = [current_target]
+
+        coords_changed = False
+        for target in targets_to_refine:
+            if target and target.type.value in [TargetType.Fiducial, TargetType.PointOfInterest]:
+                self._com_refinement(target)
+                # Coordinate changes only trigger a grid update automatically for the
+                # currently subscribed (current) target, so explicitly refresh every
+                # refined row here to keep multi-row selections in sync visually.
+                coords_changed |= self._update_grid_row_from_target(target)
+
+        if targets_to_refine:
+            self.correlation_target = update_feature_correlation_target(self.correlation_target,
+                                                                        self._tab_data_model)
+            if self.check_correlation_conditions() and coords_changed:
+                self._need_reprocessing()
+
+        wx.CallAfter(self.grid.ForceRefresh)
+
+    def _com_refinement(self, target: Target) -> None:
+        """
+        Performs center of mass refinement over the full 3D volume (X, Y, Z). Depending on the
         selected refine mode, either the full 3D result is kept (XYZ), or only the refined Z
         coordinate is kept and the x/y position is left untouched (Z), e.g. because it was already
         placed accurately and only needs a focus (Z) adjustment.
+
+        :param target: the target to refine
         """
-        if self._tab_data_model.main.currentTarget.value:
-            # Select the non-reflective streams visible in the view for targeting
-            streams = [
-                s.stream for s in self._tab_data_model.views.value[0].stream_tree.flat.value
-                if s.stream.getRawMetadata()[0].get(model.MD_OUT_WL) != model.BAND_PASS_THROUGH
-            ]
-            if not streams:
-                wx.MessageBox("FM streams are not available for refining targets", "Error", wx.OK | wx.ICON_ERROR)
-                return
+        # Select the non-reflective streams visible in the view for targeting
+        streams = [
+            s.stream for s in self._tab_data_model.views.value[0].stream_tree.flat.value
+            if s.stream.getRawMetadata()[0].get(model.MD_OUT_WL) != model.BAND_PASS_THROUGH
+        ]
+        if not streams:
+            wx.MessageBox("FM streams are not available for refining targets", "Error", wx.OK | wx.ICON_ERROR)
+            return
 
-            self.txt_refine_xyz_active.SetLabel("active ...")
-            wx.CallLater(1000, self.txt_refine_xyz_active.SetLabel, "")
+        self.txt_refine_xyz_active.SetLabel("active ...")
+        wx.CallLater(1000, self.txt_refine_xyz_active.SetLabel, "")
 
-            coords = self._tab_data_model.main.currentTarget.value.coordinates.value
-            pixel_coords = get_pixel_3d_coordinates(streams[0], coords)
+        coords = target.coordinates.value
+        pixel_coords = get_pixel_3d_coordinates(streams[0], coords)
 
-            # We are going to refine around the clicked position
-            target_x, target_y = int(pixel_coords[0]), int(pixel_coords[1])
-            # Ensure multi-channel compatibility
-            raw_multi = numpy.asarray([s.raw[0] for s in streams])
-            shape_y, shape_x = raw_multi.shape[-2], raw_multi.shape[-1]
-            # Get boundary-safe slice & crop. Always use the full x/y search range (needed to get a
-            # smooth, sub-pixel Z estimate) and the full Z-depth (the first, unrestricted dimension
-            # of roi below); only whether the refined x/y result is kept differs per refine mode.
-            pixel_size = streams[0].getRawMetadata()[0][model.MD_PIXEL_SIZE][0]  # Always present, so direct indexing
-            pixel_padding = int(REFINE_SEARCH_RANGE / pixel_size)
-            y_start = max(0, target_y - pixel_padding)
-            y_end = min(shape_y, target_y + pixel_padding + 1)
-            x_start = max(0, target_x - pixel_padding)
-            x_end = min(shape_x, target_x + pixel_padding + 1)
-            roi = numpy.s_[:, y_start:y_end, x_start:x_end]
-            multi_crop = raw_multi[(slice(None),) + roi]  # We search along all stack slices (first axis)
-            # Find best channel and compute COM
-            best_c = get_brightest_channel(multi_crop)
-            com = compute_center_of_mass(multi_crop[best_c], baseline_ratio=0.95)
-            com_z = com[0]
-            com_y_crop = com[1] + roi[1].start
-            com_x_crop = com[2] + roi[2].start
-            # Map back to physical coordinates using optimized X, Y, and Z
-            physical_coords = get_physical_3d_coordinates(streams[0], (com_x_crop, com_y_crop, com_z))
-            if self.refine_mode_choice.GetStringSelection() == LABEL_REFINE_Z:
-                # Z-only refinement: keep the original x/y position, only take the refined Z
-                physical_coords = (coords[0], coords[1], physical_coords[2])
-            # Update the model with the refined coordinates
-            target_coords = self._tab_data_model.main.currentTarget.value.coordinates.value
-            target_coords[:] = physical_coords[:]
+        # We are going to refine around the clicked position
+        target_x, target_y = int(pixel_coords[0]), int(pixel_coords[1])
+        # Ensure multi-channel compatibility
+        raw_multi = numpy.asarray([s.raw[0] for s in streams])
+        shape_y, shape_x = raw_multi.shape[-2], raw_multi.shape[-1]
+        # Get boundary-safe slice & crop. Always use the full x/y search range (needed to get a
+        # smooth, sub-pixel Z estimate) and the full Z-depth (the first, unrestricted dimension
+        # of roi below); only whether the refined x/y result is kept differs per refine mode.
+        pixel_size = streams[0].getRawMetadata()[0][model.MD_PIXEL_SIZE][0]  # Always present, so direct indexing
+        pixel_padding = int(REFINE_SEARCH_RANGE / pixel_size)
+        y_start = max(0, target_y - pixel_padding)
+        y_end = min(shape_y, target_y + pixel_padding + 1)
+        x_start = max(0, target_x - pixel_padding)
+        x_end = min(shape_x, target_x + pixel_padding + 1)
+        roi = numpy.s_[:, y_start:y_end, x_start:x_end]
+        multi_crop = raw_multi[(slice(None),) + roi]  # We search along all stack slices (first axis)
+        # Find best channel and compute COM
+        best_c = get_brightest_channel(multi_crop)
+        com = compute_center_of_mass(multi_crop[best_c], baseline_ratio=0.95)
+        com_z = com[0]
+        com_y_crop = com[1] + roi[1].start
+        com_x_crop = com[2] + roi[2].start
+        # Map back to physical coordinates using optimized X, Y, and Z
+        physical_coords = get_physical_3d_coordinates(streams[0], (com_x_crop, com_y_crop, com_z))
+        if self.refine_mode_choice.GetStringSelection() == LABEL_REFINE_Z:
+            # Z-only refinement: keep the original x/y position, only take the refined Z
+            physical_coords = (coords[0], coords[1], physical_coords[2])
+        # Update the model with the refined coordinates
+        target_coords = target.coordinates.value
+        target_coords[:] = physical_coords[:]
 
     def _reorder_grid(self) -> None:
         """
