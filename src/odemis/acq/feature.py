@@ -79,6 +79,33 @@ class TargetType(Enum):
     ProjectedPOI = "Projected POI"
 
 
+# Colour-blind-friendly, high-contrast palette (Okabe-Ito) used to give each fiducial a distinct,
+# consistent colour, so a fiducial pair (FM + FIB, sharing the same index) can be visually matched
+# across both viewports and in the correlation table. Plain hex strings are used here (rather than
+# e.g. wx.Colour) since this is a GUI-agnostic data module.
+FIDUCIAL_COLOUR_PALETTE = [
+    "#E69F00",  # orange
+    "#56B4E9",  # sky blue
+    "#2ED9A8",  # brighter bluish green (more visible on the dark grey GUI background)
+    "#F0E442",  # yellow
+    "#0072B2",  # blue
+    "#D55E00",  # vermillion
+    "#CC79A7",  # reddish purple
+]
+
+
+def get_fiducial_colour(index: int) -> str:
+    """
+    Returns the colour associated with a fiducial index. The same index always maps to the same
+    colour (cycling through the palette for indices beyond its length), so that a fiducial pair can
+    be visually matched across the FIB and FM viewports and the correlation table.
+
+    :param index: the 1-based index of the fiducial.
+    :returns: a hexadecimal colour string, e.g. "#E69F00".
+    """
+    return FIDUCIAL_COLOUR_PALETTE[(index - 1) % len(FIDUCIAL_COLOUR_PALETTE)]
+
+
 class FIBFMCorrelationData:
     """
     Class consisting of parameters related to the multipoint correlation between FIB and FM. The multipoint correlation

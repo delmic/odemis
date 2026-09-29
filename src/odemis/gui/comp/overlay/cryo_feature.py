@@ -32,13 +32,15 @@ import odemis.gui.img as guiimg
 import wx
 from odemis import model
 from odemis.acq.feature import (CryoFeature, FEATURE_ACTIVE, FEATURE_DEACTIVE, FEATURE_READY_TO_MILL,
-                                FEATURE_POLISHED, FEATURE_ROUGH_MILLED, TargetType, get_feature_position_at_posture)
+                                FEATURE_POLISHED, FEATURE_ROUGH_MILLED, TargetType, get_feature_position_at_posture,
+                                get_fiducial_colour)
 from odemis.gui.comp.canvas import CAN_DRAG
 from odemis.gui.comp.overlay.base import DragMixin, WorldOverlay
 from odemis.gui.comp.overlay.stage_point_select import StagePointSelectOverlay
 from odemis.gui.cont.cryo_project import save_project
 from odemis.gui.model import TOOL_FEATURE, TOOL_NONE, TOOL_FIDUCIAL, TOOL_REGION_OF_INTEREST, TOOL_SURFACE_FIDUCIAL
 from odemis.acq.move import Posture, MicroscopePostureManager
+from odemis.util.conversion import hex_to_frgb
 
 
 MODE_EDIT_FEATURES = 1
@@ -661,6 +663,15 @@ class CryoCorrelationPointsOverlay(WorldOverlay, DragMixin):
             else:
                 ctx.set_source_surface(feature_icon, bpos[0] - FIDUCIAL_CENTER, bpos[1] - FIDUCIAL_CENTER)
 
+        def set_label_colour(feature_type, index):
+            # Colour the fiducial number by its index, so a fiducial pair (FM + FIB, sharing the
+            # same index) can be visually matched between both viewports and the correlation table.
+            # Other target types (e.g. Point of Interest) keep the default (white) label colour.
+            if feature_type in (TargetType.Fiducial, TargetType.FibFiducial, TargetType.ProjectedFiducial):
+                self._label.colour = hex_to_frgb(get_fiducial_colour(index))
+            else:
+                self._label.colour = (1.0, 1.0, 1.0)
+
         # Show each target icon and label if applicable
         for target in self.tab_data.main.targets.value:
             if target.type.value in self.allowed_targets:
@@ -683,6 +694,7 @@ class CryoCorrelationPointsOverlay(WorldOverlay, DragMixin):
                         set_icon(self._feature_icons_selected[target.type.value], target.type.value)
                     self._label.text = target.index.value
                     self._label.pos = (bpos[0] + 15, bpos[1] + 15)
+                    set_label_colour(target.type.value, target.index.value)
                     self._label.draw(ctx)
                 elif self.tab_data.main.currentTarget.value and (
                         target.index.value == self.tab_data.main.currentTarget.value.index.value) and (
@@ -691,6 +703,7 @@ class CryoCorrelationPointsOverlay(WorldOverlay, DragMixin):
                     set_icon(self._feature_icons_selected[FIDUCIAL_PAIR], target.type.value)
                     self._label.text = target.index.value
                     self._label.pos = (bpos[0] + 15, bpos[1] + 15)
+                    set_label_colour(target.type.value, target.index.value)
                     self._label.draw(ctx)
                 else:
                     if target.superz_focused == False:  # can be None, True, False
@@ -699,6 +712,7 @@ class CryoCorrelationPointsOverlay(WorldOverlay, DragMixin):
                         set_icon(self._feature_icons[target.type.value], target.type.value)
                     self._label.text = target.index.value
                     self._label.pos = (bpos[0] + 15, bpos[1] + 15)
+                    set_label_colour(target.type.value, target.index.value)
                     self._label.draw(ctx)
 
                 ctx.paint()
@@ -713,10 +727,7 @@ class CryoCorrelationPointsOverlay(WorldOverlay, DragMixin):
                                                     self.cnvs.scale,
                                                     offset=half_size_offset)
 
-                set_icon(self._feature_icons[target.type.value])
-                # Label the projected fiducial for easy comparison with corresponding fiducials
-                if target.type.value is TargetType.ProjectedFiducial:
-                    self._label.text = target.index.value
-                    self._label.pos = (bpos[0] + 15, bpos[1] + 15)
-                    self._label.draw(ctx)
+                set_icon(self._feature_icons[target.type.value], target.type.value)
+                # Note: no label is drawn here, as it would overlap the placed fiducial's own
+                # label (the projection is intentionally shown at (about) the same position).
                 ctx.paint()
