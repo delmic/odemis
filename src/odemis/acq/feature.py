@@ -322,7 +322,11 @@ def feature_decoder(feature_raw: Dict) -> CryoFeature:
     feature.correlation_data = FIBFMCorrelationData.from_dict(correlation_data) if correlation_data else None
     feature.status.value = feature_raw['status']
     feature.posture_positions = posture_positions
-    feature.milling_tasks = {k: MillingTaskSettings.from_dict(v) for k, v in milling_task_json.items()}
+    feature.milling_tasks = {}
+    for name, data in milling_task_json.items():
+        task = MillingTaskSettings.from_dict(data)
+        if task.patterns:
+            feature.milling_tasks[name] = task
     milling_feature_offset = feature_raw.get('milling_feature_offset')
     if milling_feature_offset is not None:
         feature.milling_feature_offset.value = tuple(milling_feature_offset)

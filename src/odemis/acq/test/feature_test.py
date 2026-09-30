@@ -30,6 +30,7 @@ import numpy
 from odemis import model
 from odemis.acq.feature import (
     CryoFeature,
+    feature_decoder,
     load_milling_tasks,
     FEATURE_READY_TO_MILL,
     REFERENCE_IMAGE_FILENAME,
@@ -56,6 +57,30 @@ class TestFeatureEncoderDecoder(unittest.TestCase):
             if os.path.exists(filename):
                 os.remove(filename)
             os.rmdir(self.path)
+
+    def test_decoder_ignores_unsupported_milling_tasks(self):
+        """Ignore saved tasks that contain no patterns supported by this version."""
+        feature = feature_decoder({
+            "name": "Future feature",
+            "status": FEATURE_READY_TO_MILL,
+            "stage_position": {"x": 0, "y": 0},
+            "fm_focus_position": {"z": 0},
+            "milling_tasks": {
+                "Future task": {
+                    "name": "Future task",
+                    "milling": {
+                        "current": 100e-9,
+                        "voltage": 30e3,
+                        "field_of_view": 400e-6,
+                        "mode": "Serial",
+                        "channel": "ion",
+                    },
+                    "patterns": [{"pattern": "future_pattern"}],
+                },
+            },
+        })
+
+        self.assertEqual(feature.milling_tasks, {})
 
     def test_feature_milling_tasks(self):
         feature = CryoFeature(

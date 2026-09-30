@@ -21,6 +21,8 @@ import logging
 import os
 import unittest
 
+import yaml
+
 from odemis.acq.milling.patterns import (
     MicroexpansionPatternParameters,
     TrenchPatternParameters,
@@ -160,6 +162,54 @@ class MillingTaskTestCase(unittest.TestCase):
         self.assertEqual(loaded_tasks["Microexpansion"].patterns[0].depth.value, microexpansion_task_settings.patterns[0].depth.value)
         self.assertEqual(loaded_tasks["Microexpansion"].patterns[0].spacing.value, microexpansion_task_settings.patterns[0].spacing.value)
         self.assertEqual(loaded_tasks["Microexpansion"].patterns[0].center.value, microexpansion_task_settings.patterns[0].center.value)
+
+    def test_yaml_compatibility(self) -> None:
+        """Ignore unknown schema additions and default fields absent from old YAML."""
+        milling = {
+            "current": 100e-9,
+            "voltage": 30e3,
+            "field_of_view": 400e-6,
+            "mode": "Serial",
+            "channel": "ion",
+        }
+        legacy_trench = {
+            "name": "Legacy Trench",
+            "width": 10e-6,
+            "height": 3e-6,
+            "depth": 1e-6,
+            "spacing": 2e-6,
+            "center_x": 0,
+            "center_y": 0,
+            "pattern": "trench",
+            "future_pattern_field": "ignored",
+        }
+        data = {
+            "Mixed": {
+                "name": "Mixed",
+                "selected": True,
+                "milling": milling,
+                "patterns": [
+                    {"name": "Future", "pattern": "future_pattern"},
+                    legacy_trench,
+                ],
+                "future_task_field": "ignored",
+            },
+            "Unsupported": {
+                "name": "Unsupported",
+                "milling": milling,
+                "patterns": [{"name": "Future", "pattern": "future_pattern"}],
+            },
+        }
+        with open(TASKS_PATH, "w") as stream:
+            yaml.safe_dump(data, stream)
+
+        loaded_tasks = load_milling_tasks(TASKS_PATH)
+
+        self.assertEqual(list(loaded_tasks), ["Mixed"])
+        self.assertIsNone(loaded_tasks["Mixed"].color)
+        self.assertEqual(len(loaded_tasks["Mixed"].patterns), 1)
+        self.assertIsInstance(
+            loaded_tasks["Mixed"].patterns[0], TrenchPatternParameters)
 
 
 if __name__ == "__main__":

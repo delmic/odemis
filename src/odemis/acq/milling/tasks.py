@@ -98,12 +98,19 @@ class MillingTaskSettings:
         """Create a MillingTaskSettings object from a dictionary
         :param data: dictionary containing the milling task settings
         :return: MillingTaskSettings"""
+        patterns = []
+        for pattern_data in data.get("patterns", []):
+            pattern_class = PATTERN_NAME_TO_CLASS.get(pattern_data.get("pattern"))
+            if pattern_class is None:
+                continue
+            patterns.append(pattern_class.from_dict(pattern_data))
+
         return MillingTaskSettings(
             name=data.get("name", "Milling Task"),
             selected=data.get("selected", True),
             color=data.get("color"),
             milling=MillingSettings.from_dict(data["milling"]),
-            patterns=[PATTERN_NAME_TO_CLASS[p["pattern"]].from_dict(p) for p in data["patterns"]])
+            patterns=patterns)
 
     def __repr__(self):
         return f"{self.to_dict()}"
@@ -132,14 +139,21 @@ def save_milling_tasks(path: str, milling_tasks: Dict[str, MillingTaskSettings])
         yaml.dump(mdict, f)
 
 def load_milling_tasks(path: str) -> Dict[str, MillingTaskSettings]:
-    """Load milling tasks from a yaml file.
+    """Load supported milling tasks from a YAML file.
+
+    Unsupported pattern types are ignored. Tasks containing no supported
+    patterns are omitted so newer configurations remain forward-compatible.
+
     :param path: path to the yaml file
     :return: dictionary of milling tasks
     """
     with open(path, "r") as f:
         yaml_file = yaml.safe_load(f)
 
-    # convert the dictionary to Dict[str, MillingTaskSettings]
-    milling_tasks = {k: MillingTaskSettings.from_dict(v) for k, v in yaml_file.items()}
+    milling_tasks = {}
+    for name, data in (yaml_file or {}).items():
+        task = MillingTaskSettings.from_dict(data)
+        if task.patterns:
+            milling_tasks[name] = task
 
     return milling_tasks
