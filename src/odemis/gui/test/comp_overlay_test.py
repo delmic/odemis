@@ -31,6 +31,7 @@ from builtins import range
 
 import numpy
 import wx
+from odemis.acq.move import Posture
 from odemis.acq import stream
 
 import odemis.gui as gui
@@ -476,9 +477,9 @@ class OverlayTestCase(test.GuiTestCase):
         cryofeature_overlay.active.value = True
 
         # Add features to the tab's features list
-        tab_mod.add_new_feature(stage_position={"x": 0, "y": 0, "z": 0, "rx": 0, "rz": 0}, fm_focus_position={"z": 0})
+        tab_mod.add_new_feature(stage_position={"x": 0, "y": 0, "z": 0, "rx": 0, "rz": 0}, fm_focus_position={Posture.FM_IMAGING: {"z": 0}})
         tab_mod.add_new_feature(stage_position={"x": 0.001, "y": 0.001, "z": 0.001, "rx": 0, "rz": 0},
-                                fm_focus_position={"z": 0.001})
+                                fm_focus_position={Posture.FM_IMAGING: {"z": 0.001}})
         # Execute the gui loop, so that the buffer contains the features
         test.gui_loop(0.1)
         cnvs._dc_buffer.SelectObject(wx.NullBitmap)  # Flush the buffer

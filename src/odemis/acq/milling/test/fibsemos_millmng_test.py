@@ -28,6 +28,7 @@ from odemis import model
 from odemis.acq.milling import fibsemos, DEFAULT_MILLING_TASKS_PATH
 from odemis.acq.milling.tasks import load_milling_tasks
 from odemis.acq.feature import CryoFeature
+from odemis.acq.move import Posture
 from odemis.util import testing
 
 logging.getLogger().setLevel(logging.DEBUG)
@@ -62,7 +63,7 @@ class TestFibsemOSMillingManager(unittest.TestCase):
         cls.feature = CryoFeature(
             name="TestFeature-1",
             stage_position={"x": 0.0, "y": 0.0, "z": 0.0, "rx": 0.0, "rz": 0.0},
-            fm_focus_position={"z": 0.0},
+            fm_focus_position={Posture.FM_IMAGING: {"z": 0.0}},
         )
         cls.feature.reference_image = model.DataArray(numpy.zeros(shape=(1024, 1536)), metadata={})
 

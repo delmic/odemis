@@ -121,7 +121,7 @@ class TestAutomatedMillingManager(unittest.TestCase):
             feature = CryoFeature(
                 name=f"Feature-{i}",
                 stage_position=pos_sem_grid1,
-                fm_focus_position={"z": 1.69e-3}, # not-relevant
+                fm_focus_position={Posture.FM_IMAGING: {"z": 1.69e-3}}, # not-relevant
 
             )
             # set milling tasks

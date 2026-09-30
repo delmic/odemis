@@ -12,7 +12,9 @@
                 "rz": 4.956732
             },
             "fm_focus_position": {
-                "z": 0.00169
+                "FM IMAGING": {
+                    "z": 0.00169
+                }
             },
             "posture_positions": {
                 "SEM IMAGING": {
@@ -192,7 +194,9 @@
                 "rz": 4.9567353
             },
             "fm_focus_position": {
-                "z": 0.00169
+                "FM IMAGING": {
+                    "z": 0.00169
+                }
             },
             "posture_positions": {
                 "SEM IMAGING": {

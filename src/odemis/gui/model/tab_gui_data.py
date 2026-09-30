@@ -282,7 +282,11 @@ class CryoGUIData(MicroscopyGUIData):
 
         fm_focus_position = self.main.focus.position.value['z']
         existing_names = [str(f.name.value) for f in self.main.targets.value]
-        z_val = z if z is not None else feature.fm_focus_position.value['z']
+
+        current_posture = self.main.posture_manager.get_current_posture()
+        focus_posture = (current_posture if current_posture in (Posture.FM_IMAGING, Posture.FIB_VIEW_FM)
+                         else Posture.FM_IMAGING)
+        z_val = z if z is not None else feature.get_fm_focus_position(focus_posture, self.main.focus)['z']
 
         if type == TargetType.Fiducial:
             t_name = make_unique_name("FM-1", existing_names)
@@ -313,30 +317,31 @@ class CryoGUIData(MicroscopyGUIData):
         return target
 
     def add_new_feature(self, stage_position: Dict[str, float],
-                        fm_focus_position: Dict[str, float] = None,
+                        fm_focus_position: Optional[Dict[Posture, Dict[str, float]]] = None,
                         f_name: Optional[str] = None) -> CryoFeature:
         """
         Create a new feature and add it to the features list
         :param stage_position: the position of the feature in stage-bare coordinates. The posture is
         guessed from the position
+        :param fm_focus_position: the focus position for each posture.
+        If None, the current focus is used if at an FM posture, otherwise no focus position is stored.
         :param f_name: the name of the feature. If None, a unique name is generated.
         """
         # set the posture position
         pm = self.main.posture_manager
-        posture = pm.get_current_posture(stage_position)
+        current_posture = pm.get_current_posture(stage_position)
 
         if not f_name:
             existing_names = [f.name.value for f in self.main.features.value]
             f_name = make_unique_name("Feature-1", existing_names)
         if fm_focus_position is None:
             # if the focus position is not provided:
-            # at FM posture: use the current focus position
-            # otherwise: use the active focus position
-            if posture == Posture.FM_IMAGING:
-                fm_focus_position = self.main.focus.position.value
+            # at an FM posture: use the current focus position for that posture
+            # otherwise: nothing is stored, the active focus position is used when reading it
+            if current_posture in (Posture.FM_IMAGING, Posture.FIB_VIEW_FM):
+                fm_focus_position = {current_posture: self.main.focus.position.value}
             else:
-                md = self.main.focus.getMetadata()
-                fm_focus_position = md[model.MD_FAV_POS_ACTIVE]
+                fm_focus_position = {}
         feature = CryoFeature(f_name, stage_position, fm_focus_position)
         for p in pm.postures: # calculate the position at all postures
             get_feature_position_at_posture(pm, feature, p)
