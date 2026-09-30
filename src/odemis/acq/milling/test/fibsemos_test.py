@@ -20,8 +20,10 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
 import logging
+import math
 import unittest
 from unittest import mock
+
 import numpy
 
 from odemis.acq.milling import fibsemos  # to load the fibsemOS module
@@ -46,6 +48,7 @@ except ImportError:
 
 from odemis.acq.milling.patterns import (
     CompositeRectanglePatternParameters,
+    CorrelationPatternParameters,
     MicroexpansionPatternParameters,
     NotchPatternParameters,
     RectanglePatternParameters,
@@ -308,7 +311,7 @@ class TestConvertMillingTasksToMillingStages(unittest.TestCase):
         self.assertIsInstance(stages[1].pattern, BasePattern)
 
     def assert_composite_pattern_uses_one_stage(
-            self, pattern: CompositeRectanglePatternParameters) -> None:
+            self, pattern: CompositeRectanglePatternParameters) -> 'FibsemMillingStage':
         """Assert that all generated rectangles share one milling stage."""
         milling = MillingSettings(
             current=60e-12, voltage=30000, field_of_view=80e-6, align=True)
@@ -327,12 +330,13 @@ class TestConvertMillingTasksToMillingStages(unittest.TestCase):
                             for rectangle in stage.patterns))
         self.assertEqual(stage.milling.milling_current, milling.current.value)
         self.assertEqual(stage.alignment.enabled, milling.align.value)
+        return stage
 
     def test_ruler_uses_one_milling_stage(self) -> None:
         """Send all ruler rectangles in one milling stage."""
         pattern = RulerPatternParameters(
             width=2e-6, height=10e-6, depth=0.5e-6, spacing=10e-6,
-            num_notches=6, center=(3e-6, -4e-6))
+            num_graduations=6, center=(3e-6, -4e-6))
 
         self.assert_composite_pattern_uses_one_stage(pattern)
 
@@ -340,7 +344,7 @@ class TestConvertMillingTasksToMillingStages(unittest.TestCase):
         """Convert a ruler within a task that contains other pattern types."""
         milling = MillingSettings(current=60e-12, voltage=30000, field_of_view=80e-6, align=False)
         ruler = RulerPatternParameters(width=2e-6, height=10e-6, depth=0.5e-6,
-                                       spacing=10e-6, num_notches=6)
+                                       spacing=10e-6, num_graduations=6)
         task = MillingTaskSettings(name="Mixed", milling=milling,
                                    patterns=[create_trench_pattern_params(), ruler,
                                              create_rectangle_pattern_params()])
@@ -362,6 +366,19 @@ class TestConvertMillingTasksToMillingStages(unittest.TestCase):
 
         self.assert_composite_pattern_uses_one_stage(pattern)
 
+    def test_correlation_pattern_uses_one_milling_stage(self) -> None:
+        """Send all correlation markers in one milling stage."""
+        pattern = CorrelationPatternParameters(
+            width=900e-6, height=700e-6, marker_length=75e-6,
+            thickness=4e-6, depth=3e-6)
+
+        stage = self.assert_composite_pattern_uses_one_stage(pattern)
+        self.assertEqual(stage.milling.hfw, 960e-6)
+        rotated_rectangles = [rectangle for rectangle in stage.pattern.define()
+                              if rectangle.rotation]
+        self.assertEqual(len(rotated_rectangles), 1)
+        self.assertAlmostEqual(rotated_rectangles[0].rotation, math.pi / 4)
+
     def test_waffle_trench_uses_one_milling_stage(self) -> None:
         """Send both waffle trench rectangles in one milling stage."""
         pattern = WaffleTrenchPatternParameters(
@@ -373,45 +390,68 @@ class TestConvertMillingTasksToMillingStages(unittest.TestCase):
 
 
 @unittest.skipUnless(fibsemos.FIBSEMOS_INSTALLED, "fibsemOS is not installed")
-class TestRulerSpotSizeCorrection(unittest.TestCase):
-    """Test ruler spot size correction during fibsemOS conversion."""
+class TestCompositeSpotSizeCorrection(unittest.TestCase):
+    """Test composite-pattern spot size correction during fibsemOS conversion."""
 
     def setUp(self) -> None:
-        """Create a small corrected ruler task for each test."""
+        """Create a ruler for the pattern-specific boundary tests."""
         self.ruler = RulerPatternParameters(
             width=2e-6, height=6e-6, depth=0.5e-6, spacing=10e-6,
-            num_notches=2, center=(3e-6, -4e-6), spot_size_correction=20e-9)
+            num_graduations=2, center=(3e-6, -4e-6), spot_size_correction=20e-9)
         milling = MillingSettings(current=60e-12, voltage=30000, field_of_view=80e-6)
         self.task = MillingTaskSettings(name="Ruler", milling=milling, patterns=[self.ruler])
 
-    def test_correction_reduces_notch_dimensions(self) -> None:
-        """Subtract the correction from each milled notch dimension."""
-        stage = convert_milling_tasks_to_milling_stages([self.task])[0]
-        for pattern, rectangle in zip(stage.patterns, self.ruler.generate()):
-            self.assertAlmostEqual(pattern.width, rectangle.width.value - 20e-9, places=15)
-            self.assertAlmostEqual(pattern.height, rectangle.height.value - 20e-9, places=15)
+    def assert_spot_size_correction_applied(
+            self, pattern: CompositeRectanglePatternParameters, correction: float) -> None:
+        """Assert correction of every generated rectangle's lateral dimensions."""
+        pattern.spot_size_correction.value = correction
+        milling = MillingSettings(current=60e-12, voltage=30000, field_of_view=80e-6)
+        task = MillingTaskSettings(name=pattern.name.value, milling=milling, patterns=[pattern])
+        stage = convert_milling_tasks_to_milling_stages([task])[0]
+        rectangles = pattern.generate()
 
-    def test_correction_preserves_depth_and_position(self) -> None:
-        """Keep notch depth and position unchanged after correction."""
-        stage = convert_milling_tasks_to_milling_stages([self.task])[0]
-        for pattern, rectangle in zip(stage.patterns, self.ruler.generate()):
-            self.assertEqual(pattern.depth, rectangle.depth.value)
-            self.assertEqual((pattern.point.x, pattern.point.y), rectangle.center.value)
+        self.assertEqual(len(stage.patterns), len(rectangles))
+        for converted, rectangle in zip(stage.patterns, rectangles):
+            self.assertAlmostEqual(converted.width, rectangle.width.value - correction, places=15)
+            self.assertAlmostEqual(converted.height, rectangle.height.value - correction, places=15)
+            self.assertEqual(converted.depth, rectangle.depth.value)
+            self.assertEqual((converted.point.x, converted.point.y), rectangle.center.value)
 
-    def test_correction_equal_to_notch_height_is_rejected(self) -> None:
-        """Reject a correction equal to the notch height."""
+    def test_correction_is_applied_to_composite_patterns(self) -> None:
+        """Apply positive correction to every supported composite pattern."""
+        patterns = (
+            ("ruler", RulerPatternParameters(
+                width=2e-6, height=6e-6, depth=0.5e-6, spacing=10e-6,
+                num_graduations=2, center=(3e-6, -4e-6))),
+            ("notch", NotchPatternParameters(
+                width=3.5e-6, height=8.1e-6, depth=0.5e-6, gap=1.1e-6,
+                thickness=0.2e-6, offset=-0.2e-6)),
+            ("waffle trench", WaffleTrenchPatternParameters(
+                top_width=22e-6, top_height=37e-6, bottom_width=20e-6,
+                bottom_height=17e-6, depth=1e-6, spacing=3e-6,
+                center=(2e-6, -3e-6))),
+            ("correlation", CorrelationPatternParameters(
+                width=900e-6, height=700e-6, marker_length=75e-6,
+                thickness=4e-6, depth=3e-6, center=(1e-6, -2e-6))),
+        )
+        for name, pattern in patterns:
+            with self.subTest(pattern=name):
+                self.assert_spot_size_correction_applied(pattern, 20e-9)
+
+    def test_correction_equal_to_graduation_height_is_rejected(self) -> None:
+        """Reject a correction equal to the graduation height."""
         self.ruler.spot_size_correction.value = self.ruler.generate()[0].height.value
         with self.assertRaises(ValueError):
             convert_milling_tasks_to_milling_stages([self.task])
 
-    def test_correction_exceeding_notch_height_is_rejected(self) -> None:
-        """Reject a correction greater than the notch height."""
+    def test_correction_exceeding_graduation_height_is_rejected(self) -> None:
+        """Reject a correction greater than the graduation height."""
         self.ruler.spot_size_correction.value = 1.25 * self.ruler.generate()[0].height.value
         with self.assertRaises(ValueError):
             convert_milling_tasks_to_milling_stages([self.task])
 
-    def test_correction_exceeding_short_notch_width_is_rejected(self) -> None:
-        """Reject a correction greater than a short notch width."""
+    def test_correction_exceeding_short_graduation_width_is_rejected(self) -> None:
+        """Reject a correction greater than a short graduation width."""
         self.ruler.width.value = 20e-9  # Long ticks are 20 nm, short ticks are 15 nm.
         self.ruler.spot_size_correction.value = 16e-9
         with self.assertRaises(ValueError):

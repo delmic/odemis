@@ -25,11 +25,6 @@ import logging
 import wx
 
 from odemis import gui, model
-from odemis.acq.milling.patterns import (
-    NotchPatternParameters,
-    RulerPatternParameters,
-    WaffleTrenchPatternParameters,
-)
 from odemis.acq.milling.tasks import MillingTaskSettings
 from odemis.gui.comp.combo import ComboBox
 from odemis.gui.comp.text import IntegerTextCtrl, UnitFloatCtrl
@@ -77,6 +72,9 @@ class MillingTaskPanel(wx.Panel):
             "mode": {"label": "Milling mode"},
             "width": {"label": "Width", "accuracy": 2, "unit": "m"},
             "height": {"label": "Height", "accuracy": 2, "unit": "m"},
+            "marker_length": {
+                "label": "Marker length", "accuracy": 2, "unit": "m"
+            },
             "top_width": {"label": "Top width", "accuracy": 2, "unit": "m"},
             "top_height": {"label": "Top height", "accuracy": 2, "unit": "m"},
             "bottom_width": {
@@ -129,40 +127,8 @@ class MillingTaskPanel(wx.Panel):
 
         pattern = task.patterns[0]
         self.pattern_parameters = []
-        if isinstance(pattern, RulerPatternParameters):
-            CONFIG["width"]["tooltip"] = (
-                "Length of the longest notches (even-numbered). "
-                "Odd-numbered notches are 3/4 as long."
-            )
-            CONFIG["height"]["tooltip"] = (
-                "Overall ruler length, including the first and last notches."
-            )
-            CONFIG["spacing"]["tooltip"] = (
-                "Gap between the inner edges of the two rulers."
-            )
-            CONFIG["num_notches"]["tooltip"] = (
-                "Notches on each side, starting at zero at the bottom and "
-                "alternating long and short."
-            )
-        elif isinstance(pattern, NotchPatternParameters):
-            CONFIG["width"]["tooltip"] = "Overall width of the right-facing loop."
-            CONFIG["height"]["tooltip"] = (
-                "Overall height including both whiskers."
-            )
-            CONFIG["gap"]["tooltip"] = (
-                "Clear gap between the two horizontal segments."
-            )
-            CONFIG["thickness"]["tooltip"] = "Thickness of all five segments."
-            CONFIG["offset"]["tooltip"] = (
-                "Vertical loop offset from center; positive values move it upward."
-            )
-            CONFIG["mirrored"]["tooltip"] = (
-                "Mirror the notch horizontally so the loop faces left."
-            )
-        elif isinstance(pattern, WaffleTrenchPatternParameters):
-            CONFIG["spacing"]["tooltip"] = (
-                "Clear distance between the top and bottom rectangles."
-            )
+        for parameter, tooltip in pattern.PARAMETER_TOOLTIPS.items():
+            CONFIG.setdefault(parameter, {})["tooltip"] = tooltip
 
         for param in vars(pattern):
 

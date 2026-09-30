@@ -43,6 +43,7 @@ from odemis.acq.feature import (
 from odemis.acq.milling import millmng
 from odemis.acq.milling.millmng import MillingWorkflowTask, run_automated_milling
 from odemis.acq.milling.patterns import (
+    CorrelationPatternParameters,
     MicroexpansionPatternParameters,
     MillingPatternParameters,
     NotchPatternParameters,
@@ -745,7 +746,13 @@ class MillingTaskController:
             show_labels = task is highlighted_task
             for pattern in task.patterns:
                 uses_shared_label = isinstance(
-                    pattern, (RulerPatternParameters, NotchPatternParameters))
+                    pattern,
+                    (
+                        CorrelationPatternParameters,
+                        RulerPatternParameters,
+                        NotchPatternParameters,
+                    ),
+                )
                 uses_top_label = isinstance(
                     pattern, (MicroexpansionPatternParameters, TrenchPatternParameters))
                 generated_patterns = pattern.generate()
@@ -787,7 +794,13 @@ class MillingTaskController:
                 elif uses_shared_label and show_labels:
                     x, y = pos_to_absolute(
                         pattern.center.value, feature.reference_image)
-                    if isinstance(pattern, NotchPatternParameters):
+                    if isinstance(pattern, CorrelationPatternParameters):
+                        size = units.readable_str(
+                            (pattern.width.value, pattern.height.value), "m", sig=3
+                        )
+                        # Cairo cannot provide font fallback for the uncommon glyphs in the full task name.
+                        label = f"Correlation · {size}"
+                    elif isinstance(pattern, NotchPatternParameters):
                         size = units.readable_str(
                             (pattern.width.value, pattern.height.value), "m", sig=3
                         )

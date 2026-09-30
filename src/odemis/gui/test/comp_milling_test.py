@@ -125,6 +125,11 @@ class MillingTaskPanelTestCase(test.GuiTestCase):
             set(waffle_panel.pattern_parameters),
             {"top_width", "top_height", "bottom_width", "bottom_height",
              "depth", "spacing", "spot_size_correction"})
+        correlation_panel = controls["Correlation (NΠ+⅂Ʇ)"]["panel"]
+        self.assertEqual(
+            set(correlation_panel.pattern_parameters),
+            {"width", "height", "marker_length", "thickness", "depth",
+             "spot_size_correction"})
         for name in ("Microexpansion", "Rough Milling 01", "Polishing 01"):
             panel = controls[name]["panel"]
             self.assertNotIn("num_graduations", panel.ctrl_dict)
@@ -311,8 +316,33 @@ class MillingTaskPanelTestCase(test.GuiTestCase):
         ]
         self.assertEqual(len(colors), len(set(colors)))
         self.assertEqual(colors, [task.color for task in self.tasks.values()])
+        for color in colors:
+            red, green, blue = (
+                int(color[index:index + 2], 16) for index in (1, 3, 5)
+            )
+            self.assertEqual(max(red, green, blue), 255)
+            self.assertGreater(len({red, green, blue}), 1)
+        self.assertEqual(
+            {
+                task_name: self.tasks[task_name].color
+                for task_name in (
+                    "Microexpansion",
+                    "Rough Milling 01",
+                    "Rough Milling 02",
+                    "Polishing 01",
+                    "Polishing 02",
+                )
+            },
+            {
+                "Microexpansion": "#FFA500",
+                "Rough Milling 01": "#FFFF00",
+                "Rough Milling 02": "#00FFFF",
+                "Polishing 01": "#FF00FF",
+                "Polishing 02": "#00FF00",
+            },
+        )
 
-        task_without_color = self.tasks["Microexpansion"]
+        task_without_color = self.tasks["Correlation (NΠ+⅂Ʇ)"]
         task_without_color.color = None
         self.assertEqual(
             _get_milling_colour(task_without_color, 0), MILLING_THEME_COLORS[0])
@@ -442,6 +472,8 @@ class MillingTaskPanelTestCase(test.GuiTestCase):
         ))
         self.assertEqual(
             self.controller.rectangles_overlay.add_pattern_label.call_count, 2)
+        self.assertEqual(
+            list(self.controller.milling_tasks), ["Rough Milling 01", "Notch"])
         labels = [
             item.args[0]
             for item in (

@@ -49,6 +49,7 @@ from odemis.acq.feature import (
 )
 from odemis.acq.milling.tasks import MillingTaskSettings
 from odemis.acq.milling.patterns import (
+    CorrelationPatternParameters,
     NotchPatternParameters,
     RectanglePatternParameters,
     RulerPatternParameters,
@@ -289,6 +290,7 @@ def get_associated_tasks(wt: MillingWorkflowTask,
         # Optional rectangle patterns always belong to rough milling, regardless of task name.
         is_rough_pattern = any(
             isinstance(pattern, (
+                CorrelationPatternParameters,
                 RulerPatternParameters,
                 NotchPatternParameters,
                 WaffleTrenchPatternParameters,

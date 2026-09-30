@@ -32,6 +32,7 @@ from typing import List, Optional, Union
 from odemis import model
 from odemis.acq.milling.patterns import (
     CompositeRectanglePatternParameters,
+    CorrelationPatternParameters,
     MicroexpansionPatternParameters,
     MillingPatternParameters,
     RectanglePatternParameters,
@@ -81,6 +82,7 @@ except ImportError as e:
     FIBSEMOS_INSTALLED = False
 
 _persistent_millmng: Optional["FibsemOSMillingTaskManager"] = None
+_MILLING_FOV_MARGIN = 0.01
 
 
 class _RectanglePatternGroup(RectanglePattern):
@@ -255,7 +257,7 @@ def _convert_rectangle_pattern(p: RectanglePatternParameters) -> 'RectanglePatte
         width=_apply_spot_size_correction(p.width.value, correction, "rectangle width"),
         height=_apply_spot_size_correction(p.height.value, correction, "rectangle height"),
         depth=p.depth.value,
-        rotation=p.rotation.value,
+        rotation=math.degrees(p.rotation.value),
         scan_direction=p.scan_direction.value,
         point=Point(x=p.center.value[0], y=p.center.value[1])
     )
@@ -377,9 +379,25 @@ def _convert_composite_pattern_to_milling_stage(
     """
     rectangles = [_convert_rectangle_pattern(rectangle)
                   for rectangle in pattern.generate()]
+    milling = convert_milling_settings(task.milling)
+    if isinstance(pattern, CorrelationPatternParameters):
+        center_x, center_y = pattern.center.value
+        required_fov = 2 * max(
+            abs(center_x) + pattern.width.value / 2,
+            abs(center_y) + pattern.height.value / 2,
+        )
+        minimum_fov = required_fov * (1 + _MILLING_FOV_MARGIN)
+        maximum_fov = task.milling.field_of_view.range[1]
+        if minimum_fov > maximum_fov:
+            raise ValueError(
+                f"Correlation pattern requires a {minimum_fov:g} m milling field including its safety margin, "
+                f"which does not fit inside the maximum {maximum_fov:g} m field of view."
+            )
+        if minimum_fov >= milling.hfw:
+            milling.hfw = maximum_fov
     return FibsemMillingStage(
         name=name,
-        milling=convert_milling_settings(task.milling),
+        milling=milling,
         pattern=_RectanglePatternGroup(rectangles),
         patterns=rectangles,
         alignment=MillingAlignment(enabled=task.milling.align.value),
