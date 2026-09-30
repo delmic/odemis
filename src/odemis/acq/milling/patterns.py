@@ -819,9 +819,10 @@ class NotchPatternParameters(CompositeRectanglePatternParameters):
         offset = data.get("offset")
         if offset is None:
             upper_whisker = data.get("upper_whisker")
-            offset = (0.0 if upper_whisker is None else
-                      data["height"] / 2 - data["gap"] / 2
-                      - data["thickness"] - upper_whisker)
+            if upper_whisker is None:
+                offset = 0.0
+            else:
+                offset = data["height"] / 2 - data["gap"] / 2 - data["thickness"] - upper_whisker
         return NotchPatternParameters(
             width=data["width"],
             height=data["height"],

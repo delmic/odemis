@@ -2,9 +2,9 @@
 """
 Created on 1 October 2021
 
-@author: Bassim Lazem
+@author: Bassim Lazem, Alexéy Ilyushkin
 
-Copyright © 2021 Bassim Lazem, Delmic
+Copyright © 2021-2026 Bassim Lazem, Alexéy Ilyushkin, Delmic
 
 This file is part of Odemis.
 
@@ -244,6 +244,12 @@ class CryoFeatureController(object):
                 sample_pos = self.pm.to_sample_stage_from_stage_position(
                     milling_pos, posture=Posture.MILLING)
                 feature_sample_pos = (sample_pos["x"], sample_pos["y"])
+            else:
+                current_posture = self.pm.get_current_posture()
+                if current_posture in (Posture.MILLING, Posture.TRENCHING):
+                    sample_pos = self.pm.to_sample_stage_from_stage_position(
+                        self.pm.stage.position.value, posture=current_posture)
+                    feature_sample_pos = (sample_pos["x"], sample_pos["y"])
 
         # acquire a new fib image for reference
         from odemis.acq import acqmng
@@ -320,11 +326,16 @@ class CryoFeatureController(object):
             self._panel.btn_use_current_z.Enable(enable)
         if self.acqui_mode is guimod.AcquiMode.FIBSEM:
             current_posture = self.pm.get_current_posture()
+            save_position_postures = (Posture.MILLING, Posture.TRENCHING)
             # TODO: check if current position is near the feature position, if not, disable and show warning to user
             # TODO: acquire a new fib image for the reference, dont use the existing.
-            self._panel.btn_feature_save_position.Enable(enable and current_posture == Posture.MILLING)
-            if current_posture is not Posture.MILLING:
-                self._panel.btn_feature_save_position.SetToolTip("Move to the milling posture to save the position.")
+            self._panel.btn_feature_save_position.Enable(enable and current_posture in save_position_postures)
+            if current_posture not in save_position_postures:
+                self._panel.btn_feature_save_position.SetToolTip(
+                    "Move to the milling or trenching posture to save the position."
+                )
+            else:
+                self._panel.btn_feature_save_position.SetToolTip("")
 
     def _update_feature_cmb_list(self):
         """

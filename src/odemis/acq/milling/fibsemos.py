@@ -369,8 +369,7 @@ def _convert_composite_pattern_to_milling_stage(
         task: MillingTaskSettings,
         pattern: CompositeRectanglePatternParameters,
         name: str) -> 'FibsemMillingStage':
-    """
-    Convert a composite rectangle pattern into one fibsemOS milling stage.
+    """Convert a composite rectangle pattern into one fibsemOS milling stage.
 
     :param task: Task supplying the shared milling and alignment settings.
     :param pattern: Composite pattern whose generated rectangles belong to the stage.
@@ -404,8 +403,7 @@ def _convert_composite_pattern_to_milling_stage(
     )
 
 def convert_milling_tasks_to_milling_stages(milling_tasks: List[MillingTaskSettings]) -> List['FibsemMillingStage']:
-    """
-    Convert tasks to fibsemOS milling stages.
+    """Convert tasks to fibsemOS milling stages.
 
     Each composite rectangle pattern shares one stage and milling run.
     """
@@ -415,8 +413,7 @@ def convert_milling_tasks_to_milling_stages(milling_tasks: List[MillingTaskSetti
         if not task.selected:
             continue
         for pattern in task.patterns:
-            name = (task.name if len(task.patterns) == 1
-                    else f"{task.name}: {pattern.name.value}")
+            name = task.name if len(task.patterns) == 1 else f"{task.name}: {pattern.name.value}"
             if isinstance(pattern, CompositeRectanglePatternParameters):
                 milling_stages.append(
                     _convert_composite_pattern_to_milling_stage(task, pattern, name))

@@ -380,10 +380,10 @@ class MillingTaskController:
     def _update_spot_size_validation_message(self) -> None:
         """Update the spot size correction validation message."""
         invalid_pattern = self._get_invalid_spot_size_correction()
-        message = (
-            f"Invalid spot size correction: {invalid_pattern[0]}, {invalid_pattern[1]}."
-            if invalid_pattern else ""
-        )
+        if invalid_pattern:
+            message = f"Invalid spot size correction: {invalid_pattern[0]}, {invalid_pattern[1]}."
+        else:
+            message = ""
         self._panel.txt_automated_milling_status.SetLabel(message)
 
     @call_in_wx_main
@@ -744,6 +744,7 @@ class MillingTaskController:
             if not task.selected:
                 continue
             show_labels = task is highlighted_task
+            opacity = MILLING_OVERLAY_ACTIVE_OPACITY if show_labels else MILLING_OVERLAY_INACTIVE_OPACITY
             for pattern in task.patterns:
                 uses_shared_label = isinstance(
                     pattern,
@@ -757,12 +758,10 @@ class MillingTaskController:
                     pattern, (MicroexpansionPatternParameters, TrenchPatternParameters))
                 generated_patterns = pattern.generate()
                 for j, pshape in enumerate(generated_patterns):
-                    name = (
-                        task_name
-                        if (show_labels and j == 0
-                            and not uses_shared_label and not uses_top_label)
-                        else None
-                    )
+                    if show_labels and j == 0 and not uses_shared_label and not uses_top_label:
+                        name = task_name
+                    else:
+                        name = None
                     shape = rectangle_pattern_to_shape(
                                             canvas=self.canvas,
                                             ref_img=feature.reference_image,
@@ -775,11 +774,7 @@ class MillingTaskController:
                                             show_dimensions=(
                                                 show_labels and not uses_shared_label
                                             ),
-                                            opacity=(
-                                                MILLING_OVERLAY_ACTIVE_OPACITY
-                                                if show_labels
-                                                else MILLING_OVERLAY_INACTIVE_OPACITY
-                                            ))
+                                            opacity=opacity)
                     self.rectangles_overlay.add_shape(shape)
                 if uses_top_label and show_labels:
                     center_x, _ = pattern.center.value
@@ -807,11 +802,7 @@ class MillingTaskController:
                         label = f"{task_name} · {size}"
                         gap = units.readable_str(pattern.gap.value, "m", sig=3)
                         gap_side = 1 if pattern.mirrored.value else -1
-                        gap_align = (
-                            wx.ALIGN_LEFT
-                            if pattern.mirrored.value
-                            else wx.ALIGN_RIGHT
-                        )
+                        gap_align = wx.ALIGN_LEFT if pattern.mirrored.value else wx.ALIGN_RIGHT
                         self.rectangles_overlay.add_pattern_label(
                             gap,
                             (x + gap_side * pattern.width.value / 2,
