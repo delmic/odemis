@@ -21,6 +21,7 @@ import logging
 import unittest
 import numpy
 from odemis.acq.milling.patterns import (
+    NotchPatternParameters,
     PATTERN_NAME_TO_CLASS,
     RectanglePatternParameters,
     TrenchPatternParameters,
@@ -383,6 +384,92 @@ class RulerPatternParametersTestCase(unittest.TestCase):
         self.assertEqual(self.pattern.num_graduations.value, 21)
         with self.assertRaises(ValueError):
             RulerPatternParameters(width=2e-6, height=10e-9, depth=1e-6, spacing=1e-6)
+
+
+class NotchPatternParametersTestCase(unittest.TestCase):
+    """Test the five-segment notch geometry."""
+
+    def test_geometry_and_serialization(self) -> None:
+        """Generate the open loop and preserve it through serialization."""
+        pattern = NotchPatternParameters(
+            width=3.5e-6, height=8.1e-6, depth=0.5e-6, gap=1.1e-6,
+            thickness=0.2e-6, offset=-0.2e-6, center=(1e-6, -2e-6))
+        rectangles = pattern.generate()
+
+        self.assertEqual(len(rectangles), 5)
+        expected_sizes = [
+            (0.2e-6, 3.6e-6),
+            (3.5e-6, 0.2e-6),
+            (0.2e-6, 1.3e-6),
+            (3.5e-6, 0.2e-6),
+            (0.2e-6, 3.2e-6),
+        ]
+        for rectangle, expected_size in zip(rectangles, expected_sizes):
+            self.assertAlmostEqual(rectangle.width.value, expected_size[0])
+            self.assertAlmostEqual(rectangle.height.value, expected_size[1])
+        self.assertLess(rectangles[0].center.value[0], rectangles[2].center.value[0])
+        self.assertEqual(rectangles[0].center.value[0], rectangles[4].center.value[0])
+        self.assertTrue(all(isinstance(rectangle, RectanglePatternParameters)
+                            for rectangle in rectangles))
+        self.assertEqual(pattern.overlap.value, 100e-9)
+        for vertical_index, horizontal_index, vertical_edge, horizontal_edge in (
+            (0, 1, -1, 1),
+            (2, 1, 1, -1),
+            (2, 3, -1, 1),
+            (4, 3, 1, -1),
+        ):
+            vertical = rectangles[vertical_index]
+            horizontal = rectangles[horizontal_index]
+            vertical_y = (
+                vertical.center.value[1]
+                + vertical_edge * vertical.height.value / 2
+            )
+            horizontal_y = (
+                horizontal.center.value[1]
+                + horizontal_edge * horizontal.height.value / 2
+            )
+            self.assertAlmostEqual(
+                abs(vertical_y - horizontal_y), pattern.overlap.value)
+
+        legacy_data = pattern.to_dict()
+        del legacy_data["overlap"]
+        self.assertEqual(
+            NotchPatternParameters.from_dict(legacy_data).overlap.value,
+            100e-9,
+        )
+
+        pattern.overlap.value = 75e-9
+        pattern.mirrored.value = True
+        mirrored = pattern.generate()
+        for original, flipped in zip(rectangles, mirrored):
+            self.assertAlmostEqual(flipped.center.value[0] - pattern.center.value[0],
+                                   pattern.center.value[0] - original.center.value[0])
+
+        restored = NotchPatternParameters.from_dict(pattern.to_dict())
+        self.assertEqual(restored.overlap.value, 75e-9)
+        self.assertEqual(restored.to_dict(), pattern.to_dict())
+        self.assertEqual([rectangle.to_dict() for rectangle in restored.generate()],
+                         [rectangle.to_dict() for rectangle in mirrored])
+
+    def test_invalid_initial_geometry(self) -> None:
+        """Reject invalid notch dimensions during construction."""
+        with self.assertRaises(ValueError):
+            NotchPatternParameters(
+                width=0.2e-6,
+                height=8.1e-6,
+                depth=0.5e-6,
+                gap=1.1e-6,
+                thickness=0.2e-6,
+            )
+
+        with self.assertRaises(ValueError):
+            NotchPatternParameters(
+                width=3.5e-6,
+                height=1.5e-6,
+                depth=0.5e-6,
+                gap=1.1e-6,
+                thickness=0.2e-6,
+            )
 
 
 if __name__ == '__main__':

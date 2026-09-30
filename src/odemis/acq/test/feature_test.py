@@ -58,6 +58,32 @@ class TestFeatureEncoderDecoder(unittest.TestCase):
                 os.remove(filename)
             os.rmdir(self.path)
 
+    def test_notch_feature_offset(self):
+        """Keep the notch right of the centered polishing pattern."""
+        tasks = load_milling_tasks(DEFAULT_MILLING_TASKS_PATH)
+        feature = CryoFeature(
+            name="TestFeature-1",
+            stage_position={"x": 0, "y": 0},
+            fm_focus_position={"z": 0},
+            milling_tasks={
+                "Notch": tasks["Notch"],
+                "Polishing 02": tasks["Polishing 02"],
+            },
+        )
+        feature_position = (12e-6, -8e-6)
+
+        feature.set_milling_feature_offset(feature_position)
+
+        notch = feature.milling_tasks["Notch"].patterns[0]
+        polishing = feature.milling_tasks["Polishing 02"].patterns[0]
+        for actual, expected in zip(notch.center.value, (15e-6, -8e-6)):
+            self.assertAlmostEqual(actual, expected)
+        self.assertEqual(polishing.center.value, feature_position)
+        notch.mirrored.value = True
+        feature.set_milling_feature_offset(feature_position)
+        for actual, expected in zip(notch.center.value, (15e-6, -8e-6)):
+            self.assertAlmostEqual(actual, expected)
+
     def test_decoder_ignores_unsupported_milling_tasks(self):
         """Ignore saved tasks that contain no patterns supported by this version."""
         feature = feature_decoder({

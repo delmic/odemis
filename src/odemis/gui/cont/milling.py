@@ -45,6 +45,7 @@ from odemis.acq.milling.millmng import MillingWorkflowTask, run_automated_millin
 from odemis.acq.milling.patterns import (
     MicroexpansionPatternParameters,
     MillingPatternParameters,
+    NotchPatternParameters,
     RectanglePatternParameters,
     RulerPatternParameters,
     TrenchPatternParameters,
@@ -743,7 +744,8 @@ class MillingTaskController:
                 continue
             show_labels = task is highlighted_task
             for pattern in task.patterns:
-                uses_shared_label = isinstance(pattern, RulerPatternParameters)
+                uses_shared_label = isinstance(
+                    pattern, (RulerPatternParameters, NotchPatternParameters))
                 uses_top_label = isinstance(
                     pattern, (MicroexpansionPatternParameters, TrenchPatternParameters))
                 generated_patterns = pattern.generate()
@@ -785,9 +787,31 @@ class MillingTaskController:
                 elif uses_shared_label and show_labels:
                     x, y = pos_to_absolute(
                         pattern.center.value, feature.reference_image)
-                    height = units.readable_str(pattern.height.value, "m", sig=3)
+                    if isinstance(pattern, NotchPatternParameters):
+                        size = units.readable_str(
+                            (pattern.width.value, pattern.height.value), "m", sig=3
+                        )
+                        label = f"{task_name} · {size}"
+                        gap = units.readable_str(pattern.gap.value, "m", sig=3)
+                        gap_side = 1 if pattern.mirrored.value else -1
+                        gap_align = (
+                            wx.ALIGN_LEFT
+                            if pattern.mirrored.value
+                            else wx.ALIGN_RIGHT
+                        )
+                        self.rectangles_overlay.add_pattern_label(
+                            gap,
+                            (x + gap_side * pattern.width.value / 2,
+                             y + pattern.offset.value),
+                            align=gap_align | wx.ALIGN_CENTER_VERTICAL,
+                            offset=(gap_side * 8, 0),
+                        )
+                    else:
+                        height = units.readable_str(
+                            pattern.height.value, "m", sig=3)
+                        label = f"{task_name} · {height}"
                     self.rectangles_overlay.add_pattern_label(
-                        f"{task_name} · {height}",
+                        label,
                         (x, y + pattern.height.value / 2),
                     )
 

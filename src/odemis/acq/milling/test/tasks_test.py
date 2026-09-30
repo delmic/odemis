@@ -26,6 +26,7 @@ import yaml
 from odemis.acq.milling import DEFAULT_MILLING_TASKS_PATH
 from odemis.acq.milling.patterns import (
     MicroexpansionPatternParameters,
+    NotchPatternParameters,
     RulerPatternParameters,
     TrenchPatternParameters,
 )
@@ -234,6 +235,16 @@ class MillingTaskTestCase(unittest.TestCase):
             [pattern.to_dict() for pattern in restored.generate()],
             [pattern.to_dict() for pattern in ruler.generate()],
         )
+
+    def test_default_notch_task(self) -> None:
+        """Load the optional default notch as five rectangles."""
+        notch = load_milling_tasks(DEFAULT_MILLING_TASKS_PATH)["Notch"]
+        self.assertFalse(notch.selected)
+        self.assertEqual(notch.milling.current.value, 0.3e-9)
+        self.assertIsInstance(notch.patterns[0], NotchPatternParameters)
+        self.assertEqual(notch.patterns[0].center.value, (3e-6, 0))
+        self.assertEqual(notch.patterns[0].overlap.value, 100e-9)
+        self.assertEqual(len(notch.patterns[0].generate()), 5)
 
 
 if __name__ == "__main__":

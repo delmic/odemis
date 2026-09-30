@@ -82,6 +82,44 @@ class MillingTaskPanelTestCase(test.GuiTestCase):
             ruler_panel.ctrl_dict["spot_size_correction"], UnitFloatCtrl)
         self.assertIn("spot_size_correction_connector", controls["Ruler"])
         self.assertNotIn("rotation", ruler_panel.ctrl_dict)
+        notch_panel = controls["Notch"]["panel"]
+        self.assertEqual(
+            set(notch_panel.pattern_parameters),
+            {
+                "width",
+                "height",
+                "depth",
+                "gap",
+                "thickness",
+                "offset",
+                "mirrored",
+                "spot_size_correction",
+            },
+        )
+        self.assertTrue(all(
+            isinstance(notch_panel.ctrl_dict[param], UnitFloatCtrl)
+            for param in (
+                "width",
+                "height",
+                "depth",
+                "gap",
+                "thickness",
+                "offset",
+                "spot_size_correction",
+            )
+        ))
+        self.assertNotIn("overlap", notch_panel.ctrl_dict)
+        notch_panel.ctrl_dict["offset"].SetValue(0)
+        test.gui_loop()
+        self.assertEqual(notch_panel.ctrl_dict["offset"].get_value_str(), "0 µm")
+        self.assertIsInstance(notch_panel.ctrl_dict["mirrored"], wx.CheckBox)
+        self.assertIn("mirrored_connector", controls["Notch"])
+        mirror = notch_panel.ctrl_dict["mirrored"]
+        mirror.SetValue(True)
+        event = wx.CommandEvent(wx.EVT_CHECKBOX.typeId, mirror.Id)
+        event.SetEventObject(mirror)
+        mirror.GetEventHandler().ProcessEvent(event)
+        self.assertTrue(self.tasks["Notch"].patterns[0].mirrored.value)
         for name in ("Microexpansion", "Rough Milling 01", "Polishing 01"):
             panel = controls[name]["panel"]
             self.assertNotIn("num_graduations", panel.ctrl_dict)
@@ -151,7 +189,25 @@ class MillingTaskPanelTestCase(test.GuiTestCase):
         self.assertEqual(other_pattern.center.value, (1e-6, 14e-6))
         self.assertEqual(hidden_pattern.center.value, (11e-6, 13e-6))
 
+        notch_pattern = self.tasks["Notch"].patterns[0]
+        polishing_pattern = self.tasks["Polishing 02"].patterns[0]
         marker = (2e-6, -3e-6)
+        with patch("odemis.gui.cont.milling.save_project"):
+            self.controller._move_patterns(
+                [notch_pattern, polishing_pattern],
+                marker,
+                use_feature_offsets=True,
+            )
+        self.assertEqual(
+            notch_pattern.center.value,
+            notch_pattern.get_center_at_feature(marker),
+        )
+        self.assertEqual(polishing_pattern.center.value, marker)
+
+        task_list.SetSelection(task_list.FindString("Notch"))
+        move_all.SetValue(False)
+        self.assertEqual(self.controller._get_patterns_for_manual_move(), [])
+
         for pattern in visible_patterns:
             pattern.center.value = (20e-6, 20e-6)
         hidden_center = hidden_pattern.center.value
@@ -275,6 +331,119 @@ class MillingTaskPanelTestCase(test.GuiTestCase):
             Mock(), colour=colors[1], opacity=MILLING_OVERLAY_INACTIVE_OPACITY)
         self.assertAlmostEqual(
             inactive_rectangle.colour[3], MILLING_OVERLAY_INACTIVE_OPACITY)
+
+    def test_pattern_labels_only_for_highlighted_task(self) -> None:
+        """Show names and dimensions only for the highlighted pattern row."""
+        rough = self.tasks["Rough Milling 01"]
+        notch = self.tasks["Notch"]
+        rough.selected = True
+        notch.selected = True
+        self.controller.milling_tasks = {
+            "Rough Milling 01": rough,
+            "Notch": notch,
+        }
+        task_list = wx.CheckListBox(
+            self.panel, choices=list(self.controller.milling_tasks))
+        self.controller._panel.milling_task_chk_list = task_list
+        self.controller.selected_tasks = SimpleNamespace(
+            value=list(self.controller.milling_tasks))
+        reference_image = SimpleNamespace(metadata={model.MD_POS: (0, 0)})
+        feature = SimpleNamespace(reference_image=reference_image)
+        self.controller._tab_data = SimpleNamespace(
+            main=SimpleNamespace(currentFeature=SimpleNamespace(value=feature)))
+        self.controller.canvas = Mock()
+        self.controller.rectangles_overlay = Mock()
+        self.controller.rectangles_overlay._shapes = SimpleNamespace(value=[])
+        self.controller._active_spot_size_pattern = None
+        self.controller._on_shapes_update = Mock()
+
+        task_list.SetSelection(task_list.FindString("Rough Milling 01"))
+        with patch(
+            "odemis.gui.cont.milling.rectangle_pattern_to_shape",
+            return_value=Mock(),
+        ) as to_shape:
+            MillingTaskController.draw_milling_tasks.__wrapped__(self.controller)
+
+        rough_calls = [
+            item for item in to_shape.call_args_list
+            if item.kwargs["colour"] == rough.color
+        ]
+        notch_calls = [
+            item for item in to_shape.call_args_list
+            if item.kwargs["colour"] == notch.color
+        ]
+        self.assertTrue(all(item.kwargs["show_dimensions"] for item in rough_calls))
+        self.assertTrue(all(
+            item.kwargs["opacity"] == MILLING_OVERLAY_ACTIVE_OPACITY
+            for item in rough_calls
+        ))
+        self.assertTrue(all(item.kwargs["name"] is None for item in rough_calls))
+        self.assertTrue(all(item.kwargs["name"] is None for item in notch_calls))
+        self.assertTrue(all(
+            not item.kwargs["show_dimensions"] for item in notch_calls))
+        self.assertTrue(all(
+            item.kwargs["opacity"] == MILLING_OVERLAY_INACTIVE_OPACITY
+            for item in notch_calls
+        ))
+        rough_shape_count = len(rough.patterns[0].generate())
+        self.assertTrue(all(
+            item.kwargs["colour"] == rough.color
+            for item in to_shape.call_args_list[-rough_shape_count:]
+        ))
+        self.controller.rectangles_overlay.add_pattern_label.assert_called_once()
+        rough_label = self.controller.rectangles_overlay.add_pattern_label.call_args
+        self.assertEqual(rough_label.args[0], "Rough Milling 01")
+        rough_pattern = rough.patterns[0]
+        expected_position = (
+            rough_pattern.center.value[0],
+            rough_pattern.center.value[1]
+            + rough_pattern.spacing.value / 2
+            + rough_pattern.height.value,
+        )
+        for actual, expected in zip(rough_label.args[1], expected_position):
+            self.assertAlmostEqual(actual, expected)
+
+        task_list.SetSelection(task_list.FindString("Notch"))
+        self.controller.rectangles_overlay.reset_mock()
+        with patch(
+            "odemis.gui.cont.milling.rectangle_pattern_to_shape",
+            return_value=Mock(),
+        ) as to_shape:
+            MillingTaskController.draw_milling_tasks.__wrapped__(self.controller)
+
+        rough_calls = [
+            item for item in to_shape.call_args_list
+            if item.kwargs["colour"] == rough.color
+        ]
+        notch_calls = [
+            item for item in to_shape.call_args_list
+            if item.kwargs["colour"] == notch.color
+        ]
+        self.assertTrue(all(item.kwargs["name"] is None for item in rough_calls))
+        self.assertTrue(all(
+            not item.kwargs["show_dimensions"] for item in rough_calls))
+        self.assertTrue(all(
+            item.kwargs["opacity"] == MILLING_OVERLAY_INACTIVE_OPACITY
+            for item in rough_calls
+        ))
+        self.assertTrue(all(
+            item.kwargs["opacity"] == MILLING_OVERLAY_ACTIVE_OPACITY
+            for item in notch_calls
+        ))
+        notch_shape_count = len(notch.patterns[0].generate())
+        self.assertTrue(all(
+            item.kwargs["colour"] == notch.color
+            for item in to_shape.call_args_list[-notch_shape_count:]
+        ))
+        self.assertEqual(
+            self.controller.rectangles_overlay.add_pattern_label.call_count, 2)
+        labels = [
+            item.args[0]
+            for item in (
+                self.controller.rectangles_overlay.add_pattern_label.call_args_list
+            )
+        ]
+        self.assertTrue(any(label.startswith("Notch · ") for label in labels))
 
     def test_pattern_selection_warning(self) -> None:
         """Show a transient popup when pattern movement has no anchor."""
