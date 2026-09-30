@@ -114,6 +114,23 @@ class TestCryoProject(unittest.TestCase):
         for posture_key in project_data["features"][0]["posture_positions"].keys():
             self.assertIn(posture_key, posture_values)
 
+    def test_feature_path(self):
+        """Tests that the feature path is not stored, but derived from the feature directory on load."""
+        feature = CryoFeature("Feature-1", {"x": 0, "y": 0, "z": 0}, {"z": 0})
+        feature.path = str(self.test_dir / "Feature-1")
+        main_data = MagicMock()
+        main_data.tab.value.conf.pj_last_path = self.test_dir
+        main_data.features.value = [feature]
+        main_data.overviews.value = []
+
+        save_project(main_data)
+        self.assertNotIn("path", read_project_file(self.test_dir / PROJECT_NAME)["features"][0])
+        # No feature directory (yet)
+        self.assertNotIn("path", load_project(self.test_dir)["features"][0])
+
+        (self.test_dir / "Feature-1").mkdir()
+        self.assertEqual(load_project(self.test_dir)["features"][0]["path"], str(self.test_dir / "Feature-1"))
+
     def test_milling_feature_offset_roundtrip(self):
         """The feature/pattern anchor is persisted without changing legacy projects."""
         feature = CryoFeature("Feature-1", {"x": 0, "y": 0, "z": 0}, {"z": 0})

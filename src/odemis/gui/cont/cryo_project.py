@@ -133,6 +133,14 @@ def load_project(project_dir: os.PathLike) -> dict:
     for feature in features:
         feature["images"] = deserialize_images(feature["images"], project_dir)
 
+    # The feature directory (containing the milling data) is always named after the feature, so it is not stored in
+    # the project file (older versions did store it, as an absolute path, which is ignored).
+    for feature in features:
+        feature.pop("path", None)
+        feature_dir = project_dir / feature["name"]
+        if feature_dir.is_dir():
+            feature["path"] = str(feature_dir)
+
     # Recover absolute image paths for overview images
     overviews = deserialize_images(overviews, project_dir)
 
@@ -175,8 +183,6 @@ def serialize_project_data(main_data: "CryoMainGUIData") -> Dict:
             'superz_focused': feature.superz_focused,
             'images': serialize_images(feature.images.value, project_dir),
         }
-        if feature.path:
-            feature_item['path'] = feature.path
         if feature.milling_feature_offset.value is not None:
             feature_item['milling_feature_offset'] = feature.milling_feature_offset.value
         feature_list.append(feature_item)
