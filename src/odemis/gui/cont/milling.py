@@ -46,6 +46,7 @@ from odemis.acq.milling.patterns import (
     MicroexpansionPatternParameters,
     MillingPatternParameters,
     RectanglePatternParameters,
+    RulerPatternParameters,
     TrenchPatternParameters,
 )
 from odemis.acq.milling.tasks import MillingTaskSettings
@@ -365,7 +366,7 @@ class MillingTaskController:
                 if not task.selected:
                     continue
                 for pattern in task.patterns:
-                    # Validate the actual milling rectangles, including the ruler's thin notches.
+                    # Validate the actual milling rectangles, including the ruler's thin graduations.
                     for rectangle in pattern.generate():
                         if not isinstance(rectangle, RectanglePatternParameters):
                             continue
@@ -742,13 +743,15 @@ class MillingTaskController:
                 continue
             show_labels = task is highlighted_task
             for pattern in task.patterns:
+                uses_shared_label = isinstance(pattern, RulerPatternParameters)
                 uses_top_label = isinstance(
                     pattern, (MicroexpansionPatternParameters, TrenchPatternParameters))
                 generated_patterns = pattern.generate()
                 for j, pshape in enumerate(generated_patterns):
                     name = (
                         task_name
-                        if show_labels and j == 0 and not uses_top_label
+                        if (show_labels and j == 0
+                            and not uses_shared_label and not uses_top_label)
                         else None
                     )
                     shape = rectangle_pattern_to_shape(
@@ -761,7 +764,7 @@ class MillingTaskController:
                                                 pattern is self._active_spot_size_pattern
                                             ),
                                             show_dimensions=(
-                                                show_labels
+                                                show_labels and not uses_shared_label
                                             ),
                                             opacity=(
                                                 MILLING_OVERLAY_ACTIVE_OPACITY
@@ -779,6 +782,14 @@ class MillingTaskController:
                         (center_x, top_y), feature.reference_image)
                     self.rectangles_overlay.add_pattern_label(
                         task_name, label_position)
+                elif uses_shared_label and show_labels:
+                    x, y = pos_to_absolute(
+                        pattern.center.value, feature.reference_image)
+                    height = units.readable_str(pattern.height.value, "m", sig=3)
+                    self.rectangles_overlay.add_pattern_label(
+                        f"{task_name} · {height}",
+                        (x, y + pattern.height.value / 2),
+                    )
 
         # validate the patterns
         self._on_shapes_update(self.rectangles_overlay._shapes.value)

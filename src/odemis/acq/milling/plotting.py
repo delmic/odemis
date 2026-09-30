@@ -1,7 +1,7 @@
 """
-@author: Patrick Cleeve
+@author: Patrick Cleeve, Alexéy Ilyushkin
 
-Copyright © 2025 Delmic
+Copyright © 2025-2026 Patrick Cleeve, Alexéy Ilyushkin, Delmic
 
 This file is part of Odemis.
 
@@ -45,6 +45,7 @@ import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 from odemis import model
 from odemis.acq.milling.patterns import (
+    CompositeRectanglePatternParameters,
     MicroexpansionPatternParameters,
     RectanglePatternParameters,
     TrenchPatternParameters,
@@ -199,9 +200,18 @@ def draw_milling_tasks(image: model.DataArray, milling_tasks: Dict[str, MillingT
 
         colour = COLOURS[i%len(COLOURS)]
         for p in task.patterns:
-            patches = []
-
-            patches = drawing_functions[type(p)](image, p, colour=colour, name=task_name)
+            if isinstance(p, CompositeRectanglePatternParameters):
+                patches = [
+                    patch
+                    for rectangle in p.generate()
+                    for patch in _draw_rectangle_pattern(
+                        image, rectangle, colour=colour, name=task_name
+                    )
+                ]
+            else:
+                patches = drawing_functions[type(p)](
+                    image, p, colour=colour, name=task_name
+                )
 
             for patch in patches:
                 ax.add_patch(patch)

@@ -23,8 +23,10 @@ import unittest
 
 import yaml
 
+from odemis.acq.milling import DEFAULT_MILLING_TASKS_PATH
 from odemis.acq.milling.patterns import (
     MicroexpansionPatternParameters,
+    RulerPatternParameters,
     TrenchPatternParameters,
 )
 from odemis.acq.milling.tasks import (
@@ -210,6 +212,28 @@ class MillingTaskTestCase(unittest.TestCase):
         self.assertEqual(len(loaded_tasks["Mixed"].patterns), 1)
         self.assertIsInstance(
             loaded_tasks["Mixed"].patterns[0], TrenchPatternParameters)
+
+    def test_ruler_task_roundtrip(self) -> None:
+        """Preserve ruler task parameters through YAML serialization."""
+        tasks = load_milling_tasks(DEFAULT_MILLING_TASKS_PATH)
+        ruler = tasks["Ruler"]
+        self.assertFalse(ruler.selected)
+        self.assertEqual(ruler.generate(), [])
+        self.assertIsInstance(ruler.patterns[0], RulerPatternParameters)
+        self.assertEqual(ruler.patterns[0].num_graduations.value, 11)
+        ruler.selected = True
+        ruler.patterns[0].num_graduations.value = 16
+        ruler.patterns[0].height.value = 8e-6
+        ruler.patterns[0].center.value = (1e-6, -2e-6)
+        ruler.patterns[0].spot_size_correction.value = 20e-9
+        save_milling_tasks(TASKS_PATH, tasks)
+        restored = load_milling_tasks(TASKS_PATH)["Ruler"]
+        self.assertEqual(restored.to_dict(), ruler.to_dict())
+        self.assertEqual(len(restored.generate()), 32)
+        self.assertEqual(
+            [pattern.to_dict() for pattern in restored.generate()],
+            [pattern.to_dict() for pattern in ruler.generate()],
+        )
 
 
 if __name__ == "__main__":

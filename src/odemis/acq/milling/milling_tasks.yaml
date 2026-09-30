@@ -9,6 +9,27 @@
 #  patterns: List of patterns (and parameters) to mill
 # spot_size_correction is the total measured excess in the milled opening size.
 # It must be nonnegative and is subtracted once from each dimension sent to fibsemOS.
+'Ruler':
+  name: 'Ruler'
+  color: '#8A4FFF'
+  selected: false
+  milling:
+    current: 60.0e-12
+    voltage: 30000.0
+    field_of_view: 8e-05
+    mode: 'Serial'
+    channel: 'ion'
+  patterns:
+    - name: 'Ruler'
+      width: 2.0e-06
+      height: 1.0e-05
+      depth: 5.0e-07
+      spacing: 1.0e-05
+      num_graduations: 11
+      spot_size_correction: 0.0
+      center_x: 0
+      center_y: 0
+      pattern: 'ruler'
 'Microexpansion':
   name: 'Microexpansion'
   color: '#FFA500'
