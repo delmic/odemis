@@ -68,6 +68,9 @@ class Posture(str, Enum):
         """Return the string value of the posture."""
         return self.value
 
+# All the postures where an FM lens is used
+FM_POSTURES = {Posture.FM_IMAGING, Posture.FIB_VIEW_FM}
+
 RTOL_PROGRESS = 0.3
 # Compensation factor for a rotational move to take the same amount of time as a linear move
 ROT_DIST_SCALING_FACTOR = 0.06  # m/rad, 1° ~ 1mm
@@ -1544,7 +1547,7 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
                     else:  # Direct move between postures near SEM or near FM
                         sub_moves.append((self.stage, target_position))
 
-                if target_posture in [Posture.FM_IMAGING, Posture.FIB_VIEW_FM]:
+                if target_posture in FM_POSTURES:
                     # Engage the focuser
                     sub_moves.append((self.focus, focus_active))
             else:
@@ -2761,7 +2764,7 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
                 sub_moves.append((self.stage, filter_dict({'x', 'y', 'rx', 'rz'}, target_position)))  # Do all moves simultaneously
                 sub_moves.append((self.stage, filter_dict({'z'}, target_position)))  # Move the final Z
 
-                if target_posture in [Posture.FM_IMAGING, Posture.FIB_VIEW_FM]:
+                if target_posture in FM_POSTURES:
                     if self.shutter is not None:
                         logging.info("Retracting shutter before engaging the objective for FM imaging")
                         self.shutter.value = False  # False = retracted (open), blocking call

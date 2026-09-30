@@ -138,6 +138,9 @@ class FIBFMCorrelationData:
         # key is a tuple of (stream shape, MD_POS)
         self.fib_stream_key = None
         self.fm_stream_key = None
+        # Posture at which the FM data used for the correlation was acquired (FM_IMAGING or FIB_VIEW_FM). The FM
+        # targets (POI, fiducials) are expressed in that posture.
+        self.fm_posture: Posture = Posture.FM_IMAGING
 
         # Output parameters of multipoint correlation. The output is calculated from run_correlation function
         self.correlation_result = {}
@@ -165,6 +168,7 @@ class FIBFMCorrelationData:
             "correlation_result": self.correlation_result,
             "fm_stream_key": self.fm_stream_key,
             "fib_stream_key": self.fib_stream_key,
+            "fm_posture": self.fm_posture.value,
         }
         return data
 
@@ -185,6 +189,8 @@ class FIBFMCorrelationData:
         correlation_data.correlation_result = data["correlation_result"]
         correlation_data.fm_stream_key = data["fm_stream_key"]
         correlation_data.fib_stream_key = data["fib_stream_key"]
+        # Older projects don't have it, and only supported correlation at the FM imaging posture
+        correlation_data.fm_posture = Posture(data.get("fm_posture", Posture.FM_IMAGING.value))
         return correlation_data
 
 
@@ -194,12 +200,13 @@ class CryoFeature(object):
     """
     def __init__(self, name: str,
                  stage_position: Dict[str, float],
-                 fm_focus_position: Dict[str, float],
+                 fm_focus_position: Dict[Posture, Dict[str, float]],
                  milling_tasks: Optional[Dict[str, MillingTaskSettings]] = None, correlation_data=None):
         """
         :param name: (string) the feature name
         :param stage_position: (dict) the stage position of the feature (stage-bare)
-        :param fm_focus_position: (dict) the focus position of the feature
+        :param fm_focus_position: (dict) the focus position of the feature for each posture (Posture -> focus axes
+        position).
         :param correlation_data: (Dict[str,FIBFMCorrelationData]) Dictionary mapping the feature status to
         FIBFMCorrelationData, where feature status like Active, Rough Milled or polished is the key.
         """
@@ -255,6 +262,22 @@ class CryoFeature(object):
         # TODO: once the stage has access to it, it should check that the position is within the
         # allowed range for the given posture (see SEM_IMAGING_RANGE, FM_IMAGING_RANGE)
         self.posture_positions[posture.value] = position
+
+    def get_fm_focus_position(self, posture: Posture,
+                              focus: Optional[model.HwComponent] = None) -> Optional[Dict[str, float]]:
+        """
+        Get the focus position of the feature for a given posture. If no focus position is known
+        for that posture, the active position of the focus component (MD_FAV_POS_ACTIVE) is used,
+        if the component is provided.
+        :param posture: the posture for which the focus position is requested
+        :param focus: the focus component, used to get the default position
+        :return: the focus position (axis name -> position), or None if there is none available
+        """
+        focus_positions = self.fm_focus_position.value
+        pos = focus_positions.get(posture)
+        if pos is None and focus is not None:
+            pos = focus.getMetadata().get(model.MD_FAV_POS_ACTIVE)
+        return pos
 
     def get_posture_position(self, posture: "Posture") -> Optional[Dict[str, float]]:
         """
@@ -325,6 +348,7 @@ class CryoFeature(object):
         logging.info(f"Stage position for milling: {self.get_posture_position(Posture.MILLING)}")
         logging.info(f"Feature {self.name.value} is ready to mill.")
 
+
 def feature_decoder(feature_raw: Dict) -> CryoFeature:
     """
     Json decoder for the CryoFeature class and its attributes
@@ -339,7 +363,7 @@ def feature_decoder(feature_raw: Dict) -> CryoFeature:
     if "correlation_data" in feature_raw:
         correlation_data = feature_raw["correlation_data"]
     stage_position = feature_raw['stage_position']
-    fm_focus_position = feature_raw['fm_focus_position']
+    fm_focus_position = {Posture(k): v for k, v in feature_raw['fm_focus_position'].items()}
     posture_positions = feature_raw.get('posture_positions', {})
     milling_task_json = feature_raw.get('milling_tasks', {})
     feature = CryoFeature(name=feature_raw['name'],
@@ -586,6 +610,7 @@ class CryoFeatureAcquisitionTask(object):
     def _run_autofocus(self, site: CryoFeature) -> None:
         """Run the autofocus for the given feature."""
 
+        current_posture = self.pm.get_current_posture()
         # TODO: allow the user to select the autofocus stream, rather than just using the first one
 
         try:
@@ -603,20 +628,24 @@ class CryoFeatureAcquisitionTask(object):
             if conf >= self.autofocus_conf_level:
 
                 # update the feature focus position
-                site.fm_focus_position.value = {"z": foc_pos}
+                site.fm_focus_position.value = {**site.fm_focus_position.value, current_posture: {"z": foc_pos}}
                 logging.debug(f"auto focus succeeded at {site.name.value} with conf:{conf}. new focus position: {foc_pos}")
             else:
                 # if the confidence is low, restore the previous focus position
-                self._move_focus(site, site.fm_focus_position.value)
-                logging.debug(f"auto focus failed due at {site.name.value} with conf:{conf}. restoring focus position {site.fm_focus_position.value}")
+                prev_focus = site.get_fm_focus_position(current_posture, self.focus)
+                if prev_focus:
+                    self._move_focus(site, prev_focus)
+                logging.debug(f"auto focus failed at {site.name.value} with conf:{conf}. restoring focus position {prev_focus}")
 
         except TimeoutError as e:
             logging.debug(f"Timed out during autofocus at {site.name.value}. {e}")
             self._future._running_subf.cancel()
 
             # restore the previous focus position
-            self._move_focus(site, site.fm_focus_position.value)
-            logging.warning(f"auto focus timed out at {site.name.value}. restoring focus position {site.fm_focus_position.value}")
+            prev_focus = site.get_fm_focus_position(current_posture, self.focus)
+            if prev_focus:
+                self._move_focus(site, prev_focus)
+            logging.warning(f"auto focus timed out at {site.name.value}. restoring focus position {prev_focus}")
 
     def _move_to_site(self, site: CryoFeature):
         """
@@ -624,8 +653,9 @@ class CryoFeatureAcquisitionTask(object):
         :param site: The site to move to.
         :raises MoveError: if the stage failed to move to the given site.
         """
-        stage_position = get_feature_position_at_posture(pm=self.pm, feature=site, posture=Posture.FM_IMAGING) # stage-bare
-        fm_focus_position = site.fm_focus_position.value
+        current_posture = self.pm.get_current_posture()
+        stage_position = get_feature_position_at_posture(pm=self.pm, feature=site, posture=current_posture) # stage-bare
+        fm_focus_position = site.get_fm_focus_position(current_posture, self.focus)
         logging.debug(f"For feature {site.name.value} moving the stage to {stage_position}")
         self._future.running_subf = self.stage.moveAbs(stage_position)
 
@@ -649,7 +679,8 @@ class CryoFeatureAcquisitionTask(object):
         logging.debug(
             "For feature %s moving the objective to %s m", site.name.value, fm_focus_position
         )
-        self._move_focus(site, fm_focus_position)
+        if fm_focus_position:
+            self._move_focus(site, fm_focus_position)
 
     def _move_focus(self, site: CryoFeature, fm_focus_position: Dict[str, float]) -> None:
         """Move the focus to the given position."""

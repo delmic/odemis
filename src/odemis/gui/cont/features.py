@@ -24,6 +24,8 @@ import itertools
 import logging
 import os
 
+from typing import Dict
+
 import wx
 
 from odemis import model
@@ -39,7 +41,7 @@ from odemis.acq.feature import (
     Target,
     TargetType
 )
-from odemis.acq.move import Posture
+from odemis.acq.move import Posture, FM_POSTURES
 from odemis.gui import model as guimod
 from odemis.gui.comp.popup import show_message
 from odemis.gui.conf.licences import LICENCE_MILLING_ENABLED
@@ -102,6 +104,7 @@ class CryoFeatureController(object):
         fibsem_mode = self.acqui_mode is guimod.AcquiMode.FIBSEM
         if fm_mode:
             self._panel.btn_use_current_z.Bind(wx.EVT_BUTTON, self._on_btn_use_current_z)
+            self.pm.current_posture.subscribe(self._update_ctrl_feature_z)
         if fibsem_mode:
             self._panel.btn_feature_save_position.Bind(wx.EVT_BUTTON, self.save_milling_position)
             self._panel.btn_feature_save_position.Show(LICENCE_MILLING_ENABLED)
@@ -136,7 +139,9 @@ class CryoFeatureController(object):
         # Use current focus to set currently selected feature
         feature: CryoFeature = self._tab_data_model.main.currentFeature.value
         if feature:
-            feature.fm_focus_position.value = self._main_data_model.focus.position.value
+            current_posture = self.pm.get_current_posture()
+            feature.fm_focus_position.value = {**feature.fm_focus_position.value,
+                                               current_posture: self._main_data_model.focus.position.value}
 
     def _on_btn_go_to_feature(self, _):
         """
@@ -168,14 +173,14 @@ class CryoFeatureController(object):
         stage_position = get_feature_position_at_posture(pm=self.pm, feature=feature, posture=current_posture)
         # Older projects may contain posture metadata that is not a movable stage axis.
         stage_position = {axis: value for axis, value in stage_position.items() if axis in self.pm.stage.axes}
-        fm_focus_position = feature.fm_focus_position.value
+        fm_focus_position = feature.get_fm_focus_position(current_posture, self._main_data_model.focus)
 
         # move to feature position
         logging.info(f"Moving to position: {stage_position}, focus: {fm_focus_position}, posture: {current_posture}")
         self.pm.stage.moveAbs(stage_position)
 
-        # if fm imaging, move focus too
-        if current_posture == Posture.FM_IMAGING:
+        # if fm mode, move focus too
+        if fm_focus_position and current_posture in FM_POSTURES:
             self._main_data_model.focus.moveAbs(fm_focus_position)
 
         return
@@ -422,36 +427,45 @@ class CryoFeatureController(object):
                                                                        ctrl_2_va=self._on_cmb_feature_status_change,
                                                                        va_2_ctrl=self._on_feature_status)
 
-        correlation_data = self._tab_data_model.main.currentFeature.value.correlation_data
+        current_feature = self._tab_data_model.main.currentFeature.value
+        correlation_data = current_feature.correlation_data
+        invalid_focus = False
         # Check if the correlation data is already present in the current feature
         # If present, load the streams and targets accordingly,
         # otherwise, initialize the correlation data
         if correlation_data:
             self.correlation_target = correlation_data
-
+            # The FM targets are expressed in the posture at which the correlated FM data was acquired, which is
+            # independent of the current posture of the microscope.
+            fm_posture = self.correlation_target.fm_posture
             # Load the target
             targets = []
             if self.correlation_target.fm_fiducials:
                 targets.append(self.correlation_target.fm_fiducials)
-            stage_pos = feature.get_posture_position(Posture.FM_IMAGING)
-            feature_sample_stage = self.pm.to_sample_stage_from_stage_position(stage_pos, posture=Posture.FM_IMAGING)
-            feature_focus = feature.fm_focus_position.value
+            stage_pos = get_feature_position_at_posture(self.pm, feature, fm_posture)
+            feature_sample_stage = self.pm.to_sample_stage_from_stage_position(stage_pos, posture=fm_posture)
+            feature_focus = feature.get_fm_focus_position(fm_posture, self._main_data_model.focus)
 
-            poi = Target(x=feature_sample_stage["x"], y=feature_sample_stage["y"],
-                         z=feature_focus["z"], name="POI-1", type=TargetType.PointOfInterest,
-                         index=1, fm_focus_position=feature_focus["z"], superz_focused=feature.superz_focused)
-            targets.append([poi])
-            if self.correlation_target.fib_fiducials:
-                targets.append(self.correlation_target.fib_fiducials)
-            if self.correlation_target.fib_surface_fiducial:
-                targets.append([self.correlation_target.fib_surface_fiducial])
+            if feature_focus:
+                poi = Target(x=feature_sample_stage["x"], y=feature_sample_stage["y"],
+                             z=feature_focus["z"], name="POI-1", type=TargetType.PointOfInterest,
+                             index=1, fm_focus_position=feature_focus["z"], superz_focused=feature.superz_focused)
+                targets.append([poi])
+                if self.correlation_target.fib_fiducials:
+                    targets.append(self.correlation_target.fib_fiducials)
+                if self.correlation_target.fib_surface_fiducial:
+                    targets.append([self.correlation_target.fib_surface_fiducial])
 
-            # flatten the list of lists
-            targets = list(
-                itertools.chain.from_iterable([x] if not isinstance(x, list) else x for x in targets))
-            self._tab_data_model.main.targets.value = targets
-            self._tab_data_model.main.currentTarget.value = targets[0] if targets else None
-        else:
+                # flatten the list of lists
+                targets = list(
+                    itertools.chain.from_iterable([x] if not isinstance(x, list) else x for x in targets))
+                self._tab_data_model.main.targets.value = targets
+                self._tab_data_model.main.currentTarget.value = targets[0] if targets else None
+            else:
+                invalid_focus = True
+                logging.warning(f"Invalid focus data in correlation data for feature {current_feature.name.value}")
+
+        if not correlation_data or invalid_focus:
             self._tab_data_model.main.currentFeature.value.correlation_data = FIBFMCorrelationData()
             self._tab_data_model.main.currentTarget.value = None
             self._tab_data_model.main.targets.value = []
@@ -465,10 +479,26 @@ class CryoFeatureController(object):
                                                                     ctrl_2_va=self._on_ctrl_feature_z_change,
                                                                     va_2_ctrl=self._on_feature_focus_pos)
 
-    def _on_feature_focus_pos(self, fm_focus_position: dict):
-        # Set the feature Z ctrl with the focus position
-        self._panel.ctrl_feature_z.SetValue(fm_focus_position["z"])
+    def _on_feature_focus_pos(self, fm_focus_position: Dict[Posture, Dict[str, float]]) -> None:
+        """
+        Called when the focus positions of the current feature change
+        :param fm_focus_position: the focus position for each posture
+        """
+        self._update_ctrl_feature_z()
         save_project(self._tab_data_model.main)
+
+    @call_in_wx_main
+    def _update_ctrl_feature_z(self, _=None) -> None:
+        """
+        Set the feature Z ctrl with the focus position of the current feature at the current posture.
+        It is also used as a callback when the posture changes, as the feature Z is specific to each posture.
+        """
+        feature = self._tab_data_model.main.currentFeature.value
+        if feature is None:
+            return
+        focus = feature.get_fm_focus_position(self.pm.get_current_posture(), self._main_data_model.focus)
+        if focus is not None:
+            self._panel.ctrl_feature_z.SetValue(focus["z"])
 
     def _on_feature_name(self, _):
         # Force an update of the list of features
@@ -514,11 +544,16 @@ class CryoFeatureController(object):
     def _on_ctrl_feature_z_change(self):
         """
         Get the current feature Z ctrl value to set feature focus position
-        :return: (dict) feature focus position
+        :return: (dict) feature focus position for each posture
         """
         # HACK: sometimes the event is first received by this handler and later
         # by the UnitFloatCtrl. So the value is not yet computed => Force it, just in case.
         self._panel.ctrl_feature_z.on_text_enter(None)
         zpos = self._panel.ctrl_feature_z.GetValue()
 
-        return {"z": zpos}
+        feature = self._tab_data_model.main.currentFeature.value
+        current_posture = self.pm.get_current_posture()
+        if current_posture in FM_POSTURES:
+            return {**feature.fm_focus_position.value, current_posture: {"z": zpos}}
+        else:
+            return feature.fm_focus_position.value

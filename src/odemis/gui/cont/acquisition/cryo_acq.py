@@ -44,6 +44,7 @@ from odemis.acq.feature import (
     _create_fibsem_filename,
     acquire_at_features,
     add_feature_info_to_filename,
+    get_feature_position_at_posture,
 )
 from odemis.acq.move import Posture
 from odemis.acq.stream import (
@@ -881,25 +882,32 @@ class CryoAcquiController(object):
     def _on_close_dialog(self, z_stack):
         if z_stack:
             self.correlation_dialog_controller.open_correlation_dialog()
+            # The correlation was done on FM data acquired at either FIB_VIEW_FM or FM_IMAGING
+            cor_controller = self.correlation_dialog_controller.cor_dialog.correlation_points_controller
+            fm_posture = Posture.FIB_VIEW_FM if cor_controller.at_fib_view_fm.value else Posture.FM_IMAGING
 
             # redraw milling position
             fibsem_tab = self._tab_data.main.getTabByName(TabName.METEOR_FIBSEM)
             feature = self._tab_data.main.currentFeature.value
             if feature:
                 correlation_dict = feature.correlation_data
+                if correlation_dict:
+                    correlation_dict.fm_posture = fm_posture
+                    save_project(self._tab_data.main)
                 if correlation_dict and correlation_dict.fib_projected_pois:
                     if correlation_dict.fm_pois:
                         # Update feature position according to POI in FM
                         pm = self._tab_data.main.posture_manager
-                        feature_stage_bare = feature.get_posture_position(Posture.FM_IMAGING)
+                        feature_stage_bare = get_feature_position_at_posture(pm, feature, fm_posture)
                         poi = correlation_dict.fm_pois[0]
                         poi_coords = poi.coordinates.value
-                        sample_pos = pm.to_sample_stage_from_stage_position(feature_stage_bare, posture=Posture.FM_IMAGING)
+                        sample_pos = pm.to_sample_stage_from_stage_position(feature_stage_bare, posture=fm_posture)
                         new_feature_stage_bare = pm.from_sample_stage_to_stage_position({"x":poi_coords[0],
                                                                                     "y":poi_coords[1],
-                                                                                    "z":sample_pos["z"]}, posture=Posture.FM_IMAGING)
-                        feature.posture_positions[Posture.FM_IMAGING.value].update(new_feature_stage_bare)
-                        feature.fm_focus_position.value = {"z": poi_coords[2]}
+                                                                                    "z":sample_pos["z"]}, posture=fm_posture)
+                        feature.posture_positions[fm_posture.value].update(new_feature_stage_bare)
+                        feature.fm_focus_position.value = {**feature.fm_focus_position.value,
+                                                           fm_posture: {"z": poi_coords[2]}}
                     # Update the shared feature/pattern anchor around the projected POI.
                     # The saved milling stage position remains the reference-image center.
                     target = correlation_dict.fib_projected_pois[0]
