@@ -9,6 +9,28 @@
 #  patterns: List of patterns (and parameters) to mill
 # spot_size_correction is the total measured excess in the milled opening size.
 # It must be nonnegative and is subtracted once from each dimension sent to fibsemOS.
+'Waffle Trench':
+  name: 'Waffle Trench'
+  color: '#3D7CFF'
+  selected: false
+  milling:
+    current: 1.0e-9
+    voltage: 30000.0
+    field_of_view: 8e-05
+    mode: 'Serial'
+    channel: 'ion'
+  patterns:
+    - name: 'Waffle Trench'
+      top_width: 22.0e-06
+      top_height: 37.0e-06
+      bottom_width: 20.0e-06
+      bottom_height: 17.0e-06
+      depth: 1.0e-06
+      spacing: 3.0e-06
+      spot_size_correction: 0.0
+      center_x: 0
+      center_y: 0
+      pattern: 'waffle_trench'
 'Ruler':
   name: 'Ruler'
   color: '#8A4FFF'

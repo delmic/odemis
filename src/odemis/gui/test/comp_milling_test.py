@@ -120,6 +120,11 @@ class MillingTaskPanelTestCase(test.GuiTestCase):
         event.SetEventObject(mirror)
         mirror.GetEventHandler().ProcessEvent(event)
         self.assertTrue(self.tasks["Notch"].patterns[0].mirrored.value)
+        waffle_panel = controls["Waffle Trench"]["panel"]
+        self.assertEqual(
+            set(waffle_panel.pattern_parameters),
+            {"top_width", "top_height", "bottom_width", "bottom_height",
+             "depth", "spacing", "spot_size_correction"})
         for name in ("Microexpansion", "Rough Milling 01", "Polishing 01"):
             panel = controls[name]["panel"]
             self.assertNotIn("num_graduations", panel.ctrl_dict)

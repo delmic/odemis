@@ -54,7 +54,7 @@ class TestAssociatedMillingTasks(unittest.TestCase):
     """Test milling task workflow association."""
 
     def test_optional_patterns_in_rough_milling(self) -> None:
-        """Associate optional ruler and notch patterns only with rough milling."""
+        """Associate optional rectangle patterns only with rough milling."""
         tasks = load_milling_tasks(DEFAULT_MILLING_TASKS_PATH)
         ruler = tasks["Ruler"]
         self.assertNotIn(ruler, get_associated_tasks(MillingWorkflowTask.RoughMilling, tasks))
@@ -71,6 +71,13 @@ class TestAssociatedMillingTasks(unittest.TestCase):
         notch.selected = True
         self.assertIn(notch, get_associated_tasks(MillingWorkflowTask.RoughMilling, tasks))
         self.assertNotIn(notch, get_associated_tasks(MillingWorkflowTask.Polishing, tasks))
+
+        waffle_trench = tasks["Waffle Trench"]
+        waffle_trench.selected = True
+        self.assertIn(waffle_trench,
+                      get_associated_tasks(MillingWorkflowTask.RoughMilling, tasks))
+        self.assertNotIn(waffle_trench,
+                         get_associated_tasks(MillingWorkflowTask.Polishing, tasks))
 
 
 # NOTE: Require xt simulator to be running

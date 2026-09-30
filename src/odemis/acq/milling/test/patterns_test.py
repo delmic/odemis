@@ -27,6 +27,7 @@ from odemis.acq.milling.patterns import (
     TrenchPatternParameters,
     MicroexpansionPatternParameters,
     RulerPatternParameters,
+    WaffleTrenchPatternParameters,
 )
 
 logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)-15s: %(message)s")
@@ -470,6 +471,30 @@ class NotchPatternParametersTestCase(unittest.TestCase):
                 gap=1.1e-6,
                 thickness=0.2e-6,
             )
+
+
+class WaffleTrenchPatternParametersTestCase(unittest.TestCase):
+    """Test asymmetric waffle trench geometry and serialization."""
+
+    def test_geometry_and_serialization(self) -> None:
+        """Generate two independently sized rectangles around the opening."""
+        pattern = WaffleTrenchPatternParameters(
+            top_width=22e-6, top_height=37e-6,
+            bottom_width=20e-6, bottom_height=17e-6,
+            depth=1e-6, spacing=3e-6, center=(1e-6, -2e-6))
+        top, bottom = pattern.generate()
+
+        self.assertEqual((top.width.value, top.height.value), (22e-6, 37e-6))
+        self.assertEqual((bottom.width.value, bottom.height.value), (20e-6, 17e-6))
+        self.assertAlmostEqual(
+            top.center.value[1] - top.height.value / 2
+            - (bottom.center.value[1] + bottom.height.value / 2),
+            3e-6)
+        self.assertEqual(top.scan_direction.value, "TopToBottom")
+        self.assertEqual(bottom.scan_direction.value, "BottomToTop")
+        self.assertEqual(
+            WaffleTrenchPatternParameters.from_dict(pattern.to_dict()).to_dict(),
+            pattern.to_dict())
 
 
 if __name__ == '__main__':
