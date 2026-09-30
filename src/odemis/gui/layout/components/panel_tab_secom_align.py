@@ -30,7 +30,7 @@ from odemis.gui.comp.buttons import (
     ImageTextButton,
     ImageTextToggleButton,
 )
-from odemis.gui.comp.foldpanelbar import FoldPanelBar, FoldPanelItem
+from odemis.gui.comp.foldpanelbar import FoldPanelBar
 from odemis.gui.comp.slider import UnitFloatSlider
 from odemis.gui.comp.stream_bar import StreamBar
 from odemis.gui.comp.viewport import LiveViewport
@@ -537,11 +537,11 @@ class PnlTabSecomAlign(wx.Panel):
 
         :param fold_bar: Parent fold-panel bar.
         """
-        optical_item = self._fold_item(fold_bar, LABEL_OPTICAL_SETTINGS)
+        optical_item = fold_bar.create_and_add_item(LABEL_OPTICAL_SETTINGS)
         self.pnl_opt_streams = self._stream_bar(optical_item)
         optical_item.add_item(self.pnl_opt_streams)
 
-        sem_item = self._fold_item(fold_bar, LABEL_SEM_SETTINGS)
+        sem_item = fold_bar.create_and_add_item(LABEL_SEM_SETTINGS)
         self.pnl_sem_streams = self._stream_bar(sem_item)
         sem_item.add_item(self.pnl_sem_streams)
 
@@ -633,23 +633,6 @@ class PnlTabSecomAlign(wx.Panel):
         stream_bar.SetForegroundColour(self._theme.text_muted)
         stream_bar.SetBackgroundColour(self._theme.background)
         return stream_bar
-
-    def _fold_item(
-        self,
-        fold_bar: FoldPanelBar,
-        label: str,
-    ) -> FoldPanelItem:
-        """Create and register a styled fold-panel item.
-
-        :param fold_bar: Parent fold-panel bar.
-        :param label: Caption label.
-        :returns: Registered fold-panel item.
-        """
-        item = FoldPanelItem(fold_bar, label=label)
-        item.SetForegroundColour(self._theme.button_text)
-        item.SetBackgroundColour(self._theme.section_header)
-        fold_bar.add_item(item)
-        return item
 
     def _dark_panel(self, parent: wx.Window) -> wx.Panel:
         """Create a panel with the alignment column colours.

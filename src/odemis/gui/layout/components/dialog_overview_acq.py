@@ -21,7 +21,7 @@ from typing import Any, Optional
 import wx
 
 import odemis.gui.layout as layout
-from odemis.gui.comp.foldpanelbar import FoldPanelBar, FoldPanelItem
+from odemis.gui.comp.foldpanelbar import FoldPanelBar
 from odemis.gui.comp.slider import UnitIntegerSlider
 from odemis.gui.comp.stream_bar import StreamBar
 from odemis.gui.comp.text import UnitFloatCtrl, UnitIntegerCtrl
@@ -123,11 +123,9 @@ class OverviewAcqDialogBase(wx.Dialog):
             fold_bar.SetBackgroundColour(self._theme.background)
             scroll_sizer.Add(fold_bar, flag=wx.EXPAND)
 
-            self.fp_settings_secom_optical = self._fold_item(
-                fold_bar, LABEL_OPTICAL_SETTINGS
-            )
+            self.fp_settings_secom_optical = fold_bar.create_and_add_item(LABEL_OPTICAL_SETTINGS)
 
-            streams_item = self._fold_item(fold_bar, LABEL_STREAMS)
+            streams_item = fold_bar.create_and_add_item(LABEL_STREAMS)
             self.pnl_secom_streams = self._stream_bar(
                 streams_item, size=(300, -1)
             )
@@ -422,19 +420,6 @@ class OverviewAcqDialogBase(wx.Dialog):
             )
         panel.SetSizer(sizer)
         return panel
-
-    def _fold_item(self, fold_bar: FoldPanelBar, label: str) -> FoldPanelItem:
-        """Create and register a styled fold-panel item.
-
-        :param fold_bar: Parent fold-panel bar.
-        :param label: Caption label.
-        :returns: Registered fold-panel item.
-        """
-        item = FoldPanelItem(fold_bar, label=label)
-        item.SetForegroundColour(self._theme.button_text)
-        item.SetBackgroundColour(self._theme.section_header)
-        fold_bar.add_item(item)
-        return item
 
     def _stream_bar(self, parent: wx.Window, size: Any = wx.DefaultSize) -> StreamBar:
         """Create a styled stream bar without an add-stream button.

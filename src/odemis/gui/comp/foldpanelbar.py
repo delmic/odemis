@@ -19,13 +19,14 @@
     You should have received a copy of the GNU General Public License along with
     Odemis. If not, see http://www.gnu.org/licenses/.
 """
+from __future__ import annotations
 import os
 
 from odemis.gui import img
 from odemis.gui.util.conversion import change_brightness, wxcol_to_frgb, \
     frgb_to_wxcol
 import wx
-from odemis.gui.layout import theme
+from odemis.gui import layout
 
 
 CAPTION_BAR_SIZE = (-1, 40)
@@ -117,8 +118,27 @@ class FoldPanelBar(wx.Panel):
                 self.Parent.FitInside()
                 return
 
-    def create_and_add_item(self, label, collapsed):
-        item = FoldPanelItem(self, label=label, collapsed=collapsed)
+    def create_and_add_item(self,
+                            label: str,
+                            text_colour: str = None,
+                            background_colour: str = None,
+                            nocaption: bool = False,
+                            ) -> FoldPanelItem:
+        """
+        Create a fold-panel item and add it to bottom of the bar.
+        :param label: Caption label.
+        :param text_colour: Foreground colour. Default is theme.button_text.
+        :param background_colour: Background colour. Default is theme.section_header.
+        :param nocaption: Whether the item omits its caption bar.
+        :returns: Registered fold-panel item.
+        """
+        if text_colour is None:
+            text_colour = layout.theme.button_text
+        if background_colour is None:
+            background_colour = layout.theme.section_header
+        item = FoldPanelItem(self, label=label, nocaption=nocaption)
+        item.SetForegroundColour(text_colour)
+        item.SetBackgroundColour(background_colour)
         self.add_item(item)
         return item
 
@@ -143,7 +163,7 @@ class FoldPanelItem(wx.Panel):
 
     def __init__(self, parent, id=-1, pos=(0, 0), size=wx.DefaultSize,
                  style=wx.TAB_TRAVERSAL | wx.NO_BORDER, label="",
-                 collapsed=False, nocaption=False):
+                 nocaption=False):
 
         wx.Panel.__init__(self, parent, id, pos, size, style)
         assert isinstance(parent, FoldPanelBar)
@@ -154,7 +174,7 @@ class FoldPanelItem(wx.Panel):
         self._caption_bar = None
 
         if not nocaption:
-            self._caption_bar = CaptionBar(self, label, collapsed)
+            self._caption_bar = CaptionBar(self, label, collapsed=False)
             main_sizer.Add(self._caption_bar, flag=wx.EXPAND | wx.BOTTOM, border=1)
 
         self._container = wx.Panel(self)
@@ -231,25 +251,6 @@ class FoldPanelItem(wx.Panel):
             child.Destroy()
         self.Refresh()
 
-    def children_to_sizer(self):
-        """ Move all the children into the main sizer
-
-        This method is used by the XRC XML handler that constructs
-        :py:class:`FoldPanelItem`
-        objects, so the can just add children in the XRCed program, without
-        worrying or knowing about the main (private) sizer of this class.
-
-        """
-        for child in self.GetChildren():
-            if (child not in (self._caption_bar, self._container) and
-                    not self._container_sizer.GetItem(child)):
-                self.add_item(child)
-
-        if self._caption_bar and self._caption_bar.is_collapsed():
-            self.collapse()
-
-        self._container_sizer.Layout()
-
 
 class CaptionBar(wx.Window):
     """
@@ -279,7 +280,7 @@ class CaptionBar(wx.Window):
         # FIXME: on wx4 with GTK2, the background is always redrawn anyway,
         # which causes flickering, especially as the default background colour is
         # white. As a workaround, we set a less white background.
-        self.SetBackgroundColour(theme.background)
+        self.SetBackgroundColour(layout.theme.background)
 
         self._collapsed = collapsed  # The current state of the CaptionBar
         self._caption = caption
