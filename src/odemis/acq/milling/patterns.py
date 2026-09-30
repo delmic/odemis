@@ -1,7 +1,7 @@
 """
-@author: Patrick Cleeve
+@author: Patrick Cleeve, Alexéy Ilyushkin
 
-Copyright © 2025 Delmic
+Copyright © 2025-2026 Patrick Cleeve, Alexéy Ilyushkin, Delmic
 
 This file is part of Odemis.
 
@@ -25,12 +25,14 @@ This module contains structures to define milling patterns.
 
 import math
 from abc import ABC, abstractmethod
-from typing import List
+from typing import List, Tuple
 
 from odemis import model
 
 class MillingPatternParameters(ABC):
     """Represents milling pattern parameters"""
+
+    FEATURE_CENTER_OFFSET = (0.0, 0.0)
 
     def __init__(self, name: str):
         self.name = model.StringVA(name)
@@ -46,6 +48,20 @@ class MillingPatternParameters(ABC):
 
     def __repr__(self):
         return f"{self.to_dict()}"
+
+    def get_center_at_feature(
+        self,
+        feature_center: Tuple[float, float],
+    ) -> Tuple[float, float]:
+        """Return this pattern's center when arranged around a feature.
+
+        :param feature_center: Feature position relative to the reference image.
+        :return: Pattern center including its pattern-specific layout offset.
+        """
+        return (
+            feature_center[0] + self.FEATURE_CENTER_OFFSET[0],
+            feature_center[1] + self.FEATURE_CENTER_OFFSET[1],
+        )
 
     @abstractmethod
     def generate(self) -> List['MillingPatternParameters']:

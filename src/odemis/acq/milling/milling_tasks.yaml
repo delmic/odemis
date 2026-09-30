@@ -4,12 +4,14 @@
 # Contains the configuration for the milling tasks in the format:
 # 
 # task_name:
+#  color: Overlay color in hexadecimal RGB format (optional)
 #  milling: Milling parameters
 #  patterns: List of patterns (and parameters) to mill
 # spot_size_correction is the total measured excess in the milled opening size.
 # It must be nonnegative and is subtracted once from each dimension sent to fibsemOS.
 'Microexpansion':
   name: 'Microexpansion'
+  color: '#FFA500'
   milling:
     current: 1.0e-9
     voltage: 30000.0
@@ -28,6 +30,7 @@
       pattern: 'microexpansion'
 'Rough Milling 01':
   name: 'Rough Milling 01'
+  color: '#FFFF00'
   milling:
     current: 1.0e-9
     voltage: 30000.0
@@ -46,6 +49,7 @@
       pattern: 'trench'
 'Rough Milling 02':
   name: 'Rough Milling 02'
+  color: '#00FFFF'
   milling:
     current: 0.2e-9
     voltage: 30000.0
@@ -64,6 +68,7 @@
       pattern: 'trench'
 'Polishing 01':
   name: 'Polishing 01'
+  color: '#FF00FF'
   milling:
     current: 60.0e-12
     voltage: 30000.0
@@ -82,6 +87,7 @@
       pattern: 'trench'
 'Polishing 02':
   name: 'Polishing 02'
+  color: '#00FF00'
   milling:
     current: 60.0e-12
     voltage: 30000.0

@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """
-@author: Patrick Cleeve
+@author: Patrick Cleeve, Alexéy Ilyushkin
 
-Copyright © 2024, Delmic
+Copyright © 2024-2026 Patrick Cleeve, Alexéy Ilyushkin, Delmic
 
 This file is part of Odemis.
 
@@ -17,11 +17,20 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
-import os
 import logging
+import os
 import unittest
-from odemis.acq.milling.patterns import TrenchPatternParameters, MicroexpansionPatternParameters
-from odemis.acq.milling.tasks import MillingTaskSettings, MillingSettings, load_milling_tasks, save_milling_tasks
+
+from odemis.acq.milling.patterns import (
+    MicroexpansionPatternParameters,
+    TrenchPatternParameters,
+)
+from odemis.acq.milling.tasks import (
+    MillingSettings,
+    MillingTaskSettings,
+    load_milling_tasks,
+    save_milling_tasks,
+)
 
 logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)-15s: %(message)s")
 logging.getLogger().setLevel(logging.DEBUG)
@@ -73,14 +82,17 @@ class MillingTaskTestCase(unittest.TestCase):
     def test_milling_task_settings(self):
         milling_settings = MillingSettings(100e-9, 30e3, 400e-6, "Serial", "ion")
         trench_pattern = TrenchPatternParameters(1e-6, 1e-6, 100e-9, 1e-6, (0, 0))
+        color = "#123456"
 
-        milling_task_settings = MillingTaskSettings(milling_settings, [trench_pattern], "Milling Task")
+        milling_task_settings = MillingTaskSettings(
+            milling_settings, [trench_pattern], "Milling Task", color=color)
 
         self.assertEqual(milling_task_settings.milling.current.value, milling_settings.current.value)
         self.assertEqual(milling_task_settings.milling.voltage.value, milling_settings.voltage.value)
         self.assertEqual(milling_task_settings.milling.field_of_view.value, milling_settings.field_of_view.value)
         self.assertEqual(milling_task_settings.milling.mode.value, milling_settings.mode.value)
         self.assertEqual(milling_task_settings.milling.channel.value, milling_settings.channel.value)
+        self.assertEqual(milling_task_settings.color, color)
         self.assertEqual(milling_task_settings.patterns[0].width.value, trench_pattern.width.value)
         self.assertEqual(milling_task_settings.patterns[0].height.value, trench_pattern.height.value)
         self.assertEqual(milling_task_settings.patterns[0].depth.value, trench_pattern.depth.value)
@@ -90,6 +102,7 @@ class MillingTaskTestCase(unittest.TestCase):
         dict_data = milling_task_settings.to_dict()
         self.assertEqual(dict_data["name"], "Milling Task")
         self.assertEqual(dict_data["selected"], True)
+        self.assertEqual(dict_data["color"], color)
         self.assertEqual(dict_data["milling"], milling_settings.to_dict())
         self.assertEqual(dict_data["patterns"][0], trench_pattern.to_dict())
 
@@ -99,6 +112,7 @@ class MillingTaskTestCase(unittest.TestCase):
         self.assertEqual(milling_task_settings_from_dict.milling.field_of_view.value, milling_settings.field_of_view.value)
         self.assertEqual(milling_task_settings_from_dict.milling.mode.value, milling_settings.mode.value)
         self.assertEqual(milling_task_settings_from_dict.milling.channel.value, milling_settings.channel.value)
+        self.assertEqual(milling_task_settings_from_dict.color, color)
         self.assertEqual(milling_task_settings_from_dict.patterns[0].width.value, trench_pattern.width.value)
         self.assertEqual(milling_task_settings_from_dict.patterns[0].height.value, trench_pattern.height.value)
         self.assertEqual(milling_task_settings_from_dict.patterns[0].depth.value, trench_pattern.depth.value)
@@ -108,7 +122,8 @@ class MillingTaskTestCase(unittest.TestCase):
     def test_save_load_task_settings(self):
         milling_settings = MillingSettings(100e-9, 30e3, 400e-6, "Serial", "ion")
         trench_pattern = TrenchPatternParameters(10e-6, 3e-6, 100e-9, 2e-6, (0, 0))
-        trench_task_settings = MillingTaskSettings(milling_settings, [trench_pattern], "Trench")
+        trench_task_settings = MillingTaskSettings(
+            milling_settings, [trench_pattern], "Trench", color="#654321")
 
         milling_settings = MillingSettings(100e-9, 30e3, 400e-6, "Serial", "ion")
         microexpansion_pattern = MicroexpansionPatternParameters(1e-6, 10e-6, 100e-9, 10e-6, (0, 0))
@@ -128,6 +143,7 @@ class MillingTaskTestCase(unittest.TestCase):
         self.assertEqual(loaded_tasks["Trench"].milling.field_of_view.value, trench_task_settings.milling.field_of_view.value)
         self.assertEqual(loaded_tasks["Trench"].milling.mode.value, trench_task_settings.milling.mode.value)
         self.assertEqual(loaded_tasks["Trench"].milling.channel.value, trench_task_settings.milling.channel.value)
+        self.assertEqual(loaded_tasks["Trench"].color, trench_task_settings.color)
         self.assertEqual(loaded_tasks["Trench"].patterns[0].width.value, trench_task_settings.patterns[0].width.value)
         self.assertEqual(loaded_tasks["Trench"].patterns[0].height.value, trench_task_settings.patterns[0].height.value)
         self.assertEqual(loaded_tasks["Trench"].patterns[0].depth.value, trench_task_settings.patterns[0].depth.value)

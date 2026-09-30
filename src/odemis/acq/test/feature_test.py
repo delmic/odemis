@@ -2,7 +2,9 @@
 """
 Created on Oct 2021
 
-Copyright © Delmic
+@author: Alexéy Ilyushkin
+
+Copyright © 2021-2026 Alexéy Ilyushkin, Delmic
 
 This file is part of Odemis.
 
@@ -86,7 +88,10 @@ class TestFeatureEncoderDecoder(unittest.TestCase):
         self.assertEqual(feature.milling_feature_offset.value, milling_feature_offset)
         for task in feature.milling_tasks.values():
             for pattern in task.patterns:
-                self.assertEqual(pattern.center.value, milling_feature_offset)
+                self.assertEqual(
+                    pattern.center.value,
+                    pattern.get_center_at_feature(milling_feature_offset),
+                )
         self.assertEqual(feature.status.value, FEATURE_READY_TO_MILL)
         self.assertEqual(set(feature.milling_tasks.keys()), set(milling_tasks.keys()))
 
