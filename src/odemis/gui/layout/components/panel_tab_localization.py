@@ -262,7 +262,7 @@ class PnlTabLocalization(wx.Panel):
 
             self.lbl_current_posture = wx.StaticText(panel, label="posture")
             self.lbl_current_posture.SetForegroundColour(
-                self._theme.text_disabled
+                self._theme.text_muted
             )
             sizer.Add(
                 self.lbl_current_posture,

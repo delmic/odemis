@@ -186,7 +186,7 @@ class TDCorrelationDialogBase(wx.Dialog):
             sizer.Add(self.bmp_fm_posture)
 
             self.lbl_fm_posture = wx.StaticText(parent, label="posture")
-            self.lbl_fm_posture.SetForegroundColour(self._theme.text_disabled)
+            self.lbl_fm_posture.SetForegroundColour(self._theme.text_muted)
             sizer.Add(self.lbl_fm_posture, flag=wx.ALIGN_CENTER_VERTICAL)
 
         return sizer

@@ -303,7 +303,7 @@ class OverviewAcqDialogBase(wx.Dialog):
         grid.Add(area_size_lbl, pos=(0, 0), flag=wx.LEFT, border=13)
 
         self.area_size_txt = wx.StaticText(parent, label="...")
-        self.area_size_txt.SetForegroundColour(self._theme.text_disabled)
+        self.area_size_txt.SetForegroundColour(self._theme.text_muted)
         set_font(self.area_size_txt, 9)
         grid.Add(self.area_size_txt, pos=(0, 1), flag=wx.LEFT, border=10)
         grid.AddGrowableCol(1)

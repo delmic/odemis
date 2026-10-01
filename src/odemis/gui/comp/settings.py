@@ -197,13 +197,13 @@ class SettingsPanel(wx.Panel):
                 value_ctrl = wx.TextCtrl(self, value=value,
                                          style=wx.BORDER_NONE | wx.TE_READONLY)
                 value_ctrl.MinSize = (-1, min(value_ctrl.BestSize[1], 16))  # Workaround BestSize bug on wxPython 4.2.1
-                value_ctrl.SetForegroundColour(theme.text_disabled)
+                value_ctrl.SetForegroundColour(theme.text_muted)
                 value_ctrl.SetBackgroundColour(theme.background)
                 self.gb_sizer.Add(value_ctrl, (self.num_rows, 1),
                                   flag=wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
             else:
                 value_ctrl = wx.StaticText(self, label=value)
-                value_ctrl.SetForegroundColour(theme.text_disabled)
+                value_ctrl.SetForegroundColour(theme.text_muted)
                 self.gb_sizer.Add(value_ctrl, (self.num_rows, 1),
                                   flag=wx.BOTTOM | wx.TOP, border=5)
         else:
@@ -233,7 +233,7 @@ class SettingsPanel(wx.Panel):
         value_ctrl.MinSize = (-1, min(value_ctrl.BestSize[1], 16))  # Workaround BestSize bug on wxPython 4.2.1
 
         if readonly:
-            value_ctrl.SetForegroundColour(theme.text_disabled)
+            value_ctrl.SetForegroundColour(theme.text_muted)
         else:
             value_ctrl.SetForegroundColour(theme.text_edit)
         value_ctrl.SetBackgroundColour(theme.background)
@@ -567,7 +567,7 @@ class SettingsPanel(wx.Panel):
         value_ctrl = wx.DirPickerCtrl(
             self, path=str(value or ""), pos=(0, 0), size=(-1, 16)
         )
-        value_ctrl.SetForegroundColour(theme.text_disabled)
+        value_ctrl.SetForegroundColour(theme.text_muted)
         value_ctrl.SetBackgroundColour(value_ctrl.Parent.BackgroundColour)
         self.gb_sizer.Add(
             value_ctrl, (self.num_rows, 1), flag=wx.EXPAND | wx.ALIGN_CENTER_VERTICAL

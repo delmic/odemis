@@ -1381,7 +1381,7 @@ class FastEMMultiBeamAcquiController(object):
             for idx, roa_window in enumerate(roas):
                 roa = roa_window[0]
                 window = roa_window[1]
-                window.status_text.SetForegroundColour(theme.text_disabled)
+                window.status_text.SetForegroundColour(theme.text_muted)
                 window.status_text.SetLabelText("Open")
                 window.Layout()
                 pre_calib = pre_calibrations.copy()
