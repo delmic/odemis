@@ -196,6 +196,7 @@ class FastEMMainTab(Tab):
         self.cursor_btn = self.tb.get_button(TOOL_CURSOR)
         # Subscriptions
         self.tab_data_model.main.is_acquiring.subscribe(self._on_is_acquiring)
+        self.tab_data_model.is_acquisition_paused.subscribe(self._on_is_acquiring)
         self.tab_data_model.main.current_sample.subscribe(self._on_current_sample)
         self.tab_data_model.main.overview_streams.subscribe(self._on_overview_streams)
         self.tab_data_model.visible_views.subscribe(self._on_visible_views, init=True)
@@ -410,7 +411,23 @@ class FastEMMainTab(Tab):
         is already ongoing or not.
         :param mode: (bool) whether the system is currently acquiring.
         """
-        self.panel.pnl_vp_grid.Enable(not mode)
+        enable = (
+            not self.tab_data_model.main.is_acquiring.value
+            or self.tab_data_model.is_acquisition_paused.value
+        )
+        self.panel.pnl_vp_grid.Enable(enable)
+        if self.tab_data_model.main.is_acquiring.value:
+            self.setup_tab.button.Enable(
+                self.tab_data_model.is_acquisition_paused.value
+            )
+            self.acquisition_tab.button.Enable(
+                self.tab_data_model.is_acquisition_paused.value
+            )
+        else:
+            # These buttons are temporarily enabled during a pause, so the
+            # generic TabController's saved state is not authoritative here.
+            self.setup_tab.button.Enable(True)
+            self.acquisition_tab.button.Enable(True)
 
     @classmethod
     def get_display_priority(cls, main_data):

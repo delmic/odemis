@@ -26,7 +26,7 @@ import math
 import os
 import threading
 import time
-from typing import Optional
+from typing import Callable, Optional
 from concurrent.futures import CancelledError
 
 import numpy
@@ -161,7 +161,8 @@ def estimate_acquisition_time(roa, pre_calibrations=None, acq_dwell_time: Option
 
 def acquire(roa, path, username, scanner, multibeam, descanner, detector, stage, scan_stage, ccd, beamshift, lens,
             se_detector, ebeam_focus, pre_calibrations=None, save_full_cells=False, settings_obs=None,
-            spot_grid_thresh=0.5, blank_beam=True, stop_acq_on_failure=True, acq_dwell_time: Optional[float] = None):
+            spot_grid_thresh=0.5, blank_beam=True, stop_acq_on_failure=True, acq_dwell_time: Optional[float] = None,
+            should_acquire: Optional[Callable[[], bool]] = None):
     """
     Start a megafield acquisition task for a given region of acquisition (ROA).
 
@@ -199,6 +200,7 @@ def acquire(roa, path, username, scanner, multibeam, descanner, detector, stage,
     :param stop_acq_on_failure: (bool) If true the acquisition will be stopped based on the raised exception,
         if false the acquisition will be skipped on failure.
     :param acq_dwell_time: (float or None) The acquisition dwell time.
+    :param should_acquire: Callable indicating whether the ROA is still selected for acquisition.
     :return: (ProgressiveFuture) Acquisition future object, which can be cancelled. The result of the future is
              a tuple that contains:
                 (model.DataArray): The acquisition data, which depends on the value of the detector.dataContent VA.
@@ -208,12 +210,13 @@ def acquire(roa, path, username, scanner, multibeam, descanner, detector, stage,
 
     est_dur = estimate_acquisition_time(roa, pre_calibrations, acq_dwell_time)
     f = model.ProgressiveFuture(remaining_time=est_dur)
+    f.can_pause = True
 
     # TODO: pass path through attribute on ROA instead of argument?
     # Create a task that acquires the megafield image.
     task = AcquisitionTask(scanner, multibeam, descanner, detector, stage, scan_stage, ccd, beamshift, lens,
                            se_detector, ebeam_focus, roa, path, username, pre_calibrations, save_full_cells,
-                           settings_obs, spot_grid_thresh, blank_beam, stop_acq_on_failure, f)
+                           settings_obs, spot_grid_thresh, blank_beam, stop_acq_on_failure, f, should_acquire)
 
     f.task_canceller = task.cancel  # lets the future know how to cancel the task.
 
@@ -232,7 +235,7 @@ class AcquisitionTask(object):
 
     def __init__(self, scanner, multibeam, descanner, detector, stage, scan_stage, ccd, beamshift, lens, se_detector,
                  ebeam_focus, roa, path, username, pre_calibrations, save_full_cells, settings_obs, spot_grid_thresh,
-                 blank_beam, stop_acq_on_failure, future):
+                 blank_beam, stop_acq_on_failure, future, should_acquire=None):
         """
         :param scanner: (xt_client.Scanner) Scanner component connecting to the XT adapter.
         :param multibeam: (technolution.EBeamScanner) The multibeam scanner component of the acquisition server module.
@@ -272,6 +275,7 @@ class AcquisitionTask(object):
                             (model.DataArray): The acquisition data, which depends on the value of the
                                                detector.dataContent VA.
                             (Exception or None): Exception raised during the acquisition or None.
+        :param should_acquire: Callable indicating whether this ROA is still selected for acquisition.
         """
         self._scanner = scanner
         self._multibeam = multibeam
@@ -290,6 +294,7 @@ class AcquisitionTask(object):
         self._path = path  # sub-directories on external storage
         self._username = username
         self._future = future
+        self._should_acquire = should_acquire or (lambda: True)
         self._pre_calibrations = pre_calibrations
         self._save_full_cells = save_full_cells
         self._pre_calibrations_future = None
@@ -358,6 +363,11 @@ class AcquisitionTask(object):
             Exception: If it failed before any single field images were acquired or if acquisition was cancelled.
         """
         exception = None
+        if not self._should_acquire():
+            exception = ROASkipped(f"Skipped deselected ROA {self._roa.shape.name.value}.")
+            logging.info("%s", exception)
+            return self.megafield, exception
+
         eff_field_size = (int((1 - self._roa.overlap) * self._multibeam.resolution.value[0]),
                           int((1 - self._roa.overlap) * self._multibeam.resolution.value[1]))
         self._detector.updateMetadata({model.MD_FIELD_SIZE: eff_field_size})
@@ -430,6 +440,10 @@ class AcquisitionTask(object):
             logging.debug("Acquisition was cancelled.")
             raise
 
+        except ROASkipped as ex:
+            logging.info("%s", ex)
+            exception = ex
+
         except Exception as ex:
             if self._stop_acq_on_failure:
                 # Check if any field images have already been acquired; if not => just raise the exception.
@@ -478,6 +492,9 @@ class AcquisitionTask(object):
         beam_shift_failed = False
         # Acquire all single field images, which are automatically offloaded to the external storage.
         for field_idx in self._roa.field_indices:
+            if not self._should_acquire():
+                raise ROASkipped(f"Skipped deselected ROA {self._roa.shape.name.value}.")
+
             # Reset the event that waits for the image being received (puts flag to false).
             self._data_received.clear()
             self.field_idx = field_idx
@@ -525,6 +542,25 @@ class AcquisitionTask(object):
             # Note: The acquisition of the current single field image (tile) is still finished though.
             if self._cancelled:
                 raise CancelledError()
+
+            # Pause between fields if requested. Blanks the beam while paused so the sample is not damaged.
+            if self._future.is_pause_requested:
+                logging.debug("Pausing ROA acquisition at field boundary.")
+                if not self._blank_beam:
+                    self._scanner.blanker.value = True  # blank the beam while paused
+                # Optical autofocus also acquires from the MPPC dataflow. Release
+                # this task's listener while paused so that calibration can use it.
+                dataflow.unsubscribe(self.image_received)
+                try:
+                    self._future.wait_if_paused()
+                finally:
+                    dataflow.subscribe(self.image_received)
+                if self._cancelled:
+                    raise CancelledError()
+                if not self._should_acquire():
+                    raise ROASkipped(f"Skipped deselected ROA {self._roa.shape.name.value}.")
+                if not self._blank_beam:
+                    self._scanner.blanker.value = False  # unblank the beam after resuming
 
         logging.debug("Successfully acquired all fields of ROA.")
 
@@ -1120,7 +1156,29 @@ class OverviewAcquisition(object):
         self._sub_future = stitching.acquireTiledArea([stream], stage, area, overlap, registrar=REGISTER_IDENTITY,
                                                       focusing_method=FocusingMethod.NONE, weaver=WEAVER_COLLAGE,
                                                       log_path=file_pattern, centered_acq=centered_acq)
+        self._sub_future.can_pause = True
         self._sub_future.add_update_callback(_pass_future_progress)
+
+        # Propagate pause/resume from the outer future to the sub-future.
+        # The sub-future's tile loop calls wait_if_paused(), so pausing it stops the
+        # stage from moving to the next tile. The outer future then signals its own
+        # _is_paused_event (via wait_if_paused()), which unblocks any caller of pause().
+        def _propagate_pause():
+            while not self._sub_future.done():
+                time.sleep(0.05)
+                if self._future.is_pause_requested and not self._sub_future.done():
+                    self._sub_future.pause()  # blocks until tile loop calls wait_if_paused()
+                    try:
+                        self._future.wait_if_paused()  # signals outer paused + blocks until resumed
+                    except CancelledError:
+                        # Outer future was cancelled while paused; resume the sub-future
+                        # so its own cancellation can propagate and complete cleanly.
+                        self._sub_future.resume()
+                        return
+                    if not self._sub_future.done():
+                        self._sub_future.resume()
+
+        threading.Thread(target=_propagate_pause, daemon=True).start()
 
         das = []
         try:

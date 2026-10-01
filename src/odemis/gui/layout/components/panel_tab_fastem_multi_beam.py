@@ -29,7 +29,7 @@ from odemis.gui.layout.constants.strings import (
     LABEL_NO_REGION_OF_ACQUISITION_SELECTED,
     LABEL_PROJECTS,
     LABEL_START,
-    LABEL_TOTAL_NUMBER,
+    LABEL_TOTAL_NUMBER, LABEL_PAUSE,
 )
 from odemis.gui.layout.constants.themes import Theme
 from odemis.gui.layout.util.fonts import set_font
@@ -292,6 +292,17 @@ class PnlTabFastemMultiBeam(wx.Panel):
             )
             self.btn_cancel.Hide()
             sizer.Add(self.btn_cancel, flag=wx.ALL, border=10)
+
+            self.btn_pause = create_text_button(
+                parent,
+                LABEL_PAUSE,
+                height=24,
+                text_colour=self._theme.button_text,
+                contrast_text_colour=self._theme.button_text_contrast,
+                face_colour="def",
+            )
+            self.btn_pause.Hide()
+            sizer.Add(self.btn_pause, flag=wx.ALL, border=10)
 
         return sizer
 

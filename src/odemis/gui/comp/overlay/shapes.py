@@ -185,6 +185,7 @@ class ShapesOverlay(WorldOverlay):
         shapes_va=None,
         shape_to_copy_va=None,
         shape_creation_allowed=True,
+        shape_editing_allowed=True,
     ):
         """
         :param cnvs: canvas for the overlay.
@@ -197,6 +198,7 @@ class ShapesOverlay(WorldOverlay):
         :param shape_to_copy_va: Possibility to pass a shared VA whose value is the shape to copy object.
         :param shape_creation_allowed: (bool) If True, new shapes can be created. If False, only existing
             shapes can be selected and edited.
+        :param shape_editing_allowed: If False, existing shapes can only be selected.
         """
         if not issubclass(shape_cls, EditableShape):
             raise ValueError("Not a subclass of EditableShape!")
@@ -222,6 +224,7 @@ class ShapesOverlay(WorldOverlay):
         self._redo_action = False
         self.is_ctrl_down = False
         self.shape_creation_allowed = shape_creation_allowed
+        self.shape_editing_allowed = shape_editing_allowed
         if tool:
             self.tool = tool
             if tool_va:
@@ -355,6 +358,13 @@ class ShapesOverlay(WorldOverlay):
         # Both canvas dragging and shape creation make use of left click and motion, therefore additional Ctrl
         # key check is used to aid both functionalities.
         self.is_ctrl_down = evt.ControlDown()
+        if not self.shape_editing_allowed:
+            self._selected_shape = self._get_shape(evt.Position)
+            if self._selected_shape:
+                self._selected_shape.selected.value = True
+            self._deselect_shapes()
+            self.cnvs.request_drawing_update()
+            return WorldOverlay.on_left_down(self, evt)
         if not self.is_ctrl_down:
             self._is_new_shape = False
             # If shape creation has not finished
@@ -382,6 +392,13 @@ class ShapesOverlay(WorldOverlay):
         """Delete, unselect or copy the selected shape."""
         if not self.active.value:
             return super().on_char(evt)
+
+        if not self.shape_editing_allowed:
+            if self._selected_shape and evt.GetKeyCode() == wx.WXK_ESCAPE:
+                self._selected_shape.selected.value = False
+                self._selected_shape = None
+                self.cnvs.request_drawing_update()
+            return
 
         if evt.GetKeyCode() == wx.WXK_CONTROL_Z:
             # NOTE There is no key code such as WXK_SHIFT_CONTROL_Z
@@ -431,6 +448,9 @@ class ShapesOverlay(WorldOverlay):
         if not self.active.value:
             return super().on_left_up(evt)
 
+        if not self.shape_editing_allowed:
+            return WorldOverlay.on_left_up(self, evt)
+
         # Use the ControlDown flag from on_left_down event
         # any shape creation starts on left down event and subsequently continues to other events
         # by using the flag from on_left_down event avoid a corner case where the Ctrl key might
@@ -453,6 +473,9 @@ class ShapesOverlay(WorldOverlay):
         if not self.active.value:
             return super().on_right_down(evt)
 
+        if not self.shape_editing_allowed:
+            return WorldOverlay.on_right_down(self, evt)
+
         if self._selected_shape:
             self._selected_shape.on_right_down(evt)
         else:
@@ -461,6 +484,9 @@ class ShapesOverlay(WorldOverlay):
     def on_right_up(self, evt):
         if not self.active.value:
             return super().on_right_up(evt)
+
+        if not self.shape_editing_allowed:
+            return WorldOverlay.on_right_up(self, evt)
 
         # Right up is used specifically to finish polygon creation
         if self._selected_shape and not self._selected_shape.is_created.value:
@@ -479,6 +505,9 @@ class ShapesOverlay(WorldOverlay):
     def on_motion(self, evt):
         if not self.active.value:
             return super().on_motion(evt)
+
+        if not self.shape_editing_allowed:
+            return WorldOverlay.on_motion(self, evt)
 
         # Use the ControlDown flag from on_left_down event
         # any shape creation starts on left down event and subsequently continues to other events

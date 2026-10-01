@@ -1161,6 +1161,10 @@ class FastEMMainTabGUIData(MicroscopyGUIData):
         self.active_project_tab = model.VAEnumerated(None, choices={None: ""})
         # Toggle between FastEMSingleBeamTab and FastEMMultiBeamTab
         self.active_acquisition_tab = model.VAEnumerated(None, choices={None: ""})
+        # Indicates that a FAST-EM acquisition is paused and hardware interaction is safe.
+        self.is_acquisition_paused = model.BooleanVA(False)
+        # Indicates that optical autofocus is using the hardware during an acquisition pause.
+        self.is_optical_autofocus_running = model.BooleanVA(False)
         # Shared VA which stores all EditableShape in any canvas
         self.shapes = model.ListVA([])
         # Shared VA which the shape to copy object of a canvas
