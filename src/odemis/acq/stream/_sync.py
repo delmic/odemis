@@ -600,11 +600,11 @@ class MultipleDetectorStream(Stream, metaclass=ABCMeta):
         """
 
         logging.debug("Stream %d data received", n)
-        if self._acq_min_date > data.metadata.get(model.MD_ACQ_DATE, 0):
+        if self._acq_min_date > data.metadata.get(MD_ACQ_DATE, 0):
             # This is a sign that the e-beam might have been at the wrong (old)
             # position while Rep data is acquiring
             logging.warning("Dropping data (of stream %d) because it started %g s too early",
-                            n, self._acq_min_date - data.metadata.get(model.MD_ACQ_DATE, 0))
+                            n, self._acq_min_date - data.metadata.get(MD_ACQ_DATE, 0))
             # TODO: As the detector is synchronised, we need to restart it.
             # Or maybe not, as the typical reason it arrived early is that the
             # detector was already running, in which case they haven't
@@ -2458,11 +2458,11 @@ class ScannedFluoMDStream(MultipleDetectorStream):
     def _onData(self, n, df, data):
         logging.debug("Stream %d data received", n)
         s = self._streams[n]
-        if self._acq_min_date > data.metadata.get(model.MD_ACQ_DATE, 0):
+        if self._acq_min_date > data.metadata.get(MD_ACQ_DATE, 0):
             # This is a sign that the e-beam might have been at the wrong (old)
             # position while Rep data is acquiring
             logging.warning("Dropping data (of stream %d) because it seems it started %g s too early",
-                            n, self._acq_min_date - data.metadata.get(model.MD_ACQ_DATE, 0))
+                            n, self._acq_min_date - data.metadata.get(MD_ACQ_DATE, 0))
             if n == 0:
                 # As the first detector is synchronised, we need to restart it
                 # TODO: probably not necessary, as the typical reason it arrived
@@ -3469,8 +3469,12 @@ class SEMCCDAcquirerScanStage(SEMCCDAcquirerRectangle):
         self._sstage = self._mdstream._sstage
         if not self._sstage:
             raise ValueError("Cannot acquire with scan stage, as no stage was provided")
-        stage = model.getComponent(role="stage")  # Sample stage
-        self._scan_stage_is_stage = stage.name in self._sstage.affects.value
+        try:
+            stage = model.getComponent(role="stage")  # Sample stage
+            self._scan_stage_is_stage = stage.name in self._sstage.affects.value
+        except LookupError:
+            # No sample stage available, so scan stage must be independent
+            self._scan_stage_is_stage = False
         self._orig_spos = self._sstage.position.value
         self._prev_spos = self._orig_spos.copy()  # current position of the scan stage
 
