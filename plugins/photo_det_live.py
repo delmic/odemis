@@ -31,6 +31,23 @@ from odemis.gui.conf.data import get_local_vas
 from odemis.gui.main import OdemisGUIApp
 from odemis.gui.plugin import Plugin
 
+class TCPhotoDetectorLiveStream(MonochromatorSettingsStream):
+    def _prepare_opm(self) -> model.Future:
+        """
+        Prepare the optical path manager for the stream, by setting the optical path to the
+        time-correlator and the photo-detector.
+        Internally called before starting the stream
+        :return: A future representing the completion of the optical path setting
+        """
+        if self._opm is None:
+            return model.InstantaneousFuture()
+
+        # Force the optical path to time-correlator, as typically the detector is used
+        # to guess, but "photo-detector*" is not a known detector role for the OPM.
+        logging.debug("Setting optical path for %s", self.name.value)
+        f = self._opm.setPath("time-correlator", self.detector)
+        return f
+
 
 class PhotoDetectorLivePlugin(Plugin):
     name = "Photo-detector live display"
@@ -81,7 +98,7 @@ class PhotoDetectorLivePlugin(Plugin):
 
         axes = stctrl._filter_axes(axes)
 
-        photodet_stream = MonochromatorSettingsStream(
+        photodet_stream = TCPhotoDetectorLiveStream(
             name,
             detector,
             detector.data,
