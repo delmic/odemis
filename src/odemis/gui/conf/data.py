@@ -503,8 +503,8 @@ HW_SETTINGS_CONFIG = {
             }),
             # From the streak-delay (Note: because they are "hwvas", they are always shown at the top of the stream)
             ("triggerDelay", {
-                "control_type": odemis.gui.CONTROL_SLIDER,
-                "scale": "log",
+                "control_type": odemis.gui.CONTROL_FLT,
+                "key_step_min": 1e-9,
             }),
             ("phaseLock", {
                 "tooltip": "Activate phase-locking of the streak-unit to the blanker signal",

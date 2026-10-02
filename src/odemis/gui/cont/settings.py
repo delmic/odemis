@@ -991,8 +991,13 @@ class StreakCamAlignSettingsController(SettingsBarController):
         evt.Skip()
         cur_timeRange = self.streak_unit.timeRange.value
         requested_triggerDelay = self.ctrl_triggerDelay.GetValue()
-        # get a copy of  MD
-        trigger2delay_MD = self.streak_delay.getMetadata()[model.MD_TIME_RANGE_TO_DELAY]
+        # get a copy of MD
+        try:
+            trigger2delay_MD = self.streak_delay.getMetadata()[model.MD_TIME_RANGE_TO_DELAY]
+        except KeyError:
+            # No metadata -> this means we shouldn't have any connection
+            logging.info("No MD_TIME_RANGE_TO_DELAY metadata found, not connecting time range to delay.")
+            return
 
         # check if key already exists (prevent creating new key due to floating point issues)
         key = util.find_closest(cur_timeRange, trigger2delay_MD.keys())
