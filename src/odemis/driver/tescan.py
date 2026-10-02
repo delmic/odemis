@@ -105,6 +105,8 @@ FIB_NAME_MAP: Dict[str, str] = {
     "DtGetEnabled": "FibDtGetEnabled",
     "GetImageRot": "FibGetImageRot",
     "SetImageRot": "FibSetImageRot",
+    "GetImageShift": "FibGetImgShift",
+    "SetImageShift": "FibSetImgShift",
     # Not possible to control the FIB blanker
     "ScGetBlanker": None,
     "ScSetBlanker": None,
@@ -547,69 +549,80 @@ class SEM(model.HwComponent):
         return rdas
 
     def _single_acquisition(self, detector):
+        """
+        Acquire one image from the detector.
+
+        The scanner shift lock is held during the whole acquisition, so that the beam shift
+        (hardware and metadata) cannot change between the metadata snapshot and the scan start.
+
+        :param detector: the detector to acquire from
+        :returns: the acquired image
+        :raises CancelledError: if the acquisition was cancelled or halted
+        """
         channel = detector.channel
         scanner = detector._scanner
-        with self._acquisition_init_lock:
-            if self._acquisition_must_stop.is_set():
-                raise CancelledError("Acquisition cancelled during preparation")
+        with scanner._shift_lock:
+            with self._acquisition_init_lock:
+                if self._acquisition_must_stop.is_set():
+                    raise CancelledError("Acquisition cancelled during preparation")
 
-            pxs_pos = scanner.translation.value
-            scale = scanner.scale.value
-            res = (scanner.resolution.value[0],
-                   scanner.resolution.value[1])
+                pxs_pos = scanner.translation.value
+                scale = scanner.scale.value
+                res = (scanner.resolution.value[0],
+                       scanner.resolution.value[1])
 
-            metadata = dict(self._metadata)
-            metadata.update(scanner.getMetadata())
-            # If there is an image center set by the sample stage in the posture manager,
-            # make sure to update it with scanner translation.
-            phy_pos = metadata.get(model.MD_POS, (0, 0))
-            trans = scanner.pixelToPhy(pxs_pos)
-            updated_phy_pos = (phy_pos[0] + trans[0], phy_pos[1] + trans[1])
+                metadata = dict(self._metadata)
+                metadata.update(scanner.getMetadata())
+                # If there is an image center set by the sample stage in the posture manager,
+                # make sure to update it with scanner translation
+                phy_pos = metadata.get(model.MD_POS, (0, 0))
+                trans = scanner.pixelToPhy(pxs_pos)
+                updated_phy_pos = (phy_pos[0] + trans[0], phy_pos[1] + trans[1])
 
-            # update changed metadata
-            metadata[model.MD_POS] = updated_phy_pos
-            metadata[model.MD_ACQ_DATE] = time.time()
+                # update changed metadata
+                metadata[model.MD_POS] = updated_phy_pos
+                metadata[model.MD_ACQ_DATE] = time.time()
 
-            scaled_shape = (scanner._shape[0] / scale[0], scanner._shape[1] / scale[1])
-            scaled_trans = (pxs_pos[0] / scale[0], pxs_pos[1] / scale[1])
-            center = (scaled_shape[0] / 2, scaled_shape[1] / 2)
-            l = int(center[0] + scaled_trans[0] - (res[0] / 2))
-            t = int(center[1] + scaled_trans[1] - (res[1] / 2))
-            r = l + res[0] - 1
-            b = t + res[1] - 1
+                scaled_shape = (scanner._shape[0] / scale[0], scanner._shape[1] / scale[1])
+                scaled_trans = (pxs_pos[0] / scale[0], pxs_pos[1] / scale[1])
+                center = (scaled_shape[0] / 2, scaled_shape[1] / 2)
+                l = int(center[0] + scaled_trans[0] - (res[0] / 2))
+                t = int(center[1] + scaled_trans[1] - (res[1] / 2))
+                r = l + res[0] - 1
+                b = t + res[1] - 1
 
-            dt = scanner.dwellTime.value * 1e9
-            logging.debug(f"Acquiring {detector.name} image of {res} with dwell time {dt} ns")
+                dt = scanner.dwellTime.value * 1e9
+                logging.debug(f"Acquiring {detector.name} image of {res} with dwell time {dt} ns")
 
-        with self._acq_progress_lock:
-            try:
-                if scanner._device_handler.device_type == DeviceType.ION:
-                    scanner._update_beam_preset()
-                bpp = detector.bpp.value
-                scanner._device_handler.DtEnable(detector._channel, 1, bpp)
-                scanner._device_handler.ScScanXY(0, scaled_shape[0], scaled_shape[1],
-                                         l, t, r, b, 1, dt)
+            with self._acq_progress_lock:
+                try:
+                    if scanner._device_handler.device_type == DeviceType.ION:
+                        scanner._update_beam_preset()
+                    bpp = detector.bpp.value
+                    scanner._device_handler.DtEnable(detector._channel, 1, bpp)
+                    scanner._device_handler.ScScanXY(0, scaled_shape[0], scaled_shape[1],
+                                             l, t, r, b, 1, dt)
 
-                # Fetch the image (blocking operation), ndarray is returned.
-                # The Ex version of this method allows for acquiring multiple channels at once, and returns a list
-                # with each item the image data corresponding to a channel. Since we only acquire one channel, take only
-                # the first element (index 0).
-                img = scanner._device_handler.FetchImageEx([channel], res[0] * res[1])[0]
-                dtype = numpy.uint8 if bpp == 8 else "<u2"
-                img = numpy.frombuffer(img, dtype=dtype)
-                logging.debug(f"Received {detector.name} image of length {len(img)}")
-            except OSError:
-                raise CancelledError("Acquisition halted during scanning")
+                    # Fetch the image (blocking operation), ndarray is returned.
+                    # The Ex version of this method allows for acquiring multiple channels at once, and returns a list
+                    # with each item the image data corresponding to a channel. Since we only acquire one channel, take only
+                    # the first element (index 0).
+                    img = scanner._device_handler.FetchImageEx([channel], res[0] * res[1])[0]
+                    dtype = numpy.uint8 if bpp == 8 else "<u2"
+                    img = numpy.frombuffer(img, dtype=dtype)
+                    logging.debug(f"Received {detector.name} image of length {len(img)}")
+                except OSError:
+                    raise CancelledError("Acquisition halted during scanning")
 
-            # we must stop the scanning even after single scan
-            scanner._device_handler.ScStopScan()
-            self.pre_res = res
-            try:
-                img.shape = res[::-1]
-            except Exception as e:
-                logging.exception(f"Failed to update the image shape {e}")
+                # we must stop the scanning even after single scan
+                scanner._device_handler.ScStopScan()
+                self.pre_res = res
+                try:
+                    img.shape = res[::-1]
+                except Exception as e:
+                    logging.exception(f"Failed to update the image shape {e}")
 
-            return model.DataArray(img, metadata)
+                return model.DataArray(img, metadata)
 
     def terminate(self):
         """
@@ -718,6 +731,18 @@ class Scanner(model.Emitter):
         # TODO: compute a good depthOfField based on the current hfw
         # self.depthOfField = model.FloatContinuous(1e-6, range=(0, 1e9),
         #                                           unit="m", readonly=True)
+
+        # Protects the beam shift (hardware + metadata) against changes while an acquisition starts.
+        # Lock order (outermost first): _shift_lock, parent._acquisition_init_lock, parent._acq_progress_lock
+        self._shift_lock = threading.RLock()
+        shift_mm = self._device_handler.GetImageShift()
+        shift = tuple(v * 1e-3 for v in shift_mm)
+        self.shift = model.TupleContinuous(shift, ((-1e-3, -1e-3), (1e-3, 1e-3)), cls=(int, float), unit="m",
+                                           setter=self._setShift)
+        # The metadata is updated directly together with each hardware read (in _setShift() and
+        # _updateShift()), rather than via a VA subscriber: VA notifications are published outside
+        # of _shift_lock, so a late notification of an older shift could overwrite a newer one.
+        self.updateMetadata({model.MD_BEAM_SHIFT: shift})
 
         # (.resolution), .translation, .rotation, and .scaling are used to
         # define the conversion from coordinates to a region of interest.
@@ -955,6 +980,54 @@ class Scanner(model.Emitter):
                             name, value, rmin, rmax)
             rng = (min(rmin, value), max(rmax, value))
         return rng
+
+    def _setShift(self, value: Tuple[float, float]) -> Tuple[float, float]:
+        """
+        Set the absolute beam shift on the device.
+
+        If the requested value is outside of the hardware range, the Tescan
+        server silently clips it to the maximum limit (no exception is raised).
+        A warning is logged when the value actually set differs from the
+        request (clipping or limited resolution).
+
+        :param value: the x and y beam shift, in meters.
+        :return: the actual x and y beam shift read back from the device, in meters.
+        """
+        logging.debug("Set the absolute beam shift with value: %s m", value)
+
+        # Note: the beam shift is a FIB feature, but it is applied to all scanners (the SEM
+        # also exposes it, and the hardware call is the same).
+        with self._shift_lock:
+            with self.parent._acq_progress_lock:
+                self._device_handler.SetImageShift(value[0] * 1e3, value[1] * 1e3)
+                shift_mm = self._device_handler.GetImageShift()
+
+            actual = tuple(v * 1e-3 for v in shift_mm)
+            # Update the metadata in the same critical section as the hardware change
+            self.updateMetadata({model.MD_BEAM_SHIFT: actual})
+        if not all(math.isclose(a, r, abs_tol=1e-9) for a, r in zip(actual, value)):
+            logging.warning("Beam shift requested %s m but hardware set %s m "
+                            "(clipped to the hardware range or limited resolution)",
+                            value, actual)
+        return actual
+
+    def _updateShift(self) -> None:
+        """
+        Update the shift VigilantAttribute with the current value from the Tescan device.
+        Must not be called while holding _acquisition_init_lock or _acq_progress_lock, as the
+        lock order is always _shift_lock, then _acquisition_init_lock, then _acq_progress_lock.
+        """
+        with self._shift_lock:
+            prev_shift = self.shift.value
+            with self.parent._acq_progress_lock:
+                shift_mm = self._device_handler.GetImageShift()
+            logging.debug(f"Updating shift from Tescan device: {shift_mm}")
+            new_shift = tuple(v * 1e-3 for v in shift_mm)
+
+            self.updateMetadata({model.MD_BEAM_SHIFT: new_shift})
+            if prev_shift != new_shift:
+                self.shift._value = new_shift
+                self.shift.notify(new_shift)
 
     def _setHorizontalFOV(self, value):
         # The requested value can deviate from the actual value, for instance when requesting above the maximum.
@@ -1329,6 +1402,9 @@ class Scanner(model.Emitter):
                     if new_ext != self.external._value:
                         self.external._value = new_ext
                         self.external.notify(new_ext)
+
+            # Outside of the locks above, to respect the lock order (_shift_lock first)
+            self._updateShift()
         except TypeError:
             # A TypeError is caused by one of the getters returning a None, which is an indication that the API
             # is blocked. Most of the time momentarily, so handle it gracefully.
