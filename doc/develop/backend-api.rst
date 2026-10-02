@@ -661,3 +661,79 @@ For instance, for the cameras, the convention is binning -> resolution -> transl
 This means that assuming the user has a correct combination of values, without looking
 at the current values, it's always possible to set them by writing them in order:
 binning, resolution, translation.
+
+Component simulators
+====================
+
+Most of the components in Odemis can be simulated. This is useful for testing and development, when
+the hardware is not available. Whenever a manufacturer doesn't provide a simulator, the convention
+is that the driver should provide a simulator class. It should be accessed by passing a specific
+argument to the driver, for example by specifying the serial number as ``"fake"``.
+
+There are also some generic simulators which can be used to simulate a generic component of a specific type.
+The following sections describe the simulators available in Odemis.
+
+driver.simcam.Camera
+--------------------
+
+Generic camera simulator with optional advanced capabilities:
+
+  * **Image simulation:** Loads images from HDF5 / OME-TIFF files, incorporating noise and exposure time-dependent intensity.
+  * **Polarisation:** Supports polarisation mode according to ``MD_POL_MODE``.
+  * **Focus & optics:**
+
+    * **Blur:** Uses the "focus" dependency.
+    * **Ray-tracing:** Parabolic mirror ray-tracing simulation using the "mirror" dependency.
+    * **Slit image:** Uses grating offset from the "spectrograph" dependency.
+
+  * **Error injection:** Simulate ``.state`` ``HwError`` when the file ``/var/run/odemisd/simcam-hw.error`` exists.
+
+driver.simsem.SimSEM
+--------------------
+
+Generic SEM simulator with optional capabilities:
+
+  * **Sample drift:** Activated if ``drift_period`` is defined.
+  * **Blur:** Uses the "focus" child component.
+
+driver.simulated.GenericComponent
+---------------------------------
+
+Creates arbitrary VigilantAttributes and Axes as defined in the arguments (typically, in the microscope file).
+
+Below is a configuration example:
+
+.. code-block:: yaml
+
+       "BSED Interlock": {
+           "class": "simulated.GenericComponent",
+           "role": "bsd-interlock",
+           "init": {
+               "vas": {
+                   "interlockTriggered": {
+                       "value": false
+                   }
+               }
+           },
+           "affects": ["Mirror Actuators"]
+       }
+
+driver.simulated.Stage
+----------------------
+
+Can create an actuator with any number of axes with any range.
+
+Error Injection: Simulate a hardware error (``HwError``) at initialization by touching ``stage.fail``
+in the directory where the backend is started from.
+
+driver.simulated.Chamber
+------------------------
+
+Simulated SEM chamber (includes pressure axis).
+
+util.mock.SimulatedAxis
+-----------------------
+
+Not directly a component simulator. Instead this class simulates `one` actuator axis, very well.
+It simulates the position and speed, even during movement, and support stopping during a move.
+It can be used as a building block by actuator component simulators.
