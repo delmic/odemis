@@ -29,7 +29,8 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 import odemis.acq.test as acq_test
-from odemis.acq.feature import CryoFeature, feature_decoder
+from odemis.model import MD_FAV_POS_ACTIVE
+from odemis.acq.feature import CryoFeature, FIBFMCorrelationData, feature_decoder
 from odemis.acq.move import Posture
 from odemis.gui.cont.cryo_project import (
     load_project,
@@ -83,6 +84,11 @@ class TestCryoProject(unittest.TestCase):
         self.assertGreater(len(project_data["features"]), 0)
         self.assertIn("overviews", project_data)
         self.assertEqual(len(project_data["overviews"]), 0)
+        # The single legacy focus position is migrated to the FM imaging posture
+        legacy_features = read_project_file(self.legacy_project_json)["feature_list"]
+        for legacy_feature, feature_data in zip(legacy_features, project_data["features"]):
+            self.assertEqual(feature_data["fm_focus_position"],
+                             {Posture.FM_IMAGING.value: legacy_feature["fm_focus_position"]})
         main_data = MagicMock()
         main_data.tab.value.conf.pj_last_path = project_dir
         main_data.features.value = [feature_decoder(feature) for feature in project_data["features"]]
@@ -92,6 +98,18 @@ class TestCryoProject(unittest.TestCase):
         reloaded_project_data = read_project_file(project_dir / PROJECT_NAME)
         self.assertEqual(reloaded_project_data["features"], project_data["features"])
         self.assertEqual(reloaded_project_data["overviews"], project_data["overviews"])
+        for feature, legacy_feature in zip(main_data.features.value, legacy_features):
+            self.assertEqual(feature.fm_focus_position.value,
+                             {Posture.FM_IMAGING: legacy_feature["fm_focus_position"]})
+            self.assertEqual(feature.get_fm_focus_position(Posture.FM_IMAGING),
+                             legacy_feature["fm_focus_position"])
+            # No focus known for FIB-View FM
+            self.assertIsNone(feature.get_fm_focus_position(Posture.FIB_VIEW_FM))
+            focus = MagicMock()
+            focus.getMetadata.return_value = {MD_FAV_POS_ACTIVE: {"z": 0.5}}
+            self.assertEqual(feature.get_fm_focus_position(Posture.FIB_VIEW_FM, focus), {"z": 0.5})
+        for feature_data in reloaded_project_data["features"]:
+            self.assertEqual(list(feature_data["fm_focus_position"].keys()), [Posture.FM_IMAGING.value])
         posture_values = {p.value for p in Posture}
         for posture_key in reloaded_project_data["features"][0]["posture_positions"].keys():
             self.assertIn(posture_key, posture_values)
@@ -113,10 +131,16 @@ class TestCryoProject(unittest.TestCase):
         posture_values = {p.value for p in Posture}
         for posture_key in project_data["features"][0]["posture_positions"].keys():
             self.assertIn(posture_key, posture_values)
+        # The focus position is stored per posture
+        for feature_data in project_data["features"]:
+            self.assertEqual(list(feature_data["fm_focus_position"].keys()), [Posture.FM_IMAGING.value])
+            feature = feature_decoder(feature_data)
+            self.assertEqual(feature.fm_focus_position.value,
+                             {Posture.FM_IMAGING: feature_data["fm_focus_position"][Posture.FM_IMAGING.value]})
 
     def test_milling_feature_offset_roundtrip(self):
         """The feature/pattern anchor is persisted without changing legacy projects."""
-        feature = CryoFeature("Feature-1", {"x": 0, "y": 0, "z": 0}, {"z": 0})
+        feature = CryoFeature("Feature-1", {"x": 0, "y": 0, "z": 0}, {Posture.FM_IMAGING: {"z": 0}})
         feature.milling_feature_offset.value = (12e-6, -8e-6)
         main_data = MagicMock()
         main_data.tab.value.conf.pj_last_path = self.test_dir
@@ -127,6 +151,28 @@ class TestCryoProject(unittest.TestCase):
         feature_data = load_project(self.test_dir)["features"][0]
         self.assertEqual(feature_decoder(feature_data).milling_feature_offset.value,
                          feature.milling_feature_offset.value)
+
+    def test_correlation_fm_posture_roundtrip(self):
+        """The posture of the correlated FM data is persisted, and defaults to FM imaging for older projects."""
+        correlation_data = FIBFMCorrelationData()
+        self.assertEqual(correlation_data.fm_posture, Posture.FM_IMAGING)
+        correlation_data.fm_posture = Posture.FIB_VIEW_FM
+        feature = CryoFeature("Feature-1", {"x": 0, "y": 0, "z": 0}, {Posture.FM_IMAGING: {"z": 0}},
+                              correlation_data=correlation_data)
+        feature.correlation_data = correlation_data
+        main_data = MagicMock()
+        main_data.tab.value.conf.pj_last_path = self.test_dir
+        main_data.features.value = [feature]
+        main_data.overviews.value = []
+
+        save_project(main_data)
+        feature_data = load_project(self.test_dir)["features"][0]
+        self.assertEqual(feature_data["correlation_data"]["fm_posture"], Posture.FIB_VIEW_FM.value)
+        self.assertEqual(feature_decoder(feature_data).correlation_data.fm_posture, Posture.FIB_VIEW_FM)
+
+        # Older project: no posture stored
+        del feature_data["correlation_data"]["fm_posture"]
+        self.assertEqual(feature_decoder(feature_data).correlation_data.fm_posture, Posture.FM_IMAGING)
 
     def test_image_operations(self):
         """Tests that the image operations work properly."""
