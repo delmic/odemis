@@ -409,6 +409,7 @@ class PnlTabFibsem(wx.Panel):
                 flag=wx.ALIGN_CENTRE,
             )
 
+
         panel.SetSizer(sizer)
         item.add_item(panel)
 
@@ -808,6 +809,21 @@ class PnlTabFibsem(wx.Panel):
                 font_size=self._theme.font_size_prominent_button,
             )
             sizer.Add(self.btn_tdct)
+
+            self.btn_slm_alignment = create_text_button(
+                parent,
+                "SLM ALIGNMENT",
+                height=48,
+                text_colour=self._theme.button_text,
+                contrast_text_colour=self._theme.button_text_contrast,
+                font_size=self._theme.font_size_prominent_button,
+            )
+            self.btn_slm_alignment.Hide()
+            sizer.Add(
+                self.btn_slm_alignment,
+                flag=wx.LEFT,
+                border=self._theme.spacing_standard,
+            )
         return sizer
 
     def _build_acquired_section(self, fold_bar: FoldPanelBar) -> None:

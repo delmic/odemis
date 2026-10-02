@@ -19,7 +19,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
 import math
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Any
 
 
 def rect_intersect(ra: Tuple[float, float, float, float],
@@ -415,3 +415,20 @@ def project_point_on_line(
         x_projected = (point[0] + line_slope * (point[1] - line_intercept)) / (1 + line_slope ** 2)
         y_projected = line_slope * x_projected + line_intercept
     return (x_projected, y_projected)
+
+def rectangle_dimensions_from_points(points: List[Any]) -> Tuple[float, float]:
+    """Calculate rectangle width/height from ordered corner points.
+    The expected point order is p1->p2->p3->p4 around the rectangle.
+    :param points: List of x, y coordinates of the vertices
+    :return: width, height of the rectangle
+    """
+    if len(points) < 3:
+        raise ValueError(f"At least 3 points required, got {len(points)}")
+
+    x1, y1 = points[0]
+    x2, y2 = points[1]
+    x3, y3 = points[2]
+
+    width = math.hypot(x2 - x1, y2 - y1)
+    height = math.hypot(x3 - x2, y3 - y2)
+    return width, height

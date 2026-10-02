@@ -1152,6 +1152,158 @@ class AntiBacklashActuator(model.Actuator):
         return f
 
 
+class ForcedOrderActuator(model.Actuator):
+    """
+    This is a stage wrapper that takes a stage and ensures that, for each
+    "forced" axis, every move is executed either before or after the other
+    ("normal") axes are moved, depending on the direction of the move on
+    that axis. This is useful when several axes are mechanically linked
+    (for instance, exposed as a single axis via a ConvertStage) such that
+    the order in which the underlying axes are physically moved matters,
+    depending on the direction of the move (e.g. to avoid a collision, or
+    to always approach a position from the same side for repeatability).
+    """
+
+    def __init__(self, name, role, dependencies, backlash, **kwargs):
+        """
+        dependencies (dict str -> Actuator): dict containing one component,
+          the actuator to wrap.
+        backlash (dict str -> float): for each axis which must always be
+          moved either first or last, the direction (via the sign) for
+          which it must be moved first. Axes not present in this dict are
+          "normal" axes: they are moved together, in between the "first"
+          and "last" axes.
+        """
+        if len(dependencies) != 1:
+            raise ValueError("ForcedOrderActuator needs 1 dependency")
+
+        for a, v in backlash.items():
+            if not isinstance(a, str):
+                raise ValueError("Backlash key must be a string but got '%s'" % (a,))
+            if not isinstance(v, numbers.Real):
+                raise ValueError("Backlash value of %s must be a number but got '%s'" % (a, v))
+
+        self._dependency = list(dependencies.values())[0]
+        self._backlash = backlash
+        axes_def = {}
+        for an, ax in self._dependency.axes.items():
+            axes_def[an] = copy.deepcopy(ax)
+            axes_def[an].canUpdate = True
+
+        # look for axes in backlash not existing in the dep
+        missing = set(backlash.keys()) - set(axes_def.keys())
+        if missing:
+            raise ValueError("Dependency actuator doesn't have the axes %s" % (missing,))
+
+        model.Actuator.__init__(self, name, role, axes=axes_def,
+                                 dependencies=dependencies, **kwargs)
+
+        # will take care of executing axis moves asynchronously
+        self._executor = CancellableThreadPoolExecutor(max_workers=1)  # one task at a time
+
+        # Duplicate VAs which are just identical
+        self.position = self._dependency.position
+
+        if model.hasVA(self._dependency, "referenced"):
+            self.referenced = self._dependency.referenced
+        if model.hasVA(self._dependency, "speed"):
+            self.speed = self._dependency.speed
+
+    def terminate(self):
+        if self._executor:
+            self.stop()
+            self._executor.shutdown()
+            self._executor = None
+
+    def _doMoveRel(self, future, shift):
+        # separate the forced axes from the others
+        shift_forced = {an: s for an, s in shift.items() if an in self._backlash}
+        shift_normal = {an: s for an, s in shift.items() if an not in self._backlash}
+
+        # Separate the forced axes into first and last based on the direction of the move
+        shift_first = {an: s for an, s in shift_forced.items() if s * self._backlash[an] >= 0}
+        shift_last = {an: s for an, s in shift_forced.items() if s * self._backlash[an] < 0}
+
+        if shift_first:
+            logging.debug("ForcedOrderActuator: moving first %s", shift_first)
+            self._dependency.moveRelSync(shift_first)
+
+        if shift_normal:
+            logging.debug("ForcedOrderActuator: moving normal %s", shift_normal)
+            self._dependency.moveRelSync(shift_normal)
+
+        if shift_last:
+            logging.debug("ForcedOrderActuator: moving last %s", shift_last)
+            self._dependency.moveRelSync(shift_last)
+
+    def _doMoveAbs(self, future, pos):
+        # separate the forced axes from the others
+        pos_forced = {an: v for an, v in pos.items() if an in self._backlash}
+        pos_normal = {an: v for an, v in pos.items() if an not in self._backlash}
+
+        cur_pos = self._dependency.position.value
+        shift_forced = {an: v - cur_pos[an] for an, v in pos_forced.items()}
+        # Separate the forced axes into first and last based on the direction of the move
+        pos_first = {an: v for an, v in pos_forced.items() if shift_forced[an] * self._backlash[an] >= 0}
+        pos_last = {an: v for an, v in pos_forced.items() if shift_forced[an] * self._backlash[an] < 0}
+
+        if pos_first:
+            logging.debug("ForcedOrderActuator: positioning first %s", pos_first)
+            self._dependency.moveAbsSync(pos_first)
+
+        if pos_normal:
+            logging.debug("ForcedOrderActuator: positioning normal %s", pos_normal)
+            self._dependency.moveAbsSync(pos_normal)
+
+        if pos_last:
+            logging.debug("ForcedOrderActuator: positioning last %s", pos_last)
+            self._dependency.moveAbsSync(pos_last)
+
+    def _createFuture(self, axes, update):
+        """
+        Return (CancellableFuture): a future that can be used to manage a move
+        axes (set of str): the axes that are moved
+        update (bool): if it's an update move
+        """
+        f = CancellableFuture()  # TODO: make it cancellable too
+
+        f._update_axes = set()  # axes handled by the move, if update
+        if update:
+            # Check if all the axes support it
+            if all(self.axes[a].canUpdate for a in axes):
+                f._update_axes = axes
+            else:
+                logging.warning("Trying to do a update move on axes %s not supporting update", axes)
+
+        return f
+
+    @isasync
+    def moveRel(self, shift, update=False):
+        if not shift:
+            return model.InstantaneousFuture()
+        self._checkMoveRel(shift)
+
+        f = self._createFuture(set(shift.keys()), update)
+        return self._executor.submitf(f, self._doMoveRel, f, shift)
+
+    @isasync
+    def moveAbs(self, pos, update=False):
+        if not pos:
+            return model.InstantaneousFuture()
+        self._checkMoveAbs(pos)
+
+        f = self._createFuture(set(pos.keys()), update)
+        return self._executor.submitf(f, self._doMoveAbs, f, pos)
+
+    def stop(self, axes=None):
+        self._dependency.stop(axes=axes)
+
+    @isasync
+    def reference(self, axes):
+        f = self._dependency.reference(axes)
+        return f
+
+
 class LinearActuator(model.Actuator):
     """
     A generic actuator component which allows moving on a linear axis. It is actually a
