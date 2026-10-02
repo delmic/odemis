@@ -66,6 +66,10 @@ class FoldPanelBarTestCase(test.GuiTestCase):
 
         self.assertIsInstance(self.app.test_frame.scrwin, wx.ScrolledWindow)
         self.assertEqual(len(self.app.test_frame.scrwin.GetChildren()), 1)
+        self.assertGreater(
+            self.app.test_frame.scrwin.GetScrollRange(wx.VERTICAL),
+            self.app.test_frame.scrwin.GetScrollThumb(wx.VERTICAL),
+        )
 
         appfpb = self.app.test_frame.fpb
         self.assertIsInstance(appfpb, fpb.FoldPanelBar)
