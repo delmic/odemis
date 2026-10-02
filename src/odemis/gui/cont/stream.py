@@ -1279,9 +1279,11 @@ class StreamController(object):
             lbl_ctrl.LabelText = ""
             lbl_ctrl.SetToolTip(None)
             col_ctrl.SetToolTip("Centre wavelength colour")
+            lbl_ctrl.Show(False)
         else:
             wl_nm = int(round(wl * 1e9))
             lbl_ctrl.LabelText = "Peak at %d nm" % wl_nm
+            lbl_ctrl.Show(True)
             col_ctrl.SetToolTip("Peak wavelength colour")
 
             fit = fluo.estimate_fit_to_dye(wl, band)
@@ -1302,6 +1304,9 @@ class StreamController(object):
                 band = fluo.find_best_band_for_dye(wl, band)
             low, high = [int(round(b * 1e9)) for b in (band[0], band[-1])]
             lbl_ctrl.SetToolTip(tooltip % (low, high))
+
+        # Need to recompute the layout if the label is hidden/shown
+        lbl_ctrl.Parent.Layout()
 
     # Repetition visualisation on focus/hover methods
     # The global rule (in order):
