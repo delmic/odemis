@@ -4,7 +4,7 @@ Created on 4 Mar 2014
 
 @author: Kimon Tsitsikas
 
-Copyright © 2014-2016 Kimon Tsitsikas, Delmic
+Copyright © 2014-2026 Kimon Tsitsikas, Delmic
 
 This file is part of Odemis.
 
@@ -30,7 +30,7 @@ import socket
 import threading
 import time
 import weakref
-from typing import List, Literal, Callable, Any, Dict, Tuple, Union
+from typing import List, Literal, Callable, Any, Dict, Optional, Tuple, Union
 
 import numpy
 
@@ -145,15 +145,27 @@ class DeviceHandler:
             If the connection to the TESCAN server fails, this is raised with an appropriate
             error message.
         """
-        logging.info("Attempting to connect sockets")
+        self._host = host
+        self._port = port
+        self._socket_timeout = socket_timeout
         self.device = sem.Sem()
         self.device_type = device_type
+        self._call_lock = threading.Lock()
+        self._connect()
+
+    def _connect(self) -> None:
+        """
+        Connects the sockets of the device, and sets the socket options.
+
+        :raises HwError: if the connection to the TESCAN server fails.
+        """
+        logging.info("Attempting to connect sockets")
         # Attempts to connect all sockets, but does nothing if already running
-        connection_status = self.device.connection.Connect(host, port, socket_timeout)
+        connection_status = self.device.connection.Connect(self._host, self._port, self._socket_timeout)
         if connection_status < 0:
             raise HwError("Failed to connect to TESCAN server '%s'. "
                           "Check that the ip address is correct and TESCAN server "
-                          "connected to the network." % (host,))
+                          "connected to the network." % (self._host,))
 
         logging.info("Connected to sockets")
 
@@ -165,8 +177,15 @@ class DeviceHandler:
         self.device.connection.socket_d.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         self.device.connection.socket_d.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 
-        self.device._sharksem_lock = threading.Lock()
-        self._call_lock = self.device._sharksem_lock
+    def reconnect(self) -> None:
+        """
+        Closes and re-opens the connection to the TESCAN server, to recover from a broken connection.
+
+        :raises HwError: if the connection to the TESCAN server fails.
+        """
+        with self._call_lock:
+            self.device.connection.Disconnect()
+            self._connect()
 
     def __getattr__(self, name: str) -> Callable[[Literal[DeviceType.ELECTRON, DeviceType.ION], Any], Any]:
         """
@@ -373,8 +392,15 @@ class SEM(model.HwComponent):
         Note: acquisition might still go on on other channels
         """
         with self._acquisition_mng_lock:
-            # This call to stop the scanning will timeout the socket, which allows us to exit early.
-            detector._device_handler.ScStopScan()
+            # Stopping the scan makes the blocking image fetch time out, which allows us to exit early.
+            # It must not use the detector's connection: that connection is locked for the whole
+            # duration of the image fetch, so the call would only return once the scan is complete.
+            # Instead, use the connection of the SEM component, which is not used during acquisition.
+            if self._device_handler:
+                if detector._device_handler.device_type == DeviceType.ION:
+                    self._device_handler.FibScStopScan()
+                else:
+                    self._device_handler.ScStopScan()
             self._acquisitions.discard(detector)
             self._acq_cmd_q.put(ACQ_CMD_UPD)
             if not self._acquisitions:
@@ -444,7 +470,8 @@ class SEM(model.HwComponent):
                         else:
                             logging.warning("Acquisition failed, will retry")
                             time.sleep(1)
-                            self._connect_socket()
+                            for d in detectors:
+                                d._device_handler.reconnect()
                             continue
 
                     nfailures = 0
@@ -536,13 +563,10 @@ class SEM(model.HwComponent):
             metadata = dict(self._metadata)
             metadata.update(scanner.getMetadata())
             # If there is an image center set by the sample stage in the posture manager,
-            # make sure to update it with scanner translation and beam shift.
+            # make sure to update it with scanner translation
             phy_pos = metadata.get(model.MD_POS, (0, 0))
             trans = scanner.pixelToPhy(pxs_pos)
             updated_phy_pos = (phy_pos[0] + trans[0], phy_pos[1] + trans[1])
-            # trans = self.pixelToPhy(pxs_pos)
-            # shifted_pos = (phy_pos[0] + trans[0], phy_pos[1] + trans[1])
-            # updated_phy_pos =  shifted_pos[0] - self.shift.value[0], shifted_pos[1] - self.shift.value[1]
 
             # update changed metadata
             metadata[model.MD_POS] = updated_phy_pos
@@ -561,6 +585,8 @@ class SEM(model.HwComponent):
 
         with self._acq_progress_lock:
             try:
+                if scanner._device_handler.device_type == DeviceType.ION:
+                    scanner._update_beam_preset()
                 bpp = detector.bpp.value
                 scanner._device_handler.DtEnable(detector._channel, 1, bpp)
                 scanner._device_handler.ScScanXY(0, scaled_shape[0], scaled_shape[1],
@@ -680,6 +706,7 @@ class Scanner(model.Emitter):
         # Field of view in Tescan is set in mm
         self.magnification = model.VigilantAttribute(mag, unit="", readonly=True)
 
+        fov_range = self._extend_range_to_value("horizontalFoV", fov_range, fov)
         self.horizontalFoV = model.FloatContinuous(fov, range=fov_range, unit="m",
                                                    setter=self._setHorizontalFOV)
         self.horizontalFoV.subscribe(self._onHorizontalFOV)  # to update RO VAs and metadata
@@ -694,10 +721,9 @@ class Scanner(model.Emitter):
         # self.depthOfField = model.FloatContinuous(1e-6, range=(0, 1e9),
         #                                           unit="m", readonly=True)
 
-        # shift = self._device_handler.GetImageShift() * 1e-3
         shift_mm = self._device_handler.GetImageShift()
-        shift = [v * 1e-3 for v in shift_mm]
-        self.shift = model.ListContinuous(shift, ((-1e-3, -1e-3), (1e-3, 1e-3)), cls=(int, float), unit="m",
+        shift = tuple(v * 1e-3 for v in shift_mm)
+        self.shift = model.TupleContinuous(shift, ((-1e-3, -1e-3), (1e-3, 1e-3)), cls=(int, float), unit="m",
                                            setter=self._setShift)
         self.shift.subscribe(self._onShift, init=True)
 
@@ -749,12 +775,16 @@ class Scanner(model.Emitter):
 
             pc = self._device_handler.GetBeamCurrent() * 1e-12  # Convert from pA to A
             # For limits of current, values from the Tescan UI are used, since the API did not specify any.
+            current_range = self._extend_range_to_value("probeCurrent", current_range, pc)
             self.probeCurrent = model.FloatContinuous(pc, current_range, unit="A",
                                                         setter=self._setPC)
             self.probeCurrent.subscribe(self._onPC)
         elif self._device_handler.device_type == DeviceType.ION:
             beam_presets = self.get_beam_presets()
-            self.beamPreset = model.StringEnumerated(DEFAULT_ION_PRESET, beam_presets, setter=self._setBeamPreset)
+            preset = self._get_beam_preset()
+            if preset not in beam_presets:
+                preset = DEFAULT_ION_PRESET
+            self.beamPreset = model.StringEnumerated(preset, beam_presets, setter=self._setBeamPreset)
             # For clarity, still maintain read-only VA's. The values from the preset titles do not match exactly with
             # the actual device values.
             self.accelVoltage = model.FloatVA(volt, unit="V", readonly=True)
@@ -842,10 +872,38 @@ class Scanner(model.Emitter):
         """
         beam_presets = self._device_handler.PresetEnum().split("\n")
         beam_presets = set(p for p in beam_presets if p)
-        # Add an empty preset to serve as the default, since the current preset cannot be
-        # obtained directly via the API.
+        # Keep an empty choice for microscopes that do not report their last preset.
         beam_presets.add(DEFAULT_ION_PRESET)
         return beam_presets
+
+    def _get_beam_preset(self) -> Optional[str]:
+        """Read the last FIB preset without activating it.
+
+        :returns: Reported preset, or None when unavailable.
+        """
+        try:
+            parameters = self._device_handler.GetDeviceParams(2)
+        except Exception:
+            logging.debug("Could not read the FIB preset from device parameters", exc_info=True)
+            return None
+        for line in (parameters or "").splitlines():
+            key, separator, value = line.partition("=")
+            if separator and key.strip() == "LastPreset":
+                return value.strip()
+        return None
+
+    def _update_beam_preset(self) -> None:
+        """Refresh the FIB preset readback for the GUI and acquisition settings.
+
+        Leave the value empty when the microscope cannot report a known preset.
+        Update subscribers without activating a preset on the microscope.
+        """
+        preset = self._get_beam_preset()
+        if preset not in self.beamPreset.choices:
+            preset = DEFAULT_ION_PRESET
+        if preset != self.beamPreset._value:
+            self.beamPreset._value = preset
+            self.beamPreset.notify(preset)
 
     def _get_shutter_id_by_type(self, shutter_type: int) -> int:
         """
@@ -890,14 +948,30 @@ class Scanner(model.Emitter):
             self.horizontalFoV._value = new_fov
             self.horizontalFoV.notify(new_fov)
 
+    @staticmethod
+    def _extend_range_to_value(name: str, rng: Tuple[float, float], value: float) -> Tuple[float, float]:
+        """
+        Ensure the value fits within the range, extending the range if needed.
+        :param name: name of the VA, for the log message
+        :param rng: (min, max) range
+        :param value: current value read from the hardware
+        :returns: the range, extended to include the value if it was outside
+        """
+        rmin, rmax = rng
+        if not rmin <= value <= rmax:
+            logging.warning("Initial value of %s (%s) is outside of the range %s->%s, extending the range",
+                            name, value, rmin, rmax)
+            rng = (min(rmin, value), max(rmax, value))
+        return rng
+
     def _setShift(self, value: Tuple[float, float]) -> Tuple[float, float]:
         """
         Set the absolute beam shift on the device.
 
-        This is a pure absolute setter: it does not account for scan rotation.
-        Scan rotation only needs to be compensated for when applying a *relative*
-        shift (see shiftBy), since an absolute beam shift value always refers to
-        the same physical position, regardless of the image rotation on screen.
+        If the requested value is outside of the hardware range, the Tescan
+        server silently clips it to the maximum limit (no exception is raised).
+        A warning is logged when the value actually set differs from the
+        request (clipping or limited resolution).
 
         :param value: the x and y beam shift, in meters.
         :return: the actual x and y beam shift read back from the device, in meters.
@@ -905,42 +979,22 @@ class Scanner(model.Emitter):
         logging.debug("Set the absolute beam shift with value: %s m", value)
 
         with self.parent._acq_progress_lock:
-            shift_mm = self._device_handler.GetImageShift()
-            logging.debug("Beam shift before setting: %s mm", shift_mm)
             self._device_handler.SetImageShift(value[0] * 1e3, value[1] * 1e3)
             shift_mm = self._device_handler.GetImageShift()
-            logging.debug("Beam shift after setting: %s mm", shift_mm)
-            return [v * 1e-3 for v in shift_mm]
 
-    def shiftBy(self, dx: float, dy: float) -> Tuple[float, float]:
-        """
-        Move the beam shift by a relative amount, compensating for the current
-        scan rotation. When the scan is rotated by 180 degrees, the image is
-        flipped on screen, so a relative displacement expressed in the (rotated)
-        image coordinate system must be inverted before being applied to the
-        beam shift, which is always expressed in the unrotated coordinate system.
-
-        :param dx: relative displacement along X, in meters.
-        :param dy: relative displacement along Y, in meters.
-        :return: the new absolute x and y beam shift, in meters.
-        """
-        # invert direction for scan rotated images
-        if numpy.isclose(math.degrees(self.rotation.value), 180):
-            dx *= -1.0
-            dy *= -1.0
-
-        cur_shift = self.shift.value
-        new_shift = (cur_shift[0] + dx, cur_shift[1] + dy)
-        logging.debug(f"Shifting beam by ({dx}, {dy}) m, new absolute shift: {new_shift}")
-        self.shift.value = new_shift
-        return self.shift.value
+        actual = tuple(v * 1e-3 for v in shift_mm)
+        if not all(math.isclose(a, r, abs_tol=1e-9) for a, r in zip(actual, value)):
+            logging.warning("Beam shift requested %s m but hardware set %s m "
+                            "(clipped to the hardware range or limited resolution)",
+                            value, actual)
+        return actual
 
     def _updateShift(self) -> None:
         """Update the shift VigilantAttribute with the current value from the Tescan device."""
         prev_shift = self.shift.value
         shift_mm = self._device_handler.GetImageShift()
         logging.debug(f"Updating shift from Tescan device: {shift_mm}")
-        new_shift = [v * 1e-3 for v in shift_mm]
+        new_shift = tuple(v * 1e-3 for v in shift_mm)
 
         if prev_shift != new_shift:
             self.shift._value = new_shift
@@ -1239,8 +1293,6 @@ class Scanner(model.Emitter):
 
         rotation_degrees = math.degrees(value)
         self._device_handler.SetImageRot(rotation_degrees)
-        with self.parent._acq_progress_lock:
-            self._updateShift()
         return value
 
     def pixelToPhy(self, px_pos):
@@ -1319,6 +1371,9 @@ class Scanner(model.Emitter):
                                 if new_shutter != self.shutter._value:
                                     self.shutter._value = new_shutter
                                     self.shutter.notify(new_shutter)
+
+                    if self._device_handler.device_type == DeviceType.ION:
+                        self._update_beam_preset()
 
                     new_ext = bool(self._device_handler.ScGetExternal())
                     if new_ext != self.external._value:

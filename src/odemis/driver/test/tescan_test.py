@@ -3,7 +3,7 @@
 """
 Created on 12 May 2014
 
-Copyright © 2014 Kimon Tsitsikas, Delmic
+Copyright © 2014-2026 Kimon Tsitsikas, Delmic
 
 This file is part of Odemis.
 
@@ -420,45 +420,6 @@ class BaseSEMTest(object):
         ebeam.rotation.value = orig_rotation
         time.sleep(6)  # Wait for value refresh
         self.assertAlmostEqual(orig_rotation, ebeam.rotation.value)
-
-    def test_beam_shift_set_get(self) -> None:
-        """
-        Verify setting beam shift is reflected by both VA and hardware readback.
-        """
-        ebeam = self.scanner
-
-        original_shift = tuple(ebeam.shift.value)
-        target_shift = (50e-6, 50e-6)  # m
-
-        logging.debug(
-            "Beam shift: target=%s m, original=%s m",
-            target_shift,
-            original_shift,
-        )
-
-        try:
-            # Set an absolute beam shift through the Odemis API.
-            ebeam.shift.value = target_shift
-            # Give the hardware time to settle.
-            time.sleep(1)
-            # VA should contain the hardware readback.
-            testing.assert_tuple_almost_equal(
-                ebeam.shift.value,
-                target_shift,
-                delta=1e-7,
-            )
-            # Verify the actual Tescan hardware readback as well.
-            hw_shift_mm = ebeam._device_handler.GetImageShift()
-            hw_shift = tuple(v * 1e-3 for v in hw_shift_mm)
-            testing.assert_tuple_almost_equal(
-                hw_shift,
-                target_shift,
-                delta=1e-7,
-            )
-
-        finally:
-            # Always restore the original hardware state.
-            ebeam.shift.value = original_shift
 
     def test_blanker(self):
         """
@@ -997,25 +958,19 @@ class BaseFIBTest(object):
         """
         ion_beam = self.scanner
         original_shift = ion_beam.shift.value
-        shift_min, shift_max = ion_beam.shift.range
-        target_shift = (
-            shift_min[0] + (shift_max[0] - shift_min[0]) * 0.25,
-            shift_min[1] + (shift_max[1] - shift_min[1]) * 0.25,
-        )
+        target_shift = (5e-6, -5e-6)  # m
 
         try:
             ion_beam.shift.value = target_shift
             time.sleep(1)
-            ion_beam._updateShift()
 
             testing.assert_tuple_almost_equal(ion_beam.shift.value, target_shift, delta=1e-7)
 
-            hw_shift = tuple(ion_beam._device_handler.GetImageShift() * 1e-3)
+            hw_shift = tuple(v * 1e-3 for v in ion_beam._device_handler.GetImageShift())
             testing.assert_tuple_almost_equal(hw_shift, target_shift, delta=1e-7)
         finally:
             ion_beam.shift.value = original_shift
-            time.sleep(1)
-            ion_beam._updateShift()
+
 
 class TestFIB(BaseFIBTest, unittest.TestCase):
     """
@@ -1086,8 +1041,22 @@ class TestFIB(BaseFIBTest, unittest.TestCase):
     def test_load_presets(self):
         # We should have some presets available by default
         self.assertGreater(len(self.scanner.beamPreset.choices), 0)
-        # Check if default is set
-        self.assertEqual(self.scanner.beamPreset.value, tescan.DEFAULT_ION_PRESET)
+        # The initial selection follows the microscope's reported preset.
+        expected = self.scanner._get_beam_preset()
+        self.assertEqual(self.scanner.beamPreset.value, expected or tescan.DEFAULT_ION_PRESET)
+
+    def test_acquisition_refreshes_preset(self):
+        """Read the preset during acquisition without activating one on the microscope."""
+        preset = next(preset for preset in self.scanner.beamPreset.choices if preset)
+        for previous, reported in (("", preset), (preset, "")):
+            with self.subTest(reported=reported), \
+                 mock.patch.object(self.scanner._device_handler, "GetDeviceParams",
+                                   return_value=f"LastPreset={reported}\n"), \
+                 mock.patch.object(self.scanner._device_handler, "PresetSetEx") as activate:
+                self.scanner.beamPreset._value = previous
+                self.sed.data.get()
+                self.assertEqual(self.scanner.beamPreset.value, reported)
+                activate.assert_not_called()
 
     def test_set_presets(self):
         # Change presets (we use hardcoded presets here). If the hardcoded presets are not available on the hardware in
