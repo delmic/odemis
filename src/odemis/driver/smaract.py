@@ -27,6 +27,7 @@ refer to the SmarAct readme for Linux installation instructions.
 import copy
 import logging
 import math
+import numbers
 import os
 import threading
 import time
@@ -2870,6 +2871,11 @@ class SA_CTLDLL(CDLL):
 
     SA_CTL_INFINITE = 0xffffffff
 
+    # sensor power modes
+    SA_CTL_SENSOR_POWER_MODE_DISABLED = 0
+    SA_CTL_SENSOR_POWER_MODE_ENABLED = 1
+    SA_CTL_SENSOR_POWER_MODE_POWER_SAVE = 2
+
     def __init__(self):
         if os.name == "nt":
             raise NotImplementedError("Windows not yet supported")
@@ -2916,7 +2922,7 @@ class SA_CTLError(IOError):
 class MCS2(model.Actuator):
 
     def __init__(self, name, role, locator, ref_on_init=False, refproc=REFPROC_STD, axes=None, speed=1e-3, accel=1e-3,
-                 hold_time=float('inf'), pos_deactive_after_ref=False, param_file=None, **kwargs):
+                 hold_time=float('inf'), pos_deactive_after_ref=False, param_file=None, backlash=None, **kwargs):
         """
         A driver for a SmarAct MCS2 Actuator.
         This driver uses a DLL provided by SmarAct which connects via
@@ -2954,6 +2960,22 @@ class MCS2(model.Actuator):
             }
         pos_deactive_after_ref (bool): if True, will move to the deactive position
             defined in metadata after referencing
+        param_file (str): Optional path to a parameter configuration file (.mcs2.tsv) for the controller.
+            The file should be a tab-separated value (TSV) format with the following structure:
+                channel_index    property    value    type    # description
+            Where:
+                - channel_index: Channel number (starting from 0)
+                - property: Hexadecimal property code (e.g., 0x020F0066)
+                - value: Hexadecimal property value (e.g., 0x00000001)
+                - type: Property type - one of "I32", "I64", or "Str"
+            Example line:
+                0	0x0307005D	0b00000001	I32 # Referencing Options (Inverted Start Direction = 0b01)
+            If provided, properties are applied to the controller after connection but before referencing. If a sensor
+            power property is disabled (SA_CTL_SENSOR_POWER_MODE_DISABLED) via this file, the driver will automatically
+            enable/disable sensor power during movements and calibration.
+        backlash (dict str -> float): for axes with gravity-loading or backlash, the
+            extra distance to overshoot before a final corrective move in the safe
+            direction.
         """
         if not axes:
             raise ValueError("Needs at least 1 axis.")
@@ -2990,6 +3012,24 @@ class MCS2(model.Actuator):
             axes_def[axis_name] = ad
             self._axis_map[axis_name] = axis_channel
 
+        self._backlash = backlash or {}
+        for a, v in self._backlash.items():
+            if not isinstance(a, str):
+                raise ValueError("Backlash axis name must be a string but got %s" % (a,))
+            if a not in axes_def:
+                raise ValueError("Backlash axis %s is not a valid axis" % (a,))
+            if not isinstance(v, numbers.Real):
+                raise ValueError("Backlash value of %s must be a number but got %s" % (a, v))
+            rng = axes_def[a].range
+            if rng[1] - rng[0] < abs(v):
+                raise ValueError("Backlash value %s is bigger than the range %s" % (v, rng))
+            if v > 0:
+                axes_def[a].range = (rng[0] + v, rng[1])
+            else:
+                axes_def[a].range = (rng[0], rng[1] + v)
+        self._shifted = {a: False for a in self._backlash.keys()}
+        self._shifted_lock = threading.Lock()
+
         # Connect to the device
         logging.debug("Connecting to locator %s", locator)
         self._id = c_uint32(0)
@@ -3015,6 +3055,7 @@ class MCS2(model.Actuator):
 
         logging.debug("Using SA_CTL library version %s to connect to %s", self._swVersion, self._hwVersion)
 
+        self._sensor_power_disabled_channels = set()
         # Read param_file and apply it
         if param_file:
             try:
@@ -3031,7 +3072,14 @@ class MCS2(model.Actuator):
             # apply the new property values
             self.apply_config(prop_params)
 
+            # for these channels the sensor power will be turned on before any movement and turned off afterwards
+            for (ch, p, _), v in prop_params.items():
+                if p == SA_CTLDLL.SA_CTL_PKEY_SENSOR_POWER_MODE and v == SA_CTLDLL.SA_CTL_SENSOR_POWER_MODE_DISABLED:
+                    self._sensor_power_disabled_channels.add(ch)
+            logging.debug("Sensor power disabled channels: %s", self._sensor_power_disabled_channels)
+
         # set specific axis properties
+        self._hold_time = hold_time
         for name, channel in self._axis_map.items():
             self._set_speed(channel, speed)
             self._set_accel(channel, accel)
@@ -3045,6 +3093,7 @@ class MCS2(model.Actuator):
             logging.log(log_lvl, "Current referencing mode = {}.".format(ref_mode))
 
         self.position = model.VigilantAttribute({}, readonly=True)
+        self._backlash = self._applyInversion(self._backlash)
 
         try:
             self._updatePosition()
@@ -3286,10 +3335,17 @@ class MCS2(model.Actuator):
         self.core.SA_CTL_Reference(self._id, c_int8(channel), c_int8(0))
 
     def Calibrate(self, channel):
-        # Calibrate the controller. Note - this is blocking
-        self.core.SA_CTL_Calibrate(self._id, c_int8(channel), c_int8(0))
-        while self._is_channel_moving(channel):
-            time.sleep(0.1)
+        # enable sensor power for the axes whose SA_CTL_PKEY_SENSOR_POWER_MODE
+        # is set to disabled in the param_file before calibration
+        self._enable_sensor_power(channel)
+        try:
+            # Calibrate the controller. Note - this is blocking
+            self.core.SA_CTL_Calibrate(self._id, c_int8(channel), c_int8(0))
+            while self._is_channel_moving(channel):
+                time.sleep(0.1)
+        finally:
+            # disable sensor power for the axes enabled by _enable_sensor_power
+            self._disable_sensor_power(channel)
 
     def Move(self, pos, channel, moveMode):
         """
@@ -3358,6 +3414,25 @@ class MCS2(model.Actuator):
         """
         return bool(self._get_channel_state(channel) & SA_CTLDLL.SA_CTL_CH_STATE_BIT_ACTIVELY_MOVING)
 
+    def _is_channel_stopped(self, channel):
+        """
+        channel (int)
+        return (bool): True if the axis is neither actively moving nor holding
+        its position in closed-loop (ie, fully stopped, not just between moves)
+        """
+        state = self._get_channel_state(channel)
+        active_mask = (SA_CTLDLL.SA_CTL_CH_STATE_BIT_ACTIVELY_MOVING |
+                       SA_CTLDLL.SA_CTL_CH_STATE_BIT_CLOSED_LOOP_ACTIVE)
+        return (state & active_mask) == 0
+
+    def _is_channel_holding(self, channel):
+        """
+        channel (int)
+        return (bool): True if the axis is holding its position in closed-loop
+        """
+        state = self._get_channel_state(channel)
+        return bool(state & SA_CTLDLL.SA_CTL_CH_STATE_BIT_CLOSED_LOOP_ACTIVE)
+
     def _get_position(self, channel):
         """
         Get the position on a specified channel
@@ -3417,6 +3492,26 @@ class MCS2(model.Actuator):
             ht = int(hold_time * 1e3)
 
         self.SetProperty_i32(SA_CTLDLL.SA_CTL_PKEY_HOLD_TIME, channel, ht)
+
+    def _enable_sensor_power(self, channel: int) -> None:
+        """
+        Enable the sensor power for the specified channel, if it was initially disabled in the parameter file.
+
+        :param channel: The channel for which to enable the sensor power.
+        """
+        if channel in self._sensor_power_disabled_channels:
+            self.SetProperty_i32(SA_CTLDLL.SA_CTL_PKEY_SENSOR_POWER_MODE, channel,
+                                 SA_CTLDLL.SA_CTL_SENSOR_POWER_MODE_ENABLED)
+
+    def _disable_sensor_power(self, channel: int) -> None:
+        """
+        Ensure that the sensor power is disabled for the specified channel, if it was initially disabled in the parameter file.
+
+        :param channel: The channel for which to disable the sensor power.
+        """
+        if channel in self._sensor_power_disabled_channels:
+            self.SetProperty_i32(SA_CTLDLL.SA_CTL_PKEY_SENSOR_POWER_MODE, channel,
+                                 SA_CTLDLL.SA_CTL_SENSOR_POWER_MODE_DISABLED)
 
     def stop(self, axes=None):
         """
@@ -3495,11 +3590,83 @@ class MCS2(model.Actuator):
         f = self._executor.submitf(f, self._doMoveRel, f, shift)
         return f
 
+    def _compute_backlash_pos(self, pos):
+        """
+        pos (dict str -> float): hw-frame (already inverted) absolute target position
+        return (dict, set): hw-frame intermediate (overshoot) position to reach
+        first, and the set of axis names needing it
+        """
+        cur_pos = self._applyInversion(self.position.value)
+        sub_pos = {}
+        overshoot = set()
+        with self._shifted_lock:
+            for a, v in pos.items():
+                bl = self._backlash.get(a)
+                if bl is None:
+                    continue
+                shift = v - cur_pos[a]
+                if shift * bl >= 0:
+                    # move already ends in the safe direction, nothing to do
+                    self._shifted[a] = False
+                    continue
+                if self._shifted[a]:
+                    # already sitting in the overshoot state from a previous move
+                    continue
+                sub_pos[a] = v - bl
+                overshoot.add(a)
+                self._shifted[a] = True
+        return sub_pos, overshoot
+
+    def _compute_backlash_shift(self, shift):
+        """
+        shift (dict str -> float): hw-frame relative shift
+        return (dict, set): hw-frame overshoot shift for only the axes that need it,
+        and the set of those axis names
+        """
+        sub_shift = {}
+        overshoot = set()
+        with self._shifted_lock:
+            for a, v in shift.items():
+                bl = self._backlash.get(a)
+                if bl is None:
+                    continue
+                if v * bl >= 0:
+                    # move already ends in the safe direction, nothing to do
+                    self._shifted[a] = False
+                    continue
+                if self._shifted[a]:
+                    # already sitting in the overshoot state from a previous move
+                    continue
+                sub_shift[a] = v - bl
+                overshoot.add(a)
+                self._shifted[a] = True
+        return sub_shift, overshoot
+
     def _doMoveRel(self, future, pos):
+        """
+        pos (dict str -> float): hw-frame relative shift
+        """
+        sub_shift, overshoot = self._compute_backlash_shift(pos)
+        if overshoot:
+            logging.debug("Anti-backlash overshoot move on axes %s via %s", overshoot, sub_shift)
+            try:
+                self._doMoveRelHw(future, sub_shift, overshoot=True)
+            finally:
+                with self._shifted_lock:
+                    for a in overshoot:
+                        self._shifted[a] = False
+        # remaining move: full shift for axes untouched in leg 1, backlash correction for overshoot ones
+        remaining = dict(pos)
+        for a in overshoot:
+            remaining[a] = self._backlash[a]
+        self._doMoveRelHw(future, remaining)
+
+    def _doMoveRelHw(self, future, pos, overshoot=False):
         """
         Blocking and cancellable relative move
         future (Future): the future it handles
         _pos (dict str -> float): axis name -> relative target position
+        overshoot (bool): whether this move is an anti-backlash overshoot move
         raise:
             ValueError: if the target position is
             TMCLError: if the controller reported an error
@@ -3508,10 +3675,13 @@ class MCS2(model.Actuator):
         with future._moving_lock:
             try:
                 end = 0  # expected end
-                moving_axes = set()
+                moving_axes = {self._axis_map[an] for an in pos}
+                # enable sensor power for the axes whose SA_CTL_PKEY_SENSOR_POWER_MODE
+                # is set to disabled in the param_file before moving
+                for moving_axis in moving_axes:
+                    self._enable_sensor_power(moving_axis)
                 for an, v in pos.items():
                     channel = self._axis_map[an]
-                    moving_axes.add(channel)
                     self.Move(v, channel, SA_CTLDLL.SA_CTL_MOVE_MODE_CL_RELATIVE)
                     # compute expected end
                     dur = driver.estimateMoveDuration(abs(v),
@@ -3520,18 +3690,41 @@ class MCS2(model.Actuator):
 
                     end = max(time.time() + dur, end)
 
-                self._waitEndMove(future, moving_axes, end)
+                if overshoot:
+                    self._waitEndMoveOvershoot(future, moving_axes, end)
+                else:
+                    self._waitEndMove(future, moving_axes, end)
             except Exception as ex:
                 logging.error("Move by %s failed: %s", pos, ex)
                 raise
+            finally:
+                # disable sensor power for the axes enabled by _enable_sensor_power
+                for moving_axis in moving_axes:
+                    self._disable_sensor_power(moving_axis)
 
         logging.debug("Relative move successfully completed")
 
     def _doMoveAbs(self, future, pos):
         """
+        pos (dict str -> float): hw-frame absolute target position
+        """
+        sub_pos, overshoot = self._compute_backlash_pos(pos)
+        if overshoot:
+            logging.debug("Anti-backlash overshoot move on axes %s via %s", overshoot, sub_pos)
+            try:
+                self._doMoveAbsHw(future, sub_pos, overshoot=True)
+            finally:
+                with self._shifted_lock:
+                    for a in overshoot:
+                        self._shifted[a] = False
+        self._doMoveAbsHw(future, pos)
+
+    def _doMoveAbsHw(self, future, pos, overshoot=False):
+        """
         Blocking and cancellable absolute move
         future (Future): the future it handles
         _pos (dict str -> float): axis name -> absolute target position
+        overshoot (bool): whether this move is an anti-backlash overshoot move
         raise:
             TMCLError: if the controller reported an error
             CancelledError: if cancelled before the end of the move
@@ -3540,22 +3733,75 @@ class MCS2(model.Actuator):
             try:
                 end = 0  # expected end
                 old_pos = self._applyInversion(self.position.value)
-                moving_axes = set()
+                moving_axes = {self._axis_map[an] for an in pos}
+                # enable sensor power for the axes whose SA_CTL_PKEY_SENSOR_POWER_MODE
+                # is set to disabled in the param_file before moving
+                for moving_axis in moving_axes:
+                    self._enable_sensor_power(moving_axis)
                 for an, v in pos.items():
                     channel = self._axis_map[an]
-                    moving_axes.add(channel)
                     self.Move(v, channel, SA_CTLDLL.SA_CTL_MOVE_MODE_CL_ABSOLUTE)
                     d = abs(v - old_pos[an])
                     dur = driver.estimateMoveDuration(d,
                                                       self.speed.value[an],
                                                       self._accel[an])
                     end = max(time.time() + dur, end)
-                self._waitEndMove(future, moving_axes, end)
+                if overshoot:
+                    self._waitEndMoveOvershoot(future, moving_axes, end)
+                else:
+                    self._waitEndMove(future, moving_axes, end)
             except Exception as ex:
                 logging.error("Move to %s failed: %s", pos, ex)
                 raise
+            finally:
+                # disable sensor power for the axes enabled by _enable_sensor_power
+                for moving_axis in moving_axes:
+                    self._disable_sensor_power(moving_axis)
 
         logging.debug("Absolute move successfully completed")
+
+    def _waitEndMoveOvershoot(self, future, axes, end):
+        """
+        Wait until the expected duration of an anti-backlash overshoot move has
+        elapsed, then explicitly stop the axes. Unlike _waitEndMove, taking the
+        full expected duration is normal here (the axis may keep servoing/holding
+        against gravity at the overshoot position), so no TimeoutError is raised.
+        future (Future): the future it handles
+        axes (set of int): the axes IDs to stop once the overshoot is done
+        end (float): expected end time
+        raise:
+            CancelledError: if cancelled before the end of the move
+        """
+        moving_axes = set(axes)
+        end += self._hold_time if math.isfinite(self._hold_time) else 0
+        try:
+            while not future._must_stop.is_set():
+                for a in moving_axes.copy():
+                    if not self._is_channel_moving(a) and self._is_channel_holding(a):
+                        moving_axes.discard(a)
+                        self._check_channel_error(a)
+
+                if not moving_axes:
+                    break
+
+                now = time.time()
+                if now > end:
+                    for a in moving_axes:
+                        logging.debug("Channel %s state 0x%x", a, self._get_channel_state(a))
+                    break
+                left = end - now
+                sleept = max(0.001, min(left / 2, 0.1))
+                future._must_stop.wait(sleept)
+            else:
+                logging.debug("Overshoot move of axes %s cancelled before the end", axes)
+                future._was_stopped = True
+                raise CancelledError()
+        finally:
+            # release the hold on, possibly still unsettled overshoot pose
+            for a in axes:
+                self.Stop(a)
+            self._updatePosition()
+            self._disable_sensor_power(set(axes))
 
     def _waitEndMove(self, future, axes, end):
         """
@@ -3693,16 +3939,19 @@ class MCS2(model.Actuator):
         # referenced (anymore)
         with future._moving_lock:
             try:
-                moving_channels = set()
+                moving_axes = {self._axis_map[a] for a in axes}
+                # enable sensor power for the axes whose SA_CTL_PKEY_SENSOR_POWER_MODE
+                # is set to disabled in the param_file before referencing
+                for moving_axis in moving_axes:
+                    self._enable_sensor_power(moving_axis)
                 for a in axes:
                     if future._must_stop.is_set():
                         raise CancelledError()
                     channel = self._axis_map[a]
-                    moving_channels.add(channel)
                     self.referenced._value[a] = False
                     self.Reference(channel)  # search for the negative limit signal to set an origin
 
-                self._waitEndMove(future, moving_channels, time.time() + 100)  # block until it's over
+                self._waitEndMove(future, moving_axes, time.time() + 100)  # block until it's over
 
                 for a in axes:
                     self.referenced._value[a] = self._is_channel_referenced(self._axis_map[a])
@@ -3740,6 +3989,9 @@ class MCS2(model.Actuator):
                 # We only notify after updating the position so that when a listener
                 # receives updates both values are already updated.
                 self._updatePosition()  # all the referenced axes should be back to 0
+                # disable sensor power for the axes enabled by _enable_sensor_power
+                for moving_axis in moving_axes:
+                    self._disable_sensor_power(moving_axis)
                 # read-only so manually notify
                 self.referenced.notify(self.referenced.value)
 
@@ -3779,17 +4031,22 @@ class MCS2(model.Actuator):
                     raise CancelledError()
 
                 channel = self._axis_map[a]
-                self.referenced._value[a] = False
-                logging.info("Referencing %s axis %s (attempt %d)", reference_lbl, a, attempt + 1)
-                self.Reference(channel)
 
                 try:
+                    # enable sensor power for the axes whose SA_CTL_PKEY_SENSOR_POWER_MODE
+                    # is set to disabled in the param_file before referencing
+                    self._enable_sensor_power(channel)
+                    self.referenced._value[a] = False
+                    logging.info("Referencing %s axis %s (attempt %d)", reference_lbl, a, attempt + 1)
+                    self.Reference(channel)
                     self._waitEndMove(future, {channel}, time.time() + 100)
                 except CancelledError:
                     raise
                 except Exception as e:
                     logging.debug("Axis %s failed to reference: %s", a, e)
                     continue
+                finally:
+                    self._disable_sensor_power(channel)
 
                 is_referenced = self._is_channel_referenced(channel)
                 self.referenced._value[a] = is_referenced
