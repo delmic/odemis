@@ -24,15 +24,17 @@ import logging
 import math
 import os
 import random
+import threading
 import time
 import unittest
 import unittest.mock
+from concurrent import futures
 
 import odemis
 import simulated_test
 from odemis import model
 from odemis.driver import simulated, tmcm, smaract
-from odemis.driver.actuator import ConvertStage, AntiBacklashActuator, MultiplexActuator, FixedPositionsActuator, \
+from odemis.driver.actuator import ConvertStage, AntiBacklashActuator, ForcedOrderActuator, MultiplexActuator, FixedPositionsActuator, \
     CombinedSensorActuator, RotationActuator, CombinedFixedPositionActuator, LinearActuator, LinkedHeightActuator, \
     DualChannelPositionSensor, LinkedAxesActuator, Convert3DStage
 from odemis.util import testing
@@ -1306,6 +1308,168 @@ class TestAntiBacklashActuator(unittest.TestCase):
     def _on_position(self, pos):
         self.assertIsInstance(pos, dict)
         self.called += 1
+
+
+class TestForcedOrderActuator(unittest.TestCase):
+
+    def test_simple(self):
+        """
+        The wrapper should not affect the final position, only the order in
+        which the underlying axes are moved.
+        """
+        dependency = simulated.Stage("stage", "test", axes=["x", "y"])
+        stage = ForcedOrderActuator("foact", "align", {"orig": dependency}, forced_axes={"x": 1, "y": 1})
+
+        testing.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
+        f = stage.moveAbs({"x": 1e-06, "y": 2e-06})
+        f.result()
+        testing.assert_pos_almost_equal(stage.position.value, {"x": 1e-06, "y": 2e-06})
+        testing.assert_pos_almost_equal(dependency.position.value, {"x": 1e-06, "y": 2e-06})
+
+        f = stage.moveRel({"x": -1e-06, "y": -2e-06})
+        f.result()
+        testing.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
+        testing.assert_pos_almost_equal(dependency.position.value, {"x": 0, "y": 0})
+
+        stage.terminate()
+
+    def test_order_rel(self):
+        """
+        For a relative move, whichever forced axis moves in the direction
+        indicated by its positive value must be moved first, and
+        the one moving in the opposite direction must be moved last.
+        """
+        dependency = simulated.Stage("stage", "test", axes=["l", "z"])
+        stage = ForcedOrderActuator("foact", "align", {"orig": dependency}, forced_axes={"l": 1, "z": 1})
+
+        calls = []
+        orig_move_rel = dependency.moveRel
+
+        def record_move_rel(shift):
+            calls.append(dict(shift))
+            return orig_move_rel(shift)
+
+        dependency.moveRel = record_move_rel
+
+        # l moves negative, z moves positive => z (positive) should be first
+        f = stage.moveRel({"l": -1e-6, "z": 1e-6})
+        f.result()
+        self.assertEqual(len(calls), 2)
+        self.assertIn("z", calls[0])
+        self.assertIn("l", calls[1])
+
+        calls.clear()
+        # l moves positive, z moves negative => l (positive) should be first
+        f = stage.moveRel({"l": 1e-6, "z": -1e-6})
+        f.result()
+        self.assertEqual(len(calls), 2)
+        self.assertIn("l", calls[0])
+        self.assertIn("z", calls[1])
+
+        stage.terminate()
+
+    def test_order_abs(self):
+        """
+        Same as test_order_rel, but for absolute moves.
+        """
+        dependency = simulated.Stage("stage", "test", axes=["l", "z"])
+        stage = ForcedOrderActuator("foact", "align", {"orig": dependency}, forced_axes={"l": 1, "z": 1})
+
+        calls = []
+        orig_move_abs = dependency.moveAbs
+
+        def record_move_abs(pos):
+            calls.append(dict(pos))
+            return orig_move_abs(pos)
+
+        dependency.moveAbs = record_move_abs
+
+        # from (0, 0): l moves negative, z moves positive => z first
+        f = stage.moveAbs({"l": -1e-6, "z": 1e-6})
+        f.result()
+        self.assertEqual(len(calls), 2)
+        self.assertIn("z", calls[0])
+        self.assertIn("l", calls[1])
+
+        calls.clear()
+        # from (-1e-6, 1e-6): l moves positive, z moves negative => l first
+        f = stage.moveAbs({"l": 1e-6, "z": -1e-6})
+        f.result()
+        self.assertEqual(len(calls), 2)
+        self.assertIn("l", calls[0])
+        self.assertIn("z", calls[1])
+
+        stage.terminate()
+
+    def test_normal_axis(self):
+        """
+        An axis not listed in backlash is moved in between the "first" and "last" forced axes.
+        """
+        dependency = simulated.Stage("stage", "test", axes=["l", "z", "n"])
+        stage = ForcedOrderActuator("foact", "align", {"orig": dependency}, forced_axes={"l": 1, "z": 1})
+
+        calls = []
+        orig_move_rel = dependency.moveRel
+
+        def record_move_rel(shift):
+            calls.append(dict(shift))
+            return orig_move_rel(shift)
+
+        dependency.moveRel = record_move_rel
+
+        f = stage.moveRel({"l": -1e-6, "z": 1e-6, "n": 5e-6})
+        f.result()
+        self.assertEqual(len(calls), 3)
+        self.assertIn("z", calls[0])
+        self.assertIn("n", calls[1])
+        self.assertIn("l", calls[2])
+
+        stage.terminate()
+
+    def test_reference_is_queued_after_moves(self):
+        """Reference requests should run after already queued forced moves."""
+        dependency = simulated.Stage("stage", "test", axes=["x", "y"])
+        dependency.speed._set_value({"x": 0.05, "y": 0.05}, force_write=True)
+        dependency.referenced = model.VigilantAttribute({"x": True, "y": True}, readonly=True)
+        stage = ForcedOrderActuator("foact", "align", {"orig": dependency}, forced_axes={"x": 1, "y": -1})
+
+        calls = []
+        orig_move_abs = dependency.moveAbs
+
+        def record_move_abs(pos):
+            calls.append(("moveAbs", dict(pos)))
+            return orig_move_abs(pos)
+
+        def record_reference(axes):
+            calls.append(("reference", set(axes)))
+            return model.InstantaneousFuture()
+
+        dependency.moveAbs = record_move_abs
+        dependency.reference = record_reference
+
+        move_future = stage.moveAbs({"x": 0.005, "y": 0.004})
+        time.sleep(0.02)
+        ref_future = stage.reference({"x", "y"})
+        move_future.result()
+        ref_future.result()
+
+        self.assertEqual([kind for kind, _ in calls], ["moveAbs", "moveAbs", "reference"])
+        stage.terminate()
+
+    def test_error(self):
+        dependency = simulated.Stage("stage", "test", axes=["a", "b"])
+
+        # forced_axes on non-existing axes
+        with self.assertRaises(ValueError):
+            ForcedOrderActuator("foact", "align", {"orig": dependency},
+                                forced_axes={"a": 1, "x": 1})
+
+        # move on non-existing axis
+        stage = ForcedOrderActuator("foact", "align", {"orig": dependency},
+                                    forced_axes={"a": 1, "b": 1})
+        with self.assertRaises(ValueError):
+            stage.moveRel({"a": -5e-6, "x": 5e-6})
+        stage.terminate()
 
 
 class TestCombinedSensorActuator(unittest.TestCase):
