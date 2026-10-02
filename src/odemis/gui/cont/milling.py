@@ -30,15 +30,19 @@ import logging
 import os
 from concurrent.futures import CancelledError
 from datetime import datetime
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import wx
+from shapely import affinity
+from shapely.geometry import Polygon, box
 
 from odemis import model
 from odemis.acq.feature import (
     FEATURE_ACTIVE,
     FEATURE_DEACTIVE,
     CryoFeature,
+    MillingAlignmentAreaTooSmallError,
+    constrain_milling_alignment_area,
 )
 from odemis.acq.milling import millmng
 from odemis.acq.milling.millmng import MillingWorkflowTask, run_automated_milling
@@ -52,13 +56,21 @@ from odemis.acq.milling.patterns import (
     TrenchPatternParameters,
 )
 from odemis.acq.milling.tasks import MillingTaskSettings
+from odemis.acq.stream import StaticStream
 from odemis.gui.comp.milling import MillingTaskPanel
 from odemis.gui.comp.overlay._constants import (
+    MILLING_ALIGNMENT_AREA_COLOUR,
     MILLING_OVERLAY_ACTIVE_OPACITY,
     MILLING_OVERLAY_INACTIVE_OPACITY,
 )
 from odemis.gui.comp.overlay.base import Vec
-from odemis.gui.comp.overlay.milling import MillingPatternOverlay
+from odemis.gui.comp.overlay.milling import (
+    MillingAlignmentAreaOverlay,
+    MillingAlignmentRectangleOverlay,
+    MillingPatternOverlay,
+    constrain_milling_alignment_area_from_shape,
+    update_milling_alignment_area_shape,
+)
 from odemis.gui.comp.overlay.rectangle import MillingRectangleOverlay
 from odemis.gui.comp.overlay.shapes import EditableShape
 from odemis.gui.comp.popup import show_message
@@ -117,6 +129,63 @@ def pos_to_absolute(pos: Tuple[float, float], ref_img: model.DataArray) -> Tuple
     return center_x, center_y
 
 
+def _get_alignment_area_polygon(feature: CryoFeature) -> Optional[Polygon]:
+    """Return a feature's alignment area in image-relative physical coordinates."""
+    reference_image = feature.reference_image
+    if reference_image is None:
+        return None
+
+    image_height, image_width = reference_image.shape[-2:]
+    pixel_size_x, pixel_size_y = reference_image.metadata.get(model.MD_PIXEL_SIZE, (1e-6, 1e-6))[:2]
+    left, top, width, height = feature.millingAlignmentArea.value
+    x_min = (left - 0.5) * image_width * pixel_size_x
+    x_max = (left + width - 0.5) * image_width * pixel_size_x
+    y_max = (0.5 - top) * image_height * pixel_size_y
+    y_min = (0.5 - top - height) * image_height * pixel_size_y
+    return box(x_min, y_min, x_max, y_max)
+
+
+def _get_milling_rectangle_polygon(rectangle: RectanglePatternParameters) -> Polygon:
+    """Return a generated milling rectangle in image-relative physical coordinates."""
+    center_x, center_y = rectangle.center.value
+    half_width = rectangle.width.value / 2
+    half_height = rectangle.height.value / 2
+    geometry = box(
+        center_x - half_width,
+        center_y - half_height,
+        center_x + half_width,
+        center_y + half_height,
+    )
+    if rectangle.rotation.value:
+        geometry = affinity.rotate(
+            geometry, rectangle.rotation.value, origin=(center_x, center_y), use_radians=True)
+    return geometry
+
+
+def _get_pattern_stack_center(patterns: List[MillingPatternParameters]) -> Tuple[float, float]:
+    """Return the center of the bounds of all generated pattern geometry."""
+    bounds = [
+        _get_milling_rectangle_polygon(rectangle).bounds
+        for pattern in patterns
+        for rectangle in pattern.generate()
+        if isinstance(rectangle, RectanglePatternParameters)
+    ]
+    if bounds:
+        min_x = min(bound[0] for bound in bounds)
+        min_y = min(bound[1] for bound in bounds)
+        max_x = max(bound[2] for bound in bounds)
+        max_y = max(bound[3] for bound in bounds)
+        return (min_x + max_x) / 2, (min_y + max_y) / 2
+
+    centers = [pattern.center.value for pattern in patterns]
+    if not centers:
+        raise ValueError("Cannot calculate the center of an empty pattern stack.")
+    return (
+        sum(center[0] for center in centers) / len(centers),
+        sum(center[1] for center in centers) / len(centers),
+    )
+
+
 # TODO: support other shapes
 def rectangle_pattern_to_shape(canvas,
                         ref_img: model.DataArray,
@@ -162,6 +231,7 @@ def rectangle_pattern_to_shape(canvas,
 
     return rect
 
+
 class MillingTaskController:
     """
     Takes care of handling the "PATTERNS" collapsible panel, which shows the selected milling tasks, and their settings.
@@ -193,9 +263,19 @@ class MillingTaskController:
         self.allow_milling_pattern_move = True
         self._active_spot_size_pattern = None
 
-        # pattern overlay
+        # Draw pattern previews below the editable alignment area.
         self.rectangles_overlay = MillingPatternOverlay(cnvs=self.canvas)
         self.canvas.add_world_overlay(self.rectangles_overlay)
+
+        # One editable alignment area, shared by all milling tasks of the feature.
+        self.alignment_area_overlay = MillingAlignmentAreaOverlay(
+            cnvs=self.canvas,
+            on_area_changed=self._update_alignment_area_from_shape,
+            on_area_selected=self._deselect_milling_task_for_alignment_area,
+        )
+        self.canvas.add_world_overlay(self.alignment_area_overlay)
+        self.alignment_area_overlay.active.value = True
+
         self.canvas.Bind(wx.EVT_LEFT_DOWN, self.on_mouse_down) # bind the mouse down event
         self.canvas.Bind(wx.EVT_CHAR, self.on_char)
 
@@ -244,6 +324,7 @@ class MillingTaskController:
         self.set_milling_tasks(milling_tasks)
         self._update_pattern_panels()
         self._update_pattern_movement_controls()
+        self.draw_alignment_area()
 
     def _update_pattern_movement_controls(self) -> None:
         """Enable pattern movement controls when a feature can be edited."""
@@ -251,6 +332,92 @@ class MillingTaskController:
         can_move = feature is not None and self.allow_milling_pattern_move
         self._panel.chk_move_all_patterns.Enable(can_move)
         self._panel.btn_snap_patterns_to_feature.Enable(can_move and feature.milling_feature_offset.value is not None)
+
+    def _get_reference_stream(self, feature: CryoFeature) -> Optional[StaticStream]:
+        """Return the displayed stream containing the feature reference image."""
+        stream = self.acq_cont.stream
+        if stream is not None and stream.raw and stream.raw[0] is feature.reference_image:
+            return stream
+
+        if self.viewport.view is None:
+            return None
+        displayed_streams = [
+            candidate
+            for candidate in self.viewport.view.getStreams()
+            if candidate.raw
+        ]
+        for candidate in displayed_streams:
+            if candidate.raw[0] is feature.reference_image:
+                return candidate
+        if len(displayed_streams) == 1:
+            return displayed_streams[0]
+        return None
+
+    @call_in_wx_main
+    def draw_alignment_area(self, _: Any = None) -> None:
+        """Draw the current feature's editable area on the saved FIB image."""
+        self.alignment_area_overlay.clear()
+
+        feature = self._tab_data.main.currentFeature.value
+        stream = self._get_reference_stream(feature) if feature is not None else None
+        if feature is None or feature.reference_image is None or stream is None or not stream.raw:
+            self.canvas.request_drawing_update()
+            return
+
+        try:
+            area = constrain_milling_alignment_area(
+                feature.millingAlignmentArea.value, feature.reference_image.shape)
+        except MillingAlignmentAreaTooSmallError:
+            self.canvas.request_drawing_update()
+            return
+        feature.millingAlignmentArea.value = area
+
+        shape = MillingAlignmentRectangleOverlay(
+            self.canvas,
+            colour=MILLING_ALIGNMENT_AREA_COLOUR,
+            show_dimensions=True,
+            can_rotate=False,
+        )
+        shape.name.value = "Alignment area"
+        shape.dashed = True
+        update_milling_alignment_area_shape(shape, area, stream)
+        shape.is_created.value = True
+        shape.selected.value = False
+        self.alignment_area_overlay.add_shape(shape)
+
+    def _update_alignment_area_from_shape(
+            self, shape: MillingAlignmentRectangleOverlay, commit: bool) -> None:
+        """Constrain an edited area, update its feature, and optionally save it.
+
+        :param shape: Alignment rectangle containing the edited geometry.
+        :param commit: Whether to save the project after the completed edit.
+            Live drag updates pass ``False`` and the final mouse release passes
+            ``True``.
+        """
+        feature = self._tab_data.main.currentFeature.value
+        stream = self._get_reference_stream(feature) if feature is not None else None
+        if feature is None or feature.reference_image is None:
+            return
+        if stream is None or not stream.raw or shape.get_physical_sel() is None:
+            return
+
+        area = constrain_milling_alignment_area_from_shape(
+            shape=shape,
+            stream=stream,
+            previous_area=feature.millingAlignmentArea.value,
+            image_shape=feature.reference_image.shape,
+        )
+        if area is None:
+            return
+        feature.millingAlignmentArea.value = area
+
+        update_milling_alignment_area_shape(shape, area, stream)
+        self.canvas.request_drawing_update()
+        self._update_milling_validation_message()
+        self._update_mill_btn()
+
+        if commit:
+            save_project(self._tab_data.main)
 
     @call_in_wx_main
     def _update_pattern_panels(self) -> None:
@@ -377,13 +544,57 @@ class MillingTaskController:
                             return feature.name.value, task_name
         return None
 
-    def _update_spot_size_validation_message(self) -> None:
-        """Update the spot size correction validation message."""
+    def _get_alignment_area_overlap(self) -> Optional[Tuple[str, str]]:
+        """Return the first checked feature and task intersecting its alignment area."""
+        features = self._tab_data.main.features.value
+        feature_list = self._panel.workflow_features_chk_list
+        for index, feature in enumerate(features):
+            if index >= feature_list.GetCount() or not feature_list.IsChecked(index):
+                continue
+            alignment_area = _get_alignment_area_polygon(feature)
+            if alignment_area is None:
+                continue
+            for task_name, task in feature.milling_tasks.items():
+                if not task.selected:
+                    continue
+                for pattern in task.patterns:
+                    for rectangle in pattern.generate():
+                        if not isinstance(rectangle, RectanglePatternParameters):
+                            continue
+                        intersection = alignment_area.intersection(
+                            _get_milling_rectangle_polygon(rectangle))
+                        if intersection.area > 0:
+                            return feature.name.value, task_name
+        return None
+
+    def _get_invalid_alignment_reference(self) -> Optional[str]:
+        """Return the first checked feature whose reference image is too small."""
+        features = self._tab_data.main.features.value
+        feature_list = self._panel.workflow_features_chk_list
+        for index, feature in enumerate(features):
+            if index >= feature_list.GetCount() or not feature_list.IsChecked(index):
+                continue
+            if feature.reference_image is None:
+                continue
+            try:
+                constrain_milling_alignment_area(
+                    feature.millingAlignmentArea.value, feature.reference_image.shape)
+            except MillingAlignmentAreaTooSmallError:
+                return feature.name.value
+        return None
+
+    def _update_milling_validation_message(self) -> None:
+        """Update the inline milling validation message."""
         invalid_pattern = self._get_invalid_spot_size_correction()
         if invalid_pattern:
             message = f"Invalid spot size correction: {invalid_pattern[0]}, {invalid_pattern[1]}."
         else:
-            message = ""
+            invalid_reference = self._get_invalid_alignment_reference()
+            if invalid_reference:
+                message = f"Acquire a higher-resolution reference image for {invalid_reference}."
+            else:
+                overlap = self._get_alignment_area_overlap()
+                message = f"Alignment area overlaps a pattern for {overlap[0]}." if overlap else ""
         self._panel.txt_automated_milling_status.SetLabel(message)
 
     @call_in_wx_main
@@ -432,9 +643,7 @@ class MillingTaskController:
     def _on_milling_task_selected(self, evt: wx.CommandEvent):
         """Show the correction overlay for the highlighted pattern list row."""
         task = self.milling_tasks.get(evt.GetString())
-        self._active_spot_size_pattern = (
-            task.patterns[0] if task and task.patterns else None
-        )
+        self._active_spot_size_pattern = task.patterns[0] if task and task.patterns else None
         self.draw_milling_tasks()
         evt.Skip()
 
@@ -443,6 +652,15 @@ class MillingTaskController:
         self._panel.milling_task_chk_list.SetSelection(wx.NOT_FOUND)
         self._active_spot_size_pattern = None
         self.draw_milling_tasks()
+
+    def _deselect_milling_task_for_alignment_area(self) -> None:
+        """Clear the highlighted milling task without rebuilding the edited area."""
+        task_list = self._panel.milling_task_chk_list
+        if task_list.GetSelection() == wx.NOT_FOUND and self._active_spot_size_pattern is None:
+            return
+        task_list.SetSelection(wx.NOT_FOUND)
+        self._active_spot_size_pattern = None
+        self.draw_milling_tasks(redraw_alignment_area=False)
 
     def on_mouse_down(self, evt):
         active_canvas = evt.GetEventObject()
@@ -600,7 +818,7 @@ class MillingTaskController:
         for task_name, task in self.milling_tasks.items():
             task.selected = task_name in tasks
 
-        self._update_spot_size_validation_message()
+        self._update_milling_validation_message()
         save_project(self._tab_data.main)
         self.draw_milling_tasks()
         self._update_mill_btn()
@@ -715,9 +933,12 @@ class MillingTaskController:
         self.draw_milling_tasks()
 
     @call_in_wx_main
-    def draw_milling_tasks(self, _=None):
+    def draw_milling_tasks(self, _: Any = None, redraw_alignment_area: bool = True) -> None:
         """Redraw all milling tasks on the canvas.
         """
+        if redraw_alignment_area:
+            self.draw_alignment_area()
+
         # Clears the rectangles_overlay first
         self.rectangles_overlay.clear()
         self.rectangles_overlay.clear_labels()
@@ -915,7 +1136,7 @@ class MillingTaskController:
 
         logging.warning(f"Pattern updated: {dat}")
         self.draw_milling_tasks()
-        self._update_spot_size_validation_message()
+        self._update_milling_validation_message()
         self._update_mill_btn()
 
     def _cancel_milling_series(self, _):
@@ -943,8 +1164,12 @@ class MillingTaskController:
         has_tasks = bool(self.selected_tasks.value)
         valid_patterns = self.valid_patterns.value
         invalid_spot_size_correction = self._get_invalid_spot_size_correction()
+        invalid_alignment_reference = self._get_invalid_alignment_reference()
+        alignment_area_overlap = self._get_alignment_area_overlap()
         milling_enabled = (
-            has_tasks and not is_acquiring and valid_patterns and not invalid_spot_size_correction
+            has_tasks and not is_acquiring and valid_patterns
+            and not invalid_spot_size_correction and not invalid_alignment_reference
+            and not alignment_area_overlap
         )
         self._panel.btn_run_milling.Enable(milling_enabled)
         self._panel.btn_run_automated_milling.Enable(milling_enabled)
@@ -1013,7 +1238,7 @@ class AutomatedMillingController:
             disabled_txt = f"{f.name.value} is not ready for milling. Please prepare the feature first."
             wx.MessageBox(disabled_txt, "Info", wx.OK | wx.ICON_INFORMATION)
 
-        self._tab.milling_task_controller._update_spot_size_validation_message()
+        self._tab.milling_task_controller._update_milling_validation_message()
         self._tab.milling_task_controller._update_mill_btn()
 
     def _update_feature_status(self, feature: CryoFeature):
@@ -1038,7 +1263,7 @@ class AutomatedMillingController:
             # subscribe to the feature status, so we can update the list
             f.status.subscribe(self._update_feature_status, init=False)
 
-        self._tab.milling_task_controller._update_spot_size_validation_message()
+        self._tab.milling_task_controller._update_milling_validation_message()
         self._tab.milling_task_controller._update_mill_btn()
 
     def _run_automated_milling(self, evt: wx.Event):

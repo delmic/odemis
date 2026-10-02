@@ -22,6 +22,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 import copy
 import logging
+import math
 import os
 import threading
 import time
@@ -65,6 +66,133 @@ FEATURE_ACTIVE, FEATURE_READY_TO_MILL, FEATURE_ROUGH_MILLED, FEATURE_POLISHED, F
 )
 
 REFERENCE_IMAGE_FILENAME = "Reference-Alignment-FIB.ome.tiff"
+
+# Alignment areas are expressed as normalized (left, top, width, height)
+# coordinates in the saved FIB reference image.
+DEFAULT_MILLING_ALIGNMENT_AREA = (0.7, 0.375, 0.25, 0.25)
+# Smallest pixel count and widest/tallest shapes that provide reliable fibsemOS alignment.
+MIN_MILLING_ALIGNMENT_AREA_PIXELS = 384 * 256
+# Pixel width / height, from portrait 256 x 384 through landscape 384 x 256.
+MILLING_ALIGNMENT_AREA_ASPECT_RATIO_RANGE = (256 / 384, 384 / 256)
+
+
+class MillingAlignmentAreaTooSmallError(ValueError):
+    """Raised when an image cannot contain a valid milling alignment area."""
+
+
+def constrain_milling_alignment_area_size(
+        size: Tuple[float, float], image_shape: Tuple[int, int],
+        maximum_size: Tuple[float, float] = (1.0, 1.0)) -> Tuple[float, float]:
+    """Constrain normalized area dimensions using pixel count and shape.
+
+    The result contains at least the required number of pixels, has a pixel
+    aspect ratio within the supported range, and does not exceed the supplied
+    normalized maximum dimensions.
+
+    :param size: Normalized ``(width, height)`` to constrain.
+    :param image_shape: Reference-image ``(height, width)``.
+    :param maximum_size: Largest normalized ``(width, height)`` that can fit.
+    :return: Constrained normalized ``(width, height)``.
+    :raises MillingAlignmentAreaTooSmallError: If the image cannot contain an
+        alignment area that satisfies the pixel-count and aspect-ratio limits.
+    :raises ValueError: If the shape or requested dimensions are invalid.
+    """
+    if len(image_shape) != 2:
+        raise ValueError(f"Expected an image (height, width) pair, got {image_shape!r}")
+    image_height, image_width = image_shape
+    if image_width <= 0 or image_height <= 0:
+        raise ValueError(f"Reference-image dimensions must be positive, got {image_shape!r}")
+
+    width, height = (float(value) for value in size)
+    maximum_width, maximum_height = (float(value) for value in maximum_size)
+    if not all(math.isfinite(value) for value in (width, height, maximum_width, maximum_height)):
+        raise ValueError("Alignment-area dimensions must be finite")
+    if width <= 0 or height <= 0 or maximum_width <= 0 or maximum_height <= 0:
+        raise ValueError("Alignment-area dimensions must be positive")
+
+    maximum_pixel_width = min(maximum_width, 1.0) * image_width
+    maximum_pixel_height = min(maximum_height, 1.0) * image_height
+    minimum_ratio, maximum_ratio = MILLING_ALIGNMENT_AREA_ASPECT_RATIO_RANGE
+    maximum_valid_width = maximum_pixel_width
+    maximum_valid_height = maximum_pixel_height
+    if maximum_valid_width / maximum_valid_height > maximum_ratio:
+        maximum_valid_width = maximum_valid_height * maximum_ratio
+    elif maximum_valid_width / maximum_valid_height < minimum_ratio:
+        maximum_valid_height = maximum_valid_width / minimum_ratio
+    if maximum_valid_width * maximum_valid_height < MIN_MILLING_ALIGNMENT_AREA_PIXELS:
+        raise MillingAlignmentAreaTooSmallError(
+            "Reference image is too small for milling alignment. "
+            f"The alignment area must contain at least {MIN_MILLING_ALIGNMENT_AREA_PIXELS} pixels "
+            "and have an aspect ratio between 2:3 and 3:2."
+        )
+
+    pixel_width = min(width * image_width, maximum_pixel_width)
+    pixel_height = min(height * image_height, maximum_pixel_height)
+    ratio = pixel_width / pixel_height
+    if ratio > maximum_ratio:
+        required_height = pixel_width / maximum_ratio
+        if required_height <= maximum_pixel_height:
+            pixel_height = required_height
+        else:
+            pixel_height = maximum_pixel_height
+            pixel_width = pixel_height * maximum_ratio
+    elif ratio < minimum_ratio:
+        required_width = pixel_height * minimum_ratio
+        if required_width <= maximum_pixel_width:
+            pixel_width = required_width
+        else:
+            pixel_width = maximum_pixel_width
+            pixel_height = pixel_width / minimum_ratio
+
+    pixel_count = pixel_width * pixel_height
+    if pixel_count < MIN_MILLING_ALIGNMENT_AREA_PIXELS:
+        scale = math.sqrt(MIN_MILLING_ALIGNMENT_AREA_PIXELS / pixel_count)
+        scaled_width = pixel_width * scale
+        scaled_height = pixel_height * scale
+        if scaled_width <= maximum_pixel_width and scaled_height <= maximum_pixel_height:
+            pixel_width, pixel_height = scaled_width, scaled_height
+        elif scaled_width > maximum_pixel_width:
+            pixel_width = maximum_pixel_width
+            pixel_height = MIN_MILLING_ALIGNMENT_AREA_PIXELS / pixel_width
+        else:
+            pixel_height = maximum_pixel_height
+            pixel_width = MIN_MILLING_ALIGNMENT_AREA_PIXELS / pixel_height
+
+    return (pixel_width / image_width, pixel_height / image_height)
+
+
+def constrain_milling_alignment_area(
+        area: Tuple[float, float, float, float],
+        image_shape: Tuple[int, int]) -> Tuple[float, float, float, float]:
+    """Constrain an alignment area to the saved FIB reference image.
+
+    The returned area is normalized, meets the minimum pixel-count and
+    aspect-ratio constraints, and remains inside the image.
+
+    :param area: Normalized ``(left, top, width, height)`` coordinates.
+    :param image_shape: Reference-image ``(height, width)``.
+    :return: Constrained normalized ``(left, top, width, height)`` coordinates.
+    :raises MillingAlignmentAreaTooSmallError: If the image cannot contain an
+        alignment area that satisfies the pixel-count and aspect-ratio limits.
+    :raises ValueError: If the area coordinates or image shape are invalid.
+    """
+    if len(area) != 4:
+        raise ValueError(f"Expected four alignment-area coordinates, got {area!r}")
+    left, top, width, height = (float(value) for value in area)
+    if not all(math.isfinite(value) for value in (left, top, width, height)):
+        raise ValueError(f"Alignment-area coordinates must be finite, got {area!r}")
+    if width <= 0 or height <= 0:
+        raise ValueError(f"Alignment-area dimensions must be positive, got {area!r}")
+
+    constrained_width, constrained_height = constrain_milling_alignment_area_size(
+        (width, height), image_shape)
+
+    center_x = left + width / 2
+    center_y = top + height / 2
+    constrained_left = min(max(center_x - constrained_width / 2, 0.0), 1.0 - constrained_width)
+    constrained_top = min(max(center_y - constrained_height / 2, 0.0), 1.0 - constrained_height)
+    return (constrained_left, constrained_top, constrained_width, constrained_height)
+
 
 USER_MILLING_TASKS_PATH = os.path.expanduser("~/.config/odemis/milling_tasks.yaml")
 # Collection of data uses lock such that multiple triggers of data collection do not happen at the same time.
@@ -227,6 +355,12 @@ class CryoFeature(object):
         # relative to the image center. The milling posture position remains the
         # stage position at the center of that image, used by automated milling.
         self.milling_feature_offset = model.TupleVA(None, unit="m")
+        self.millingAlignmentArea = model.TupleContinuous(
+            DEFAULT_MILLING_ALIGNMENT_AREA,
+            range=((0.0, 0.0, 0.0, 0.0), (1.0, 1.0, 1.0, 1.0)),
+            cls=(int, float),
+            setter=self._set_milling_alignment_area,
+        )
 
         if milling_tasks is None:
             # Find the default milling tasks, starting by looking into the config directory, and then
@@ -297,6 +431,18 @@ class CryoFeature(object):
         """
         return self.posture_positions.get(posture.value, None)
 
+    def _set_milling_alignment_area(
+            self, area: Tuple[float, float, float, float]) -> Tuple[float, float, float, float]:
+        """Validate a normalized alignment area before storing it."""
+        left, top, width, height = (float(value) for value in area)
+        if not all(math.isfinite(value) for value in (left, top, width, height)):
+            raise ValueError(f"Alignment-area coordinates must be finite, got {area!r}")
+        if width <= 0 or height <= 0:
+            raise ValueError(f"Alignment-area dimensions must be positive, got {area!r}")
+        if left + width > 1.0 or top + height > 1.0:
+            raise ValueError(f"Alignment area must remain inside the reference image, got {area!r}")
+        return (left, top, width, height)
+
     def set_milling_feature_offset(self,
                                    position: Tuple[float, float],
                                    move_patterns: bool = True) -> None:
@@ -330,6 +476,9 @@ class CryoFeature(object):
         :param milling_tasks: the milling tasks for the feature (optional)
         """
 
+        alignment_area = constrain_milling_alignment_area(
+            self.millingAlignmentArea.value, reference_image.shape)
+
         logging.info(f"Saving milling data for feature: {self.name.value}")
 
         # assign the milling tasks
@@ -347,6 +496,7 @@ class CryoFeature(object):
         filename = os.path.join(self.path, f"{self.name.value}-{REFERENCE_IMAGE_FILENAME}")
         exporter = find_fittest_converter(filename)
         exporter.export(filename, reference_image)
+        self.millingAlignmentArea.value = alignment_area
 
         # save the milling position (it can be updated by the user)
         self.set_posture_position(posture=Posture.MILLING, position=stage_position)
@@ -396,6 +546,16 @@ def feature_decoder(feature_raw: Dict) -> CryoFeature:
     feature.path = feature_raw.get('path', None)
     feature.superz_stream_name = feature_raw.get('superz_stream_name', None)
     feature.superz_focused = feature_raw.get('superz_focused', None)
+    milling_alignment_area = feature_raw.get('milling_alignment_area')
+    if milling_alignment_area is not None:
+        try:
+            feature.millingAlignmentArea.value = tuple(milling_alignment_area)
+        except (IndexError, TypeError, ValueError) as exc:
+            logging.warning(
+                "Ignoring invalid milling alignment area for feature %s: %s",
+                feature.name.value,
+                exc,
+            )
 
     for image in feature_raw.get('images', []):
         args = [feature.images.value, image[IMG_FILENAME]]
@@ -408,9 +568,19 @@ def feature_decoder(feature_raw: Dict) -> CryoFeature:
         filename = os.path.join(feature.path, f"{feature.name.value}-{REFERENCE_IMAGE_FILENAME}")
         if os.path.exists(filename):
             feature.reference_image = open_acquisition(filename)[0].getData()
+            try:
+                feature.millingAlignmentArea.value = constrain_milling_alignment_area(
+                    feature.millingAlignmentArea.value, feature.reference_image.shape)
+            except MillingAlignmentAreaTooSmallError as exc:
+                logging.warning(
+                    "Reference image for feature %s cannot provide a milling alignment area: %s",
+                    feature.name.value,
+                    exc,
+                )
         else:
             logging.warning(f"Reference image for feature {feature.name.value} not found in {filename}")
     return feature
+
 
 def get_feature_position_at_posture(pm: MicroscopePostureManager,
                                     feature: CryoFeature,

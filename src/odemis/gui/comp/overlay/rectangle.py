@@ -20,7 +20,7 @@ This file is part of Odemis.
 
 """
 import math
-from typing import List, Optional, Tuple
+from typing import Any, List, Optional, Tuple
 
 import cairo
 import wx
@@ -98,10 +98,10 @@ class RectangleOverlay(EditableShape, RectangleEditingMixin, WorldOverlay):
     """
     LABEL_BACKGROUND_OPACITY = 1.0
 
-    def __init__(self, cnvs, colour=theme.selection, show_selection_points: bool = True,
-                 show_dimensions: bool = True):
+    def __init__(self, cnvs: Any, colour: Any = theme.selection, show_selection_points: bool = True,
+                 show_dimensions: bool = True, can_rotate: bool = True) -> None:
         EditableShape.__init__(self, cnvs)
-        RectangleEditingMixin.__init__(self, colour)
+        RectangleEditingMixin.__init__(self, colour, can_rotate=can_rotate)
         # RectangleOverlay has attributes and methods of the "WorldOverlay" interface.
         # However, WorldOverlay's __init__() is not called here because mouse events
         # (such as EVT_LEFT_DOWN, EVT_LEFT_UP, etc.) are managed by ShapesOverlay's canvas.
@@ -225,7 +225,7 @@ class RectangleOverlay(EditableShape, RectangleEditingMixin, WorldOverlay):
         :returns: (RectangleOverlay) a new instance of RectangleOverlay with necessary copied attributes.
 
         """
-        shape = RectangleOverlay(self.cnvs)
+        shape = RectangleOverlay(self.cnvs, show_dimensions=self.show_dimensions, can_rotate=self.can_rotate)
         shape.colour = self.colour
         shape.name.value = self.name.value
         shape.dashed = self.dashed
@@ -491,12 +491,13 @@ class RectangleOverlay(EditableShape, RectangleEditingMixin, WorldOverlay):
         mid_point41 = Vec((b_point4.x + b_point1.x) / 2, (b_point4.y + b_point1.y) / 2)
 
         # Draw the edit and rotation points
-        b_rotation = Vec(self.cnvs.view_to_buffer(self.v_rotation))
         ctx.set_dash([])
         ctx.set_line_width(1)
         ctx.set_source_rgba(*hex_to_frgba(theme.text_edit, 0.8))
-        ctx.arc(b_rotation.x, b_rotation.y, 4, 0, 2 * math.pi)
-        ctx.fill()
+        if self.can_rotate:
+            b_rotation = Vec(self.cnvs.view_to_buffer(self.v_rotation))
+            ctx.arc(b_rotation.x, b_rotation.y, 4, 0, 2 * math.pi)
+            ctx.fill()
         ctx.arc(mid_point12.x, mid_point12.y, 4, 0, 2 * math.pi)
         ctx.fill()
         ctx.arc(mid_point23.x, mid_point23.y, 4, 0, 2 * math.pi)
