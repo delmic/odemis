@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """
-@author: Patrick Cleeve
+@author: Patrick Cleeve, Alexéy Ilyushkin
 
-Copyright © 2024, Delmic
+Copyright © 2024-2026 Patrick Cleeve, Alexéy Ilyushkin, Delmic
 
 This file is part of Odemis.
 
@@ -17,11 +17,27 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
-import os
 import logging
+import os
 import unittest
-from odemis.acq.milling.patterns import TrenchPatternParameters, MicroexpansionPatternParameters
-from odemis.acq.milling.tasks import MillingTaskSettings, MillingSettings, load_milling_tasks, save_milling_tasks
+
+import yaml
+
+from odemis.acq.milling import DEFAULT_MILLING_TASKS_PATH
+from odemis.acq.milling.patterns import (
+    CorrelationPatternParameters,
+    MicroexpansionPatternParameters,
+    NotchPatternParameters,
+    RulerPatternParameters,
+    TrenchPatternParameters,
+    WaffleTrenchPatternParameters,
+)
+from odemis.acq.milling.tasks import (
+    MillingSettings,
+    MillingTaskSettings,
+    load_milling_tasks,
+    save_milling_tasks,
+)
 
 logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)-15s: %(message)s")
 logging.getLogger().setLevel(logging.DEBUG)
@@ -73,14 +89,17 @@ class MillingTaskTestCase(unittest.TestCase):
     def test_milling_task_settings(self):
         milling_settings = MillingSettings(100e-9, 30e3, 400e-6, "Serial", "ion")
         trench_pattern = TrenchPatternParameters(1e-6, 1e-6, 100e-9, 1e-6, (0, 0))
+        color = "#123456"
 
-        milling_task_settings = MillingTaskSettings(milling_settings, [trench_pattern], "Milling Task")
+        milling_task_settings = MillingTaskSettings(
+            milling_settings, [trench_pattern], "Milling Task", color=color)
 
         self.assertEqual(milling_task_settings.milling.current.value, milling_settings.current.value)
         self.assertEqual(milling_task_settings.milling.voltage.value, milling_settings.voltage.value)
         self.assertEqual(milling_task_settings.milling.field_of_view.value, milling_settings.field_of_view.value)
         self.assertEqual(milling_task_settings.milling.mode.value, milling_settings.mode.value)
         self.assertEqual(milling_task_settings.milling.channel.value, milling_settings.channel.value)
+        self.assertEqual(milling_task_settings.color, color)
         self.assertEqual(milling_task_settings.patterns[0].width.value, trench_pattern.width.value)
         self.assertEqual(milling_task_settings.patterns[0].height.value, trench_pattern.height.value)
         self.assertEqual(milling_task_settings.patterns[0].depth.value, trench_pattern.depth.value)
@@ -90,6 +109,7 @@ class MillingTaskTestCase(unittest.TestCase):
         dict_data = milling_task_settings.to_dict()
         self.assertEqual(dict_data["name"], "Milling Task")
         self.assertEqual(dict_data["selected"], True)
+        self.assertEqual(dict_data["color"], color)
         self.assertEqual(dict_data["milling"], milling_settings.to_dict())
         self.assertEqual(dict_data["patterns"][0], trench_pattern.to_dict())
 
@@ -99,6 +119,7 @@ class MillingTaskTestCase(unittest.TestCase):
         self.assertEqual(milling_task_settings_from_dict.milling.field_of_view.value, milling_settings.field_of_view.value)
         self.assertEqual(milling_task_settings_from_dict.milling.mode.value, milling_settings.mode.value)
         self.assertEqual(milling_task_settings_from_dict.milling.channel.value, milling_settings.channel.value)
+        self.assertEqual(milling_task_settings_from_dict.color, color)
         self.assertEqual(milling_task_settings_from_dict.patterns[0].width.value, trench_pattern.width.value)
         self.assertEqual(milling_task_settings_from_dict.patterns[0].height.value, trench_pattern.height.value)
         self.assertEqual(milling_task_settings_from_dict.patterns[0].depth.value, trench_pattern.depth.value)
@@ -108,7 +129,8 @@ class MillingTaskTestCase(unittest.TestCase):
     def test_save_load_task_settings(self):
         milling_settings = MillingSettings(100e-9, 30e3, 400e-6, "Serial", "ion")
         trench_pattern = TrenchPatternParameters(10e-6, 3e-6, 100e-9, 2e-6, (0, 0))
-        trench_task_settings = MillingTaskSettings(milling_settings, [trench_pattern], "Trench")
+        trench_task_settings = MillingTaskSettings(
+            milling_settings, [trench_pattern], "Trench", color="#654321")
 
         milling_settings = MillingSettings(100e-9, 30e3, 400e-6, "Serial", "ion")
         microexpansion_pattern = MicroexpansionPatternParameters(1e-6, 10e-6, 100e-9, 10e-6, (0, 0))
@@ -128,6 +150,7 @@ class MillingTaskTestCase(unittest.TestCase):
         self.assertEqual(loaded_tasks["Trench"].milling.field_of_view.value, trench_task_settings.milling.field_of_view.value)
         self.assertEqual(loaded_tasks["Trench"].milling.mode.value, trench_task_settings.milling.mode.value)
         self.assertEqual(loaded_tasks["Trench"].milling.channel.value, trench_task_settings.milling.channel.value)
+        self.assertEqual(loaded_tasks["Trench"].color, trench_task_settings.color)
         self.assertEqual(loaded_tasks["Trench"].patterns[0].width.value, trench_task_settings.patterns[0].width.value)
         self.assertEqual(loaded_tasks["Trench"].patterns[0].height.value, trench_task_settings.patterns[0].height.value)
         self.assertEqual(loaded_tasks["Trench"].patterns[0].depth.value, trench_task_settings.patterns[0].depth.value)
@@ -144,6 +167,113 @@ class MillingTaskTestCase(unittest.TestCase):
         self.assertEqual(loaded_tasks["Microexpansion"].patterns[0].depth.value, microexpansion_task_settings.patterns[0].depth.value)
         self.assertEqual(loaded_tasks["Microexpansion"].patterns[0].spacing.value, microexpansion_task_settings.patterns[0].spacing.value)
         self.assertEqual(loaded_tasks["Microexpansion"].patterns[0].center.value, microexpansion_task_settings.patterns[0].center.value)
+
+    def test_yaml_compatibility(self) -> None:
+        """Ignore unknown schema additions and default fields absent from old YAML."""
+        milling = {
+            "current": 100e-9,
+            "voltage": 30e3,
+            "field_of_view": 400e-6,
+            "mode": "Serial",
+            "channel": "ion",
+        }
+        legacy_trench = {
+            "name": "Legacy Trench",
+            "width": 10e-6,
+            "height": 3e-6,
+            "depth": 1e-6,
+            "spacing": 2e-6,
+            "center_x": 0,
+            "center_y": 0,
+            "pattern": "trench",
+            "future_pattern_field": "ignored",
+        }
+        data = {
+            "Mixed": {
+                "name": "Mixed",
+                "selected": True,
+                "milling": milling,
+                "patterns": [
+                    {"name": "Future", "pattern": "future_pattern"},
+                    legacy_trench,
+                ],
+                "future_task_field": "ignored",
+            },
+            "Unsupported": {
+                "name": "Unsupported",
+                "milling": milling,
+                "patterns": [{"name": "Future", "pattern": "future_pattern"}],
+            },
+        }
+        with open(TASKS_PATH, "w") as stream:
+            yaml.safe_dump(data, stream)
+
+        loaded_tasks = load_milling_tasks(TASKS_PATH)
+
+        self.assertEqual(list(loaded_tasks), ["Mixed"])
+        self.assertIsNone(loaded_tasks["Mixed"].color)
+        self.assertEqual(len(loaded_tasks["Mixed"].patterns), 1)
+        self.assertIsInstance(
+            loaded_tasks["Mixed"].patterns[0], TrenchPatternParameters)
+
+    def test_ruler_task_roundtrip(self) -> None:
+        """Preserve ruler task parameters through YAML serialization."""
+        tasks = load_milling_tasks(DEFAULT_MILLING_TASKS_PATH)
+        ruler = tasks["Ruler"]
+        self.assertFalse(ruler.selected)
+        self.assertEqual(ruler.generate(), [])
+        self.assertIsInstance(ruler.patterns[0], RulerPatternParameters)
+        self.assertEqual(ruler.patterns[0].num_graduations.value, 11)
+        ruler.selected = True
+        ruler.patterns[0].num_graduations.value = 16
+        ruler.patterns[0].height.value = 8e-6
+        ruler.patterns[0].center.value = (1e-6, -2e-6)
+        ruler.patterns[0].spot_size_correction.value = 20e-9
+        save_milling_tasks(TASKS_PATH, tasks)
+        restored = load_milling_tasks(TASKS_PATH)["Ruler"]
+        self.assertEqual(restored.to_dict(), ruler.to_dict())
+        self.assertEqual(len(restored.generate()), 32)
+        self.assertEqual(
+            [pattern.to_dict() for pattern in restored.generate()],
+            [pattern.to_dict() for pattern in ruler.generate()],
+        )
+
+    def test_default_notch_task(self) -> None:
+        """Load the optional default notch as five rectangles."""
+        notch = load_milling_tasks(DEFAULT_MILLING_TASKS_PATH)["Notch"]
+        self.assertFalse(notch.selected)
+        self.assertEqual(notch.milling.current.value, 0.3e-9)
+        self.assertIsInstance(notch.patterns[0], NotchPatternParameters)
+        self.assertEqual(notch.patterns[0].center.value, (3e-6, 0))
+        self.assertEqual(notch.patterns[0].overlap.value, 100e-9)
+        self.assertEqual(len(notch.patterns[0].generate()), 5)
+
+    def test_default_correlation_task(self) -> None:
+        """Load the optional full-field correlation pattern."""
+        task = load_milling_tasks(DEFAULT_MILLING_TASKS_PATH)[
+            "Correlation (NΠ+⅂Ʇ)"
+        ]
+        pattern = task.patterns[0]
+
+        self.assertFalse(task.selected)
+        self.assertEqual(task.milling.current.value, 60e-9)
+        self.assertEqual(task.milling.field_of_view.value, 960e-6)
+        self.assertIsInstance(pattern, CorrelationPatternParameters)
+        self.assertEqual((pattern.width.value, pattern.height.value),
+                         (900e-6, 700e-6))
+        self.assertEqual(len(pattern.generate()), 12)
+
+    def test_default_waffle_trench_task(self) -> None:
+        """Load the optional waffle trench with asymmetric defaults."""
+        task = load_milling_tasks(DEFAULT_MILLING_TASKS_PATH)["Waffle Trench"]
+        pattern = task.patterns[0]
+
+        self.assertFalse(task.selected)
+        self.assertIsInstance(pattern, WaffleTrenchPatternParameters)
+        self.assertEqual((pattern.top_width.value, pattern.top_height.value),
+                         (22e-6, 37e-6))
+        self.assertEqual((pattern.bottom_width.value, pattern.bottom_height.value),
+                         (20e-6, 17e-6))
 
 
 if __name__ == "__main__":

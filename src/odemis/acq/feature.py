@@ -2,9 +2,9 @@
 """
 Created on 1 October 2021
 
-@author: Bassim Lazem
+@author: Bassim Lazem, Alexéy Ilyushkin
 
-Copyright © 2021 Bassim Lazem, Delmic
+Copyright © 2021-2026 Bassim Lazem, Alexéy Ilyushkin, Delmic
 
 This file is part of Odemis.
 
@@ -271,14 +271,15 @@ class CryoFeature(object):
 
         :param position: Physical (x, y) offset in meters from the saved FIB
             reference-image center, expressed in sample-stage axes.
-        :param move_patterns: If True, snap the milling-pattern stack to the
-            feature. Manual pattern movement uses a separate controller path.
+        :param move_patterns: If True, arrange the milling-pattern stack around
+            the feature using each pattern's default offset. Manual pattern
+            movement uses a separate controller path.
         """
         position = tuple(position)
         if move_patterns:
             for task in self.milling_tasks.values():
                 for pattern in task.patterns:
-                    pattern.center.value = position
+                    pattern.center.value = pattern.get_center_at_feature(position)
         # Update this last so redraw subscribers see the complete state.
         self.milling_feature_offset.value = position
 
@@ -348,7 +349,11 @@ def feature_decoder(feature_raw: Dict) -> CryoFeature:
     feature.correlation_data = FIBFMCorrelationData.from_dict(correlation_data) if correlation_data else None
     feature.status.value = feature_raw['status']
     feature.posture_positions = posture_positions
-    feature.milling_tasks = {k: MillingTaskSettings.from_dict(v) for k, v in milling_task_json.items()}
+    feature.milling_tasks = {}
+    for name, data in milling_task_json.items():
+        task = MillingTaskSettings.from_dict(data)
+        if task.patterns:
+            feature.milling_tasks[name] = task
     milling_feature_offset = feature_raw.get('milling_feature_offset')
     if milling_feature_offset is not None:
         feature.milling_feature_offset.value = tuple(milling_feature_offset)

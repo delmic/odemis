@@ -2,7 +2,9 @@
 """
 Created on Oct 2021
 
-Copyright © Delmic
+@author: Alexéy Ilyushkin
+
+Copyright © 2021-2026 Alexéy Ilyushkin, Delmic
 
 This file is part of Odemis.
 
@@ -28,6 +30,7 @@ import numpy
 from odemis import model
 from odemis.acq.feature import (
     CryoFeature,
+    feature_decoder,
     load_milling_tasks,
     FEATURE_READY_TO_MILL,
     REFERENCE_IMAGE_FILENAME,
@@ -54,6 +57,56 @@ class TestFeatureEncoderDecoder(unittest.TestCase):
             if os.path.exists(filename):
                 os.remove(filename)
             os.rmdir(self.path)
+
+    def test_notch_feature_offset(self):
+        """Keep the notch right of the centered polishing pattern."""
+        tasks = load_milling_tasks(DEFAULT_MILLING_TASKS_PATH)
+        feature = CryoFeature(
+            name="TestFeature-1",
+            stage_position={"x": 0, "y": 0},
+            fm_focus_position={"z": 0},
+            milling_tasks={
+                "Notch": tasks["Notch"],
+                "Polishing 02": tasks["Polishing 02"],
+            },
+        )
+        feature_position = (12e-6, -8e-6)
+
+        feature.set_milling_feature_offset(feature_position)
+
+        notch = feature.milling_tasks["Notch"].patterns[0]
+        polishing = feature.milling_tasks["Polishing 02"].patterns[0]
+        for actual, expected in zip(notch.center.value, (15e-6, -8e-6)):
+            self.assertAlmostEqual(actual, expected)
+        self.assertEqual(polishing.center.value, feature_position)
+        notch.mirrored.value = True
+        feature.set_milling_feature_offset(feature_position)
+        for actual, expected in zip(notch.center.value, (15e-6, -8e-6)):
+            self.assertAlmostEqual(actual, expected)
+
+    def test_decoder_ignores_unsupported_milling_tasks(self):
+        """Ignore saved tasks that contain no patterns supported by this version."""
+        feature = feature_decoder({
+            "name": "Future feature",
+            "status": FEATURE_READY_TO_MILL,
+            "stage_position": {"x": 0, "y": 0},
+            "fm_focus_position": {"z": 0},
+            "milling_tasks": {
+                "Future task": {
+                    "name": "Future task",
+                    "milling": {
+                        "current": 100e-9,
+                        "voltage": 30e3,
+                        "field_of_view": 400e-6,
+                        "mode": "Serial",
+                        "channel": "ion",
+                    },
+                    "patterns": [{"pattern": "future_pattern"}],
+                },
+            },
+        })
+
+        self.assertEqual(feature.milling_tasks, {})
 
     def test_feature_milling_tasks(self):
         feature = CryoFeature(
@@ -86,7 +139,10 @@ class TestFeatureEncoderDecoder(unittest.TestCase):
         self.assertEqual(feature.milling_feature_offset.value, milling_feature_offset)
         for task in feature.milling_tasks.values():
             for pattern in task.patterns:
-                self.assertEqual(pattern.center.value, milling_feature_offset)
+                self.assertEqual(
+                    pattern.center.value,
+                    pattern.get_center_at_feature(milling_feature_offset),
+                )
         self.assertEqual(feature.status.value, FEATURE_READY_TO_MILL)
         self.assertEqual(set(feature.milling_tasks.keys()), set(milling_tasks.keys()))
 

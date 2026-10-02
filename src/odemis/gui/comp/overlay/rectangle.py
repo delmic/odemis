@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """
 :created: 2024-02-02
-:author: Nandish Patel
-:copyright: © 2024 Nandish Patel, Delmic
+:author: Nandish Patel, Alexéy Ilyushkin
+:copyright: © 2024-2026 Nandish Patel, Alexéy Ilyushkin, Delmic
 
 This file is part of Odemis.
 
@@ -27,7 +27,13 @@ import wx
 
 import odemis.gui as gui
 import odemis.util.units as units
-from odemis.gui.comp.overlay._constants import LINE_WIDTH_THICK, LINE_WIDTH_THIN
+from odemis.gui.comp.overlay._constants import (
+    LINE_WIDTH_THICK,
+    LINE_WIDTH_THIN,
+    MILLING_LABEL_BACKGROUND_OPACITY,
+    MILLING_OVERLAY_ACTIVE_OPACITY,
+    MILLING_OVERLAY_LINE_WIDTH,
+)
 from odemis.gui.comp.overlay.base import (
     SEL_MODE_NONE,
     SEL_MODE_ROTATION,
@@ -90,7 +96,10 @@ class RectangleOverlay(EditableShape, RectangleEditingMixin, WorldOverlay):
     The selected rectangle can be manipulated by dragging its edges or rotating it.
 
     """
-    def __init__(self, cnvs, colour=theme.selection, show_selection_points: bool = True):
+    LABEL_BACKGROUND_OPACITY = 1.0
+
+    def __init__(self, cnvs, colour=theme.selection, show_selection_points: bool = True,
+                 show_dimensions: bool = True):
         EditableShape.__init__(self, cnvs)
         RectangleEditingMixin.__init__(self, colour)
         # RectangleOverlay has attributes and methods of the "WorldOverlay" interface.
@@ -118,7 +127,7 @@ class RectangleOverlay(EditableShape, RectangleEditingMixin, WorldOverlay):
             colour=hex_to_frgb(theme.button_text_contrast),
             opacity=1.0,
             deg=None,
-            background=hex_to_frgba(theme.viewport_background),
+            background=hex_to_frgba(theme.viewport_background, self.LABEL_BACKGROUND_OPACITY),
         )
         self._side2_label = Label(
             text="",
@@ -129,7 +138,7 @@ class RectangleOverlay(EditableShape, RectangleEditingMixin, WorldOverlay):
             colour=hex_to_frgb(theme.button_text_contrast),
             opacity=1.0,
             deg=None,
-            background=hex_to_frgba(theme.viewport_background),
+            background=hex_to_frgba(theme.viewport_background, self.LABEL_BACKGROUND_OPACITY),
         )
         # Label for the rotation angle of the rectangle
         # Call draw_rotation_label to use it
@@ -142,7 +151,7 @@ class RectangleOverlay(EditableShape, RectangleEditingMixin, WorldOverlay):
             colour=hex_to_frgb(theme.button_text_contrast),
             opacity=1.0,
             deg=None,
-            background=hex_to_frgba(theme.viewport_background),
+            background=hex_to_frgba(theme.viewport_background, self.LABEL_BACKGROUND_OPACITY),
         )
         self._name_label = Label(
             text=self.name.value,
@@ -158,6 +167,7 @@ class RectangleOverlay(EditableShape, RectangleEditingMixin, WorldOverlay):
 
         # draw selection points on shape
         self._draw_selection_points = show_selection_points
+        self.show_dimensions = show_dimensions
 
     def to_dict(self) -> dict:
         """
@@ -508,12 +518,13 @@ class RectangleOverlay(EditableShape, RectangleEditingMixin, WorldOverlay):
     def draw_name_label(self, ctx):
         self._name_label.text = self.name.value
         self._name_label.pos = self.cnvs.view_to_buffer(self.v_center)
-        self._name_label.background = hex_to_frgba(theme.viewport_background)
+        self._name_label.background = hex_to_frgba(theme.viewport_background, self.LABEL_BACKGROUND_OPACITY)
         self._name_label.draw(ctx)
 
-    def draw(self, ctx, shift=(0, 0), scale=1.0, line_width=4):
+    def draw(self, ctx, shift=(0, 0), scale=1.0, line_width=None):
         """ Draw the selection as a rectangle """
-        line_width = LINE_WIDTH_THICK if self.selected.value else LINE_WIDTH_THIN
+        if line_width is None:
+            line_width = LINE_WIDTH_THICK if self.selected.value else LINE_WIDTH_THIN
 
         if self.p_point1 and self.p_point2 and self.p_point3 and self.p_point4:
 
@@ -544,7 +555,7 @@ class RectangleOverlay(EditableShape, RectangleEditingMixin, WorldOverlay):
                 self.draw_edges(ctx, b_point1, b_point2, b_point3, b_point4)
 
             # Side labels
-            if self.selected.value:
+            if self.selected.value and self.show_dimensions:
                 self.draw_side_labels(ctx, b_point1, b_point2, b_point3, b_point4)
 
             # Draw the rotation label or name label at the center
@@ -569,14 +580,20 @@ class RectangleOverlay(EditableShape, RectangleEditingMixin, WorldOverlay):
 class MillingRectangleOverlay(RectangleOverlay):
     """Rectangle overlay that can show the estimated uncorrected opening."""
 
+    LABEL_BACKGROUND_OPACITY = MILLING_LABEL_BACKGROUND_OPACITY
+
     def __init__(self, *args, spot_size_correction: float = 0.0,
-                 show_spot_size_correction: bool = False, **kwargs):
+                 show_spot_size_correction: bool = False,
+                 opacity: float = MILLING_OVERLAY_ACTIVE_OPACITY, **kwargs):
         """Initialize the correction overlay.
 
         :param spot_size_correction: Total measured opening excess in meters.
         :param show_spot_size_correction: Whether to show the correction band and dashed outline.
+        :param opacity: Overlay opacity from 0.0 (transparent) to 1.0 (opaque).
         """
         super().__init__(*args, **kwargs)
+        red, green, blue, _ = self.colour
+        self.colour = (red, green, blue, opacity)
         self.spot_size_correction = spot_size_correction
         self.show_spot_size_correction = show_spot_size_correction
 
@@ -635,14 +652,15 @@ class MillingRectangleOverlay(RectangleOverlay):
         for point in estimated_buffer_points[1:]:
             ctx.line_to(*point)
         ctx.close_path()
-        ctx.set_line_width(2)
+        ctx.set_line_width(MILLING_OVERLAY_LINE_WIDTH)
         ctx.set_line_join(cairo.LINE_JOIN_MITER)
         ctx.set_dash(SPOT_SIZE_CORRECTION_DASH)
         ctx.set_source_rgba(*self.colour)
         ctx.stroke()
         ctx.restore()
 
-    def draw(self, ctx, shift=(0, 0), scale=1.0, line_width=4):
+    def draw(self, ctx, shift=(0, 0), scale=1.0,
+             line_width=MILLING_OVERLAY_LINE_WIDTH):
         """Draw the correction visualization and rectangle overlay."""
         self._draw_spot_size_correction(ctx)
         super().draw(ctx, shift=shift, scale=scale, line_width=line_width)

@@ -2,9 +2,9 @@
 """
 Created on 09 Mar 2023
 
-@author: Canberk Akin
+@author: Canberk Akin, Alexéy Ilyushkin
 
-Copyright © 2023 Canberk Akin, Delmic
+Copyright © 2023-2026 Canberk Akin, Alexéy Ilyushkin, Delmic
 
 This file is part of Odemis.
 
@@ -43,15 +43,25 @@ from odemis.acq.feature import (
 from odemis.acq.milling import millmng
 from odemis.acq.milling.millmng import MillingWorkflowTask, run_automated_milling
 from odemis.acq.milling.patterns import (
+    CorrelationPatternParameters,
     MicroexpansionPatternParameters,
+    MillingPatternParameters,
+    NotchPatternParameters,
     RectanglePatternParameters,
+    RulerPatternParameters,
     TrenchPatternParameters,
 )
 from odemis.acq.milling.tasks import MillingTaskSettings
 from odemis.gui.comp.milling import MillingTaskPanel
+from odemis.gui.comp.overlay._constants import (
+    MILLING_OVERLAY_ACTIVE_OPACITY,
+    MILLING_OVERLAY_INACTIVE_OPACITY,
+)
 from odemis.gui.comp.overlay.base import Vec
-from odemis.gui.comp.overlay.rectangle import MillingRectangleOverlay, RectangleOverlay
-from odemis.gui.comp.overlay.shapes import EditableShape, ShapesOverlay
+from odemis.gui.comp.overlay.milling import MillingPatternOverlay
+from odemis.gui.comp.overlay.rectangle import MillingRectangleOverlay
+from odemis.gui.comp.overlay.shapes import EditableShape
+from odemis.gui.comp.popup import show_message
 from odemis.gui.conf import get_acqui_conf
 from odemis.gui.cont.features import save_project
 from odemis.gui.layout import theme
@@ -62,31 +72,27 @@ from odemis.gui.util.widgets import (
 )
 from odemis.util import is_point_in_rect, units
 
-# yellow, cyan, magenta, lime, orange, hotpink
-MILLING_COLOURS_CYCLE = [
+MILLING_THEME_COLORS = (
+    theme.categorical_red,
+    theme.categorical_blue,
+    theme.categorical_rose,
+    theme.categorical_pink,
+    theme.categorical_orange,
     theme.categorical_yellow,
     theme.categorical_cyan,
     theme.categorical_magenta,
     theme.categorical_green,
-    theme.categorical_orange,
-    theme.categorical_pink,
-]
-MILLING_COLOURS_CANONICAL = {
-    "Rough Milling 01": theme.categorical_yellow,
-    "Rough Milling 02": theme.categorical_cyan,
-    "Polishing 01": theme.categorical_magenta,
-    "Polishing 02": theme.categorical_green,
-    "Microexpansion": theme.categorical_orange,
-    "Fiducial": theme.categorical_pink,
-}
+)
 # Step sizes to move the milling patterns horizontally
 MOVE_DELTA_X_SHORT = 1  # px
 MOVE_DELTA_X_LONG = 5  # px
-def _get_milling_colour(task_name: str, idx: int) -> str:
-    """Get the colour based on the task name or index"""
-    if task_name in MILLING_COLOURS_CANONICAL:
-        return MILLING_COLOURS_CANONICAL[task_name]
-    return MILLING_COLOURS_CYCLE[idx % len(MILLING_COLOURS_CYCLE)]
+PATTERN_MOVE_WARNING_TIMEOUT = 3.0
+
+
+def _get_milling_colour(task: MillingTaskSettings, idx: int) -> str:
+    """Get the configured task color, falling back to the application theme."""
+    return task.color or MILLING_THEME_COLORS[idx % len(MILLING_THEME_COLORS)]
+
 
 def pos_to_relative(pos: Tuple[float, float], ref_img: model.DataArray) -> Tuple[float, float]:
     """Convert the position from absolute position to relative position to the centre of image the given stream"""
@@ -117,7 +123,9 @@ def rectangle_pattern_to_shape(canvas,
                         pattern: RectanglePatternParameters,
                         colour: str = theme.categorical_yellow,
                         name: str = None,
-                        show_spot_size_correction: bool = False) -> EditableShape:
+                        show_spot_size_correction: bool = False,
+                        show_dimensions: bool = True,
+                        opacity: float = MILLING_OVERLAY_ACTIVE_OPACITY) -> EditableShape:
     """Convert a rectangle pattern to a shape"""
     rect = MillingRectangleOverlay(
         cnvs=canvas,
@@ -125,6 +133,8 @@ def rectangle_pattern_to_shape(canvas,
         show_selection_points=False,
         spot_size_correction=pattern.spot_size_correction.value,
         show_spot_size_correction=show_spot_size_correction,
+        show_dimensions=show_dimensions,
+        opacity=opacity,
     )
     width = pattern.width.value
     height = pattern.height.value
@@ -147,7 +157,8 @@ def rectangle_pattern_to_shape(canvas,
     rect._points = rect.get_physical_sel()
     rect.points.value = rect._points
 
-    # rect.set_rotation(math.radians(45)) #  TODO: how to rotate the shape?
+    if pattern.rotation.value:
+        rect.set_rotation(pattern.rotation.value)
 
     return rect
 
@@ -183,17 +194,18 @@ class MillingTaskController:
         self._active_spot_size_pattern = None
 
         # pattern overlay
-        self.rectangles_overlay = ShapesOverlay(
-            cnvs=self.canvas,
-            shape_cls=RectangleOverlay,
-        )
+        self.rectangles_overlay = MillingPatternOverlay(cnvs=self.canvas)
         self.canvas.add_world_overlay(self.rectangles_overlay)
         self.canvas.Bind(wx.EVT_LEFT_DOWN, self.on_mouse_down) # bind the mouse down event
         self.canvas.Bind(wx.EVT_CHAR, self.on_char)
 
         self.selected_tasks = model.ListVA([])  # List of strings, names of the selected milling tasks
+        self._panel.milling_task_chk_list.Bind(
+            wx.EVT_LEFT_DOWN, handler=self._on_milling_task_mouse_down)
         self._panel.milling_task_chk_list.Bind(wx.EVT_CHECKLISTBOX, handler=self._update_selected_tasks)
         self._panel.milling_task_chk_list.Bind(wx.EVT_LISTBOX, handler=self._on_milling_task_selected)
+        self._panel.btn_snap_patterns_to_feature.Bind(
+            wx.EVT_BUTTON, self._snap_patterns_to_feature)
 
         self._tab_data.main.currentFeature.subscribe(self._on_current_feature_changes, init=True)
 
@@ -231,6 +243,14 @@ class MillingTaskController:
         milling_tasks = feature.milling_tasks if feature else {}
         self.set_milling_tasks(milling_tasks)
         self._update_pattern_panels()
+        self._update_pattern_movement_controls()
+
+    def _update_pattern_movement_controls(self) -> None:
+        """Enable pattern movement controls when a feature can be edited."""
+        feature = self._tab_data.main.currentFeature.value
+        can_move = feature is not None and self.allow_milling_pattern_move
+        self._panel.chk_move_all_patterns.Enable(can_move)
+        self._panel.btn_snap_patterns_to_feature.Enable(can_move and feature.milling_feature_offset.value is not None)
 
     @call_in_wx_main
     def _update_pattern_panels(self) -> None:
@@ -250,9 +270,6 @@ class MillingTaskController:
 
         # create the setting panels, and connectors
         self.controls: Dict[str, MillingTaskPanel] = {}
-        pattern_parameters = [
-            "width", "height", "depth", "spacing", "spot_size_correction"
-        ]
         milling_parameters = ["current", "align", "mode"]
 
         # Note: always create all the panels, but hide for which the task is not selected.
@@ -273,16 +290,18 @@ class MillingTaskController:
             self.controls[task_name]["panel"] = panel
 
             # pattern parameters
-            for param in pattern_parameters:
+            for param in panel.pattern_parameters:
+                value = getattr(parameters, param)
+                event = wx.EVT_CHECKBOX if isinstance(value, model.BooleanVA) else wx.EVT_COMMAND_ENTER
                 _va_connector = VigilantAttributeConnector(
-                    getattr(parameters, param),
+                    value,
                     panel.ctrl_dict[param],
-                    events=wx.EVT_COMMAND_ENTER,
+                    events=event,
                 )
                 self.controls[task_name][f"{param}_connector"] = _va_connector
 
                 # VA connector, bind events
-                getattr(parameters, param).subscribe(self._on_patterns)
+                value.subscribe(self._on_patterns)
                 panel.ctrl_dict[param].Bind(
                     wx.EVT_SET_FOCUS,
                     lambda evt, pattern=parameters: self._on_pattern_control_interaction(evt, pattern),
@@ -349,22 +368,22 @@ class MillingTaskController:
                 if not task.selected:
                     continue
                 for pattern in task.patterns:
-                    if not isinstance(pattern, (RectanglePatternParameters,
-                                                TrenchPatternParameters,
-                                                MicroexpansionPatternParameters)):
-                        continue
-                    correction = pattern.spot_size_correction.value
-                    if correction >= min(pattern.width.value, pattern.height.value):
-                        return feature.name.value, task_name
+                    # Validate the actual milling rectangles, including the ruler's thin graduations.
+                    for rectangle in pattern.generate():
+                        if not isinstance(rectangle, RectanglePatternParameters):
+                            continue
+                        correction = rectangle.spot_size_correction.value
+                        if correction >= min(rectangle.width.value, rectangle.height.value):
+                            return feature.name.value, task_name
         return None
 
     def _update_spot_size_validation_message(self) -> None:
         """Update the spot size correction validation message."""
         invalid_pattern = self._get_invalid_spot_size_correction()
-        message = (
-            f"Invalid spot size correction: {invalid_pattern[0]}, {invalid_pattern[1]}."
-            if invalid_pattern else ""
-        )
+        if invalid_pattern:
+            message = f"Invalid spot size correction: {invalid_pattern[0]}, {invalid_pattern[1]}."
+        else:
+            message = ""
         self._panel.txt_automated_milling_status.SetLabel(message)
 
     @call_in_wx_main
@@ -389,10 +408,7 @@ class MillingTaskController:
         """Activate a pattern when its control or an internal child is clicked."""
         control.Bind(
             wx.EVT_LEFT_DOWN,
-            lambda evt, active_pattern=pattern: self._on_pattern_control_interaction(
-                evt, active_pattern
-            ),
-        )
+            lambda evt, active_pattern=pattern: self._on_pattern_control_interaction(evt, active_pattern))
         for child in control.GetChildren():
             self._bind_pattern_activation(child, pattern)
 
@@ -402,12 +418,31 @@ class MillingTaskController:
             self.draw_milling_tasks()
         evt.Skip()
 
+    def _on_milling_task_mouse_down(self, evt: wx.MouseEvent) -> None:
+        """Deselect an already-highlighted row when it is Ctrl-clicked."""
+        task_list = self._panel.milling_task_chk_list
+        clicked_index = task_list.HitTest(evt.GetPosition())
+        if (evt.ControlDown()
+                and clicked_index != wx.NOT_FOUND
+                and clicked_index == task_list.GetSelection()):
+            self._deselect_milling_task()
+            return
+        evt.Skip()
+
     def _on_milling_task_selected(self, evt: wx.CommandEvent):
         """Show the correction overlay for the highlighted pattern list row."""
         task = self.milling_tasks.get(evt.GetString())
-        self._active_spot_size_pattern = task.patterns[0] if task and task.patterns else None
+        self._active_spot_size_pattern = (
+            task.patterns[0] if task and task.patterns else None
+        )
         self.draw_milling_tasks()
         evt.Skip()
+
+    def _deselect_milling_task(self) -> None:
+        """Clear the highlighted milling task without changing its checked state."""
+        self._panel.milling_task_chk_list.SetSelection(wx.NOT_FOUND)
+        self._active_spot_size_pattern = None
+        self.draw_milling_tasks()
 
     def on_mouse_down(self, evt):
         active_canvas = evt.GetEventObject()
@@ -427,12 +462,38 @@ class MillingTaskController:
 
             # TODO: validate if click is outside image bounds, don't move the pattern
             # TODO: validate whether the pattern is within the image bounds before moving it
-            # move selected stream to position
-            self.move_milling_tasks(pos_to_relative(p_pos, feature.reference_image))
+            patterns = self._get_patterns_for_manual_move()
+            if not patterns:
+                self._show_pattern_selection_warning(
+                    "Select a milling pattern before moving it.")
+                return
+
+            anchor_pattern = None
+            if self._panel.chk_move_all_patterns.GetValue():
+                anchor_pattern = self._get_highlighted_pattern()
+                if anchor_pattern is None:
+                    self._show_pattern_selection_warning(
+                        "Select a milling pattern before moving all patterns.")
+                    return
+            self._move_patterns(patterns, pos_to_relative(p_pos, feature.reference_image), anchor_pattern)
             return
 
         # super event passthrough
         evt.Skip()
+
+    def _show_pattern_selection_warning(self, message: str) -> None:
+        """Log and temporarily display a pattern-selection warning.
+
+        :param message: Warning text shown to the user and written to the log.
+        """
+        logging.info(message)
+        show_message(
+            self._tab.main_frame,
+            title="Pattern movement",
+            message=message,
+            timeout=PATTERN_MOVE_WARNING_TIMEOUT,
+            level=logging.WARNING,
+        )
 
     def on_char(self, evt: wx.Event) -> None:
         """
@@ -457,7 +518,7 @@ class MillingTaskController:
         feature = self._tab_data.main.currentFeature.value
 
         # move if a reference image exists, because coordinate conversion from view pixels to physical
-        # metres relies on the MD_POS metadata stored in that image
+        # meters relies on the MD_POS metadata stored in that image
         if (ctrl_mod
                 and self.allow_milling_pattern_move
                 and feature and feature.reference_image is not None
@@ -473,22 +534,22 @@ class MillingTaskController:
             else:
                 view_dx = step_px
 
-            # All patterns across all tasks are shifted by the same view-space offset so
-            # their relative positions are preserved (the whole milling stack moves together).
-            for task in self.milling_tasks.values():
-                for pattern in task.patterns:
-                    selected_center_rel = pattern.center.value
-                    offset = active_canvas.get_half_buffer_size()
-                    center_phys = pos_to_absolute(selected_center_rel, ref_img)
-                    center_view = active_canvas.phys_to_view(center_phys, offset)
-                    new_center_view = (center_view[0] + view_dx, center_view[1])
-                    new_center_phys = active_canvas.view_to_phys(new_center_view, offset)
-                    logging.debug(f"Move milling pattern {pattern.name.value} horizontally from physical position"
-                                  f" {center_phys}, to new position {new_center_phys}")
+            patterns = self._get_patterns_for_manual_move()
+            if not patterns:
+                logging.info("Select a milling pattern before moving it.")
+                return
+            for pattern in patterns:
+                selected_center_rel = pattern.center.value
+                offset = active_canvas.get_half_buffer_size()
+                center_phys = pos_to_absolute(selected_center_rel, ref_img)
+                center_view = active_canvas.phys_to_view(center_phys, offset)
+                new_center_view = (center_view[0] + view_dx, center_view[1])
+                new_center_phys = active_canvas.view_to_phys(new_center_view, offset)
+                logging.debug(f"Move milling pattern {pattern.name.value} horizontally from physical position"
+                              f" {center_phys}, to new position {new_center_phys}")
 
-                    # move selected pattern to position
-                    relative_pos = pos_to_relative(new_center_phys, feature.reference_image)
-                    pattern.center.value = relative_pos
+                relative_pos = pos_to_relative(new_center_phys, feature.reference_image)
+                pattern.center.value = relative_pos
 
             save_project(self._tab_data.main)
             self.draw_milling_tasks()
@@ -544,36 +605,111 @@ class MillingTaskController:
         self.draw_milling_tasks()
         self._update_mill_btn()
 
-    def move_milling_tasks(self, pos: Tuple[float, float]):
-        """
-        Update only the milling patterns for the current feature.
+    def _get_patterns_for_manual_move(self) -> List[MillingPatternParameters]:
+        """Return the highlighted pattern, or all patterns in grouped movement mode."""
+        highlighted_task = self._get_highlighted_task()
+        if highlighted_task is None or not highlighted_task.selected:
+            return []
 
-        This is the independent Ctrl+Shift+click movement path and must not move
-        the feature marker.
-        :param pos: the position to draw the patterns at (in m, as relative coordinates to the center of the ion-beam FoV)
+        if self._panel.chk_move_all_patterns.GetValue():
+            return [pattern for task in self.milling_tasks.values()
+                    if task.selected for pattern in task.patterns]
+
+        return list(highlighted_task.patterns)
+
+    def _get_highlighted_task(self) -> Optional[MillingTaskSettings]:
+        """Return the milling task represented by the highlighted row.
+
+        :return: Highlighted milling task, or None when no row is highlighted.
+        """
+        selection = self._panel.milling_task_chk_list.GetSelection()
+        if selection == wx.NOT_FOUND:
+            return None
+        task_name = self._panel.milling_task_chk_list.GetString(selection)
+        return self.milling_tasks.get(task_name)
+
+    def _get_highlighted_pattern(self) -> Optional[MillingPatternParameters]:
+        """Return the first pattern from the highlighted milling-task row.
+
+        :return: Highlighted pattern, or None when no row is highlighted.
+        """
+        task = self._get_highlighted_task()
+        return task.patterns[0] if task and task.patterns else None
+
+    def _move_patterns(self, patterns: List[MillingPatternParameters],
+                       pos: Tuple[float, float],
+                       anchor_pattern: Optional[MillingPatternParameters] = None,
+                       use_feature_offsets: bool = False) -> None:
+        """Move patterns to a target position and persist the updated project.
+
+        When an anchor pattern is provided, translate every pattern by the
+        offset required to center the anchor at the target position.
+
+        :param patterns: Patterns to move.
+        :param pos: Target position relative to the reference-image center.
+        :param anchor_pattern: Pattern to center at the target while preserving
+            the relative positions of all patterns.
+        :param use_feature_offsets: Arrange patterns at their feature-relative
+            default offsets instead of placing every center at the target.
+        """
+        offset = None
+        if anchor_pattern is not None:
+            anchor_x, anchor_y = anchor_pattern.center.value
+            offset = (pos[0] - anchor_x, pos[1] - anchor_y)
+
+        for pattern in patterns:
+            if use_feature_offsets:
+                pattern.center.value = pattern.get_center_at_feature(pos)
+            elif offset is None:
+                pattern.center.value = pos
+            else:
+                center_x, center_y = pattern.center.value
+                pattern.center.value = (center_x + offset[0], center_y + offset[1])
+
+        save_project(self._tab_data.main)
+        self.draw_milling_tasks()
+
+    def move_milling_tasks(self, pos: Tuple[float, float]) -> None:
+        """Arrange every displayed milling pattern around the current feature.
+
+        :param pos: Position relative to the center of the ion-beam field of view.
         """
         feature = self._tab_data.main.currentFeature.value
         if feature is None:
             logging.warning("Cannot move milling tasks without a selected feature.")
             return
 
-        for task in feature.milling_tasks.values():
-            for pattern in task.patterns:
-                pattern.center.value = pos
+        patterns = [pattern for task in feature.milling_tasks.values()
+                    if task.selected for pattern in task.patterns]
+        self._move_patterns(patterns, pos, use_feature_offsets=True)
 
-        save_project(self._tab_data.main)
-        self.draw_milling_tasks()
+    def _snap_patterns_to_feature(self, _: wx.Event) -> None:
+        """Recenter displayed milling patterns on the feature marker."""
+        feature = self._tab_data.main.currentFeature.value
+        if not self.allow_milling_pattern_move:
+            logging.warning(
+                "Cannot recenter milling patterns while pattern movement is disabled.")
+            return
+        if feature is None:
+            logging.warning(
+                "Cannot recenter milling patterns without a selected feature.")
+            return
+        if feature.milling_feature_offset.value is None:
+            logging.warning("Cannot recenter milling patterns without a feature marker.")
+            return
+        self.move_milling_tasks(feature.milling_feature_offset.value)
 
     def set_milling_feature_position(self,
                                      pos: Tuple[float, float],
                                      move_patterns: bool = True) -> None:
-        """Commit the feature marker and optionally snap patterns around it."""
+        """Commit the feature marker and optionally recenter patterns around it."""
         feature = self._tab_data.main.currentFeature.value
         if feature is None:
             logging.warning("Cannot position milling feature without a selected feature.")
             return
 
         feature.set_milling_feature_offset(pos, move_patterns=move_patterns)
+        self._update_pattern_movement_controls()
 
         save_project(self._tab_data.main)
         self.draw_milling_tasks()
@@ -594,24 +730,94 @@ class MillingTaskController:
             self.canvas.request_drawing_update()
             return
 
+        highlighted_task = self._get_highlighted_task()
+        indexed_tasks = list(enumerate(self.milling_tasks.items()))
+        # Draw the highlighted task last so it appears above overlapping
+        # patterns. This temporary rendering order does not mutate milling order.
+        rendering_order = sorted(
+            indexed_tasks,
+            key=lambda item: item[1][1] is highlighted_task,
+        )
+
         # redraw all patterns
-        for i, (task_name, task) in enumerate(self.milling_tasks.items()):
+        for i, (task_name, task) in rendering_order:
             if not task.selected:
                 continue
+            show_labels = task is highlighted_task
+            opacity = MILLING_OVERLAY_ACTIVE_OPACITY if show_labels else MILLING_OVERLAY_INACTIVE_OPACITY
             for pattern in task.patterns:
-                # logging.debug(f"{task_name}: {pattern.to_json()}")
-                for j, pshape in enumerate(pattern.generate()):
-                    name = task_name if j == 0 else None
+                uses_shared_label = isinstance(
+                    pattern,
+                    (
+                        CorrelationPatternParameters,
+                        RulerPatternParameters,
+                        NotchPatternParameters,
+                    ),
+                )
+                uses_top_label = isinstance(
+                    pattern, (MicroexpansionPatternParameters, TrenchPatternParameters))
+                generated_patterns = pattern.generate()
+                for j, pshape in enumerate(generated_patterns):
+                    if show_labels and j == 0 and not uses_shared_label and not uses_top_label:
+                        name = task_name
+                    else:
+                        name = None
                     shape = rectangle_pattern_to_shape(
                                             canvas=self.canvas,
                                             ref_img=feature.reference_image,
                                             pattern=pshape,
-                                            colour=_get_milling_colour(task_name, i),
+                                            colour=_get_milling_colour(task, i),
                                             name=name,
                                             show_spot_size_correction=(
                                                 pattern is self._active_spot_size_pattern
-                                            ))
+                                            ),
+                                            show_dimensions=(
+                                                show_labels and not uses_shared_label
+                                            ),
+                                            opacity=opacity)
                     self.rectangles_overlay.add_shape(shape)
+                if uses_top_label and show_labels:
+                    center_x, _ = pattern.center.value
+                    top_y = max(
+                        pshape.center.value[1] + pshape.height.value / 2
+                        for pshape in generated_patterns
+                    )
+                    label_position = pos_to_absolute(
+                        (center_x, top_y), feature.reference_image)
+                    self.rectangles_overlay.add_pattern_label(
+                        task_name, label_position)
+                elif uses_shared_label and show_labels:
+                    x, y = pos_to_absolute(
+                        pattern.center.value, feature.reference_image)
+                    if isinstance(pattern, CorrelationPatternParameters):
+                        size = units.readable_str(
+                            (pattern.width.value, pattern.height.value), "m", sig=3
+                        )
+                        # Cairo cannot provide font fallback for the uncommon glyphs in the full task name.
+                        label = f"Correlation · {size}"
+                    elif isinstance(pattern, NotchPatternParameters):
+                        size = units.readable_str(
+                            (pattern.width.value, pattern.height.value), "m", sig=3
+                        )
+                        label = f"{task_name} · {size}"
+                        gap = units.readable_str(pattern.gap.value, "m", sig=3)
+                        gap_side = 1 if pattern.mirrored.value else -1
+                        gap_align = wx.ALIGN_LEFT if pattern.mirrored.value else wx.ALIGN_RIGHT
+                        self.rectangles_overlay.add_pattern_label(
+                            gap,
+                            (x + gap_side * pattern.width.value / 2,
+                             y + pattern.offset.value),
+                            align=gap_align | wx.ALIGN_CENTER_VERTICAL,
+                            offset=(gap_side * 8, 0),
+                        )
+                    else:
+                        height = units.readable_str(
+                            pattern.height.value, "m", sig=3)
+                        label = f"{task_name} · {height}"
+                    self.rectangles_overlay.add_pattern_label(
+                        label,
+                        (x, y + pattern.height.value / 2),
+                    )
 
         # validate the patterns
         self._on_shapes_update(self.rectangles_overlay._shapes.value)
@@ -724,6 +930,8 @@ class MillingTaskController:
         Called when is_acquiring changes
         Enable/Disable mill button
         """
+        self.allow_milling_pattern_move = not is_acquiring
+        self._update_pattern_movement_controls()
         self._update_mill_btn()
 
     @call_in_wx_main

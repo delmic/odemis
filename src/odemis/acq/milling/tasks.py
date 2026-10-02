@@ -1,7 +1,7 @@
 """
-@author: Patrick Cleeve
+@author: Patrick Cleeve, Alexéy Ilyushkin
 
-Copyright © 2025 Delmic
+Copyright © 2025-2026 Patrick Cleeve, Alexéy Ilyushkin, Delmic
 
 This file is part of Odemis.
 
@@ -23,9 +23,10 @@ This module contains structures to define milling tasks and parameters.
 
 """
 
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 import yaml
+
 from odemis import model
 from odemis.acq.milling.patterns import (
     MillingPatternParameters,
@@ -72,9 +73,11 @@ class MillingTaskSettings:
     def __init__(self, milling: MillingSettings,
                  patterns: List[MillingPatternParameters],
                  name: str,
-                 selected: bool = True):
+                 selected: bool = True,
+                 color: Optional[str] = None):
         self.name: str = name
         self.selected: bool = selected  # Whether this task should be executed or not
+        self.color: Optional[str] = color
         self.milling: MillingSettings = milling
         self.patterns: List[MillingPatternParameters] = patterns
 
@@ -82,21 +85,32 @@ class MillingTaskSettings:
         """Convert the parameters to a dictionary
         :return: dictionary containing the milling task settings
         """
-        return {"name": self.name,
+        data = {"name": self.name,
                 "selected": self.selected,
                 "milling": self.milling.to_dict(),
                 "patterns": [pattern.to_dict() for pattern in self.patterns]}
+        if self.color is not None:
+            data["color"] = self.color
+        return data
 
     @staticmethod
     def from_dict(data: dict) -> "MillingTaskSettings":
         """Create a MillingTaskSettings object from a dictionary
         :param data: dictionary containing the milling task settings
         :return: MillingTaskSettings"""
+        patterns = []
+        for pattern_data in data.get("patterns", []):
+            pattern_class = PATTERN_NAME_TO_CLASS.get(pattern_data.get("pattern"))
+            if pattern_class is None:
+                continue
+            patterns.append(pattern_class.from_dict(pattern_data))
+
         return MillingTaskSettings(
             name=data.get("name", "Milling Task"),
             selected=data.get("selected", True),
+            color=data.get("color"),
             milling=MillingSettings.from_dict(data["milling"]),
-            patterns=[PATTERN_NAME_TO_CLASS[p["pattern"]].from_dict(p) for p in data["patterns"]])
+            patterns=patterns)
 
     def __repr__(self):
         return f"{self.to_dict()}"
@@ -125,14 +139,21 @@ def save_milling_tasks(path: str, milling_tasks: Dict[str, MillingTaskSettings])
         yaml.dump(mdict, f)
 
 def load_milling_tasks(path: str) -> Dict[str, MillingTaskSettings]:
-    """Load milling tasks from a yaml file.
+    """Load supported milling tasks from a YAML file.
+
+    Unsupported pattern types are ignored. Tasks containing no supported
+    patterns are omitted so newer configurations remain forward-compatible.
+
     :param path: path to the yaml file
     :return: dictionary of milling tasks
     """
     with open(path, "r") as f:
         yaml_file = yaml.safe_load(f)
 
-    # convert the dictionary to Dict[str, MillingTaskSettings]
-    milling_tasks = {k: MillingTaskSettings.from_dict(v) for k, v in yaml_file.items()}
+    milling_tasks = {}
+    for name, data in (yaml_file or {}).items():
+        task = MillingTaskSettings.from_dict(data)
+        if task.patterns:
+            milling_tasks[name] = task
 
     return milling_tasks
