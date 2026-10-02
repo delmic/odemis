@@ -23,6 +23,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 import itertools
 import logging
 import os
+from pathlib import Path
 
 import wx
 
@@ -33,6 +34,7 @@ from odemis.acq.feature import (
     FEATURE_POLISHED,
     FEATURE_READY_TO_MILL,
     FEATURE_ROUGH_MILLED,
+    REFERENCE_IMAGE_FILENAME,
     CryoFeature,
     get_feature_position_at_posture,
     FIBFMCorrelationData,
@@ -466,11 +468,42 @@ class CryoFeatureController(object):
 
     def _on_cmb_feature_name_change(self):
         feature = self._tab_data_model.main.currentFeature.value
-        value = self._panel.cmb_features.GetValue()  # Old name
+        value = self._panel.cmb_features.GetValue()  # New name
         # Update the name of the streams with the new name
         for stream in feature.streams.value:
             stream.name.value = stream.name.value.replace(feature.name.value, value)
+        self._rename_feature_path(feature, value)
         return value
+
+    def _rename_feature_path(self, feature: CryoFeature, new_name: str) -> None:
+        """
+        Update the feature directory (and its reference image) so that it follows the new feature name.
+        The feature name must not have been updated yet.
+        :param feature: the feature being renamed
+        :param new_name: the new name of the feature
+        """
+        old_name = feature.name.value
+        if not feature.path or new_name == old_name:
+            return
+
+        old_path = Path(feature.path)
+        new_path = Path(self._tab.conf.pj_last_path) / new_name
+        if old_path == new_path:
+            return
+        if new_path.exists():
+            logging.warning(f"Cannot move feature directory to {new_path}, as it already exists")
+            return
+
+        try:
+            if old_path.is_dir():
+                old_path.rename(new_path)
+                old_ref = new_path / f"{old_name}-{REFERENCE_IMAGE_FILENAME}"
+                if old_ref.exists():
+                    old_ref.rename(new_path / f"{new_name}-{REFERENCE_IMAGE_FILENAME}")
+        except OSError:
+            logging.exception(f"Failed to move feature directory {old_path} to {new_path}")
+            return
+        feature.path = str(new_path)
 
     def _on_feature_status(self, feature_status):
         """
