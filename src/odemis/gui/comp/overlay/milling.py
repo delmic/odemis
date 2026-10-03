@@ -22,6 +22,7 @@ from odemis.acq.feature import (
     constrain_milling_alignment_area,
     constrain_milling_alignment_area_size,
 )
+from odemis.acq.milling.patterns import MillingPatternParameters
 from odemis.acq.stream import StaticStream
 from odemis.gui.comp.overlay._constants import (
     MILLING_LABEL_BACKGROUND_OPACITY,
@@ -30,7 +31,7 @@ from odemis.gui.comp.overlay._constants import (
 )
 from odemis.gui.comp.overlay.base import SEL_MODE_DRAG, SEL_MODE_EDIT, SEL_MODE_NONE, Vec
 from odemis.gui.comp.overlay.rectangle import MillingRectangleOverlay, RectangleOverlay
-from odemis.gui.comp.overlay.shapes import ShapesOverlay
+from odemis.gui.comp.overlay.shapes import EditableShape, ShapesOverlay
 from odemis.gui.layout import theme
 from odemis.util.conversion import hex_to_frgba
 
@@ -45,6 +46,24 @@ class MillingPatternOverlay(ShapesOverlay):
         """
         super().__init__(cnvs, shape_cls=RectangleOverlay)
         self._pattern_labels = []
+        self._shape_patterns = {}
+
+    def clear(self) -> None:
+        """Remove all displayed shapes and their milling-pattern associations."""
+        super().clear()
+        self._shape_patterns.clear()
+
+    def add_pattern_shape(
+            self, shape: EditableShape, task_name: str, pattern: MillingPatternParameters) -> None:
+        """Add a displayed rectangle and associate it with its milling task."""
+        self.add_shape(shape)
+        self._shape_patterns[shape] = (task_name, pattern)
+
+    def get_pattern_at(
+            self, v_pos: Tuple[float, float]) -> Optional[Tuple[str, MillingPatternParameters]]:
+        """Return the task and pattern displayed at a viewport position."""
+        shape = self._get_shape(v_pos)
+        return self._shape_patterns.get(shape)
 
     def add_pattern_label(self, text: str, p_pos: Tuple[float, float],
                           align: int = wx.ALIGN_CENTRE_HORIZONTAL | wx.ALIGN_BOTTOM,
@@ -321,28 +340,44 @@ def update_milling_alignment_area_shape(
 class MillingAlignmentAreaOverlay(ShapesOverlay):
     """Allow one existing milling alignment rectangle to be moved and resized."""
 
-    def __init__(
-            self,
-            cnvs: Any,
-            on_area_changed: Callable[[MillingAlignmentRectangleOverlay, bool], None],
-            on_area_selected: Optional[Callable[[], None]] = None,
-    ) -> None:
+    def __init__(self, cnvs: Any, on_area_changed: Callable[[MillingAlignmentRectangleOverlay, bool], None],
+                 on_area_selected: Optional[Callable[[], None]] = None,
+                 blocks_area_interaction: Optional[Callable[[Tuple[float, float]], bool]] = None) -> None:
         """Initialize the alignment-area overlay.
 
         :param cnvs: Canvas that owns the overlay.
         :param on_area_changed: Callback receiving ``shape`` and ``commit``.
             Motion updates use ``commit=False``; mouse release uses ``commit=True``.
         :param on_area_selected: Callback invoked when the alignment area is clicked.
+        :param blocks_area_interaction: Callback indicating that another object
+            should receive an interior click at the given viewport position.
         """
         super().__init__(cnvs=cnvs, shape_cls=MillingAlignmentRectangleOverlay, shape_creation_allowed=False)
         self._on_area_changed = on_area_changed
         self._on_area_selected = on_area_selected
+        self._blocks_area_interaction = blocks_area_interaction
 
     def clear(self) -> None:
         """Remove the area and discard its previous edit selection."""
         super().clear()
         self._selected_shape = None
         self.cnvs.reset_dynamic_cursor()
+
+    def is_corner_handle_at(self, v_pos: Tuple[float, float]) -> bool:
+        """Return whether a selected area's resize handle is at a position."""
+        shape = self._get_shape(v_pos)
+        if shape is None or not shape.selected.value:
+            return False
+        hover, _ = shape.get_hover(v_pos)
+        return hover == gui.HOVER_EDGE
+
+    def deselect(self) -> None:
+        """Deselect the alignment area without rebuilding it."""
+        for shape in self._shapes.value:
+            shape.selected.value = False
+        self._selected_shape = None
+        self.cnvs.reset_dynamic_cursor()
+        self.cnvs.request_drawing_update()
 
     def on_enter(self, evt: wx.MouseEvent) -> None:
         """Leave viewport activation to an explicit mouse click."""
@@ -361,6 +396,11 @@ class MillingAlignmentAreaOverlay(ShapesOverlay):
 
     def on_left_down(self, evt: wx.MouseEvent) -> None:
         """Select and move an unselected area, or edit an already selected area."""
+        if self.active.value and not evt.ControlDown() and self._blocks_area_interaction is not None:
+            if self._blocks_area_interaction(evt.Position):
+                evt.Skip()
+                return
+
         clicked_shape = None
         was_selected = False
         if self.active.value and not evt.ControlDown():
@@ -388,6 +428,11 @@ class MillingAlignmentAreaOverlay(ShapesOverlay):
         """Publish constrained area updates while the user edits the rectangle."""
         if not self.active.value:
             return super().on_motion(evt)
+        if self.cnvs.left_dragging:
+            # The canvas owns a reference-image drag and its cursor until the
+            # mouse button is released. Do not reset that cursor here.
+            evt.Skip()
+            return
 
         shape = self._selected_shape
         if shape is not None and not self.is_ctrl_down:
@@ -398,18 +443,18 @@ class MillingAlignmentAreaOverlay(ShapesOverlay):
         hover = gui.HOVER_NONE
         if shape is not None and shape.selected.value:
             hover, _ = shape.get_hover(evt.Position)
+        interior_blocked = False
+        if hover == gui.HOVER_SELECTION and self._blocks_area_interaction is not None:
+            interior_blocked = self._blocks_area_interaction(evt.Position)
 
-        is_corner_edit = (
-            shape is not None
-            and shape.selected.value
-            and shape.selection_mode == SEL_MODE_EDIT
-            and shape.edit_hover == gui.HOVER_EDGE
-        )
+        has_selected_shape = shape is not None and shape.selected.value
+        is_corner_edit = (has_selected_shape and shape.selection_mode == SEL_MODE_EDIT
+                          and shape.edit_hover == gui.HOVER_EDGE)
         if shape is not None and shape.selection_mode == SEL_MODE_DRAG:
             self.cnvs.set_dynamic_cursor(wx.CURSOR_HAND)
         elif hover == gui.HOVER_EDGE or is_corner_edit:
             self.cnvs.set_dynamic_cursor(wx.CURSOR_SIZING)
-        elif hover == gui.HOVER_SELECTION:
+        elif hover == gui.HOVER_SELECTION and not interior_blocked:
             self.cnvs.set_dynamic_cursor(wx.CURSOR_HAND)
         else:
             self.cnvs.reset_dynamic_cursor()

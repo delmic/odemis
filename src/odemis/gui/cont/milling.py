@@ -99,6 +99,7 @@ MILLING_THEME_COLORS = (
 MOVE_DELTA_X_SHORT = 1  # px
 MOVE_DELTA_X_LONG = 5  # px
 PATTERN_MOVE_WARNING_TIMEOUT = 3.0
+PATTERN_DRAG_HINT_THRESHOLD = 5  # px
 
 
 def _get_milling_colour(task: MillingTaskSettings, idx: int) -> str:
@@ -262,6 +263,7 @@ class MillingTaskController:
         self.milling_tasks: Dict[str, MillingTaskSettings] = {} # TODO: move to main_data
         self.allow_milling_pattern_move = True
         self._active_spot_size_pattern = None
+        self._pattern_drag_start = None
 
         # Draw pattern previews below the editable alignment area.
         self.rectangles_overlay = MillingPatternOverlay(cnvs=self.canvas)
@@ -272,16 +274,20 @@ class MillingTaskController:
             cnvs=self.canvas,
             on_area_changed=self._update_alignment_area_from_shape,
             on_area_selected=self._deselect_milling_task_for_alignment_area,
+            blocks_area_interaction=self._blocks_alignment_area_interaction,
         )
         self.canvas.add_world_overlay(self.alignment_area_overlay)
         self.alignment_area_overlay.active.value = True
 
         self.canvas.Bind(wx.EVT_LEFT_DOWN, self.on_mouse_down) # bind the mouse down event
+        self.canvas.Bind(wx.EVT_MOTION, self.on_mouse_motion)
         self.canvas.Bind(wx.EVT_CHAR, self.on_char)
 
         self.selected_tasks = model.ListVA([])  # List of strings, names of the selected milling tasks
         self._panel.milling_task_chk_list.Bind(
             wx.EVT_LEFT_DOWN, handler=self._on_milling_task_mouse_down)
+        self._panel.milling_task_chk_list.Bind(
+            wx.EVT_KEY_DOWN, handler=self._on_milling_task_key_down)
         self._panel.milling_task_chk_list.Bind(wx.EVT_CHECKLISTBOX, handler=self._update_selected_tasks)
         self._panel.milling_task_chk_list.Bind(wx.EVT_LISTBOX, handler=self._on_milling_task_selected)
         self._panel.btn_snap_patterns_to_feature.Bind(
@@ -617,6 +623,8 @@ class MillingTaskController:
 
     def _bind_pattern_activation(self, control: wx.Window, pattern) -> None:
         """Activate a pattern when its control or an internal child is clicked."""
+        if isinstance(control, wx.TextCtrl):
+            return
         control.Bind(
             wx.EVT_LEFT_DOWN,
             lambda evt, active_pattern=pattern: self._on_pattern_control_interaction(evt, active_pattern))
@@ -630,49 +638,123 @@ class MillingTaskController:
         evt.Skip()
 
     def _on_milling_task_mouse_down(self, evt: wx.MouseEvent) -> None:
-        """Deselect an already-highlighted row when it is Ctrl-clicked."""
+        """Deselect a selected row on Ctrl-click and preserve other rows."""
         task_list = self._panel.milling_task_chk_list
         clicked_index = task_list.HitTest(evt.GetPosition())
-        if (evt.ControlDown()
-                and clicked_index != wx.NOT_FOUND
-                and clicked_index == task_list.GetSelection()):
-            self._deselect_milling_task()
+        selections = list(task_list.GetSelections())
+        if evt.ControlDown() and clicked_index in selections:
+            clicked_task = self.milling_tasks.get(task_list.GetString(clicked_index))
+            active_pattern = self._active_spot_size_pattern
+            clicked_task_was_active = clicked_task is not None and active_pattern in clicked_task.patterns
+            task_list.Deselect(clicked_index)
+            if clicked_task_was_active:
+                remaining = list(task_list.GetSelections())
+                if remaining:
+                    self._activate_milling_task(task_list.GetString(remaining[-1]))
+                    return
+                self._active_spot_size_pattern = None
+            self.draw_milling_tasks()
             return
         evt.Skip()
 
-    def _on_milling_task_selected(self, evt: wx.CommandEvent):
+    def _on_milling_task_key_down(self, evt: wx.KeyEvent) -> None:
+        """Toggle the checked state of all selected rows when Space is pressed."""
+        if evt.GetKeyCode() != wx.WXK_SPACE:
+            evt.Skip()
+            return
+
+        task_list = self._panel.milling_task_chk_list
+        selections = list(task_list.GetSelections())
+        if not selections:
+            evt.Skip()
+            return
+
+        should_check = not all(task_list.IsChecked(index) for index in selections)
+        for index in selections:
+            task_list.Check(index, should_check)
+        self._update_selected_tasks()
+
+    def _on_milling_task_selected(self, evt: wx.CommandEvent) -> None:
         """Show the correction overlay for the highlighted pattern list row."""
-        task = self.milling_tasks.get(evt.GetString())
+        self._activate_milling_task(evt.GetString())
+        evt.Skip()
+
+    def _activate_milling_task(self, task_name: str) -> None:
+        """Make one selected task active for labels and pattern controls."""
+        task = self.milling_tasks.get(task_name)
         self._active_spot_size_pattern = task.patterns[0] if task and task.patterns else None
         self.draw_milling_tasks()
-        evt.Skip()
 
     def _deselect_milling_task(self) -> None:
         """Clear the highlighted milling task without changing its checked state."""
+        task_list = self._panel.milling_task_chk_list
+        if not task_list.GetSelections() and self._active_spot_size_pattern is None:
+            return
+        self._clear_milling_task_selection()
+        self.draw_milling_tasks()
+
+    def _clear_milling_task_selection(self) -> None:
+        """Clear selected milling-task rows without redrawing their overlays."""
         self._panel.milling_task_chk_list.SetSelection(wx.NOT_FOUND)
         self._active_spot_size_pattern = None
-        self.draw_milling_tasks()
+
+    def _select_first_checked_milling_task(self) -> None:
+        """Select the first checked milling task when no row is selected."""
+        task_list = self._panel.milling_task_chk_list
+        if task_list.GetSelections():
+            return
+
+        for index in range(task_list.GetCount()):
+            if not task_list.IsChecked(index):
+                continue
+            task_list.SetSelection(index)
+            self._activate_milling_task(task_list.GetString(index))
+            return
 
     def _deselect_milling_task_for_alignment_area(self) -> None:
         """Clear the highlighted milling task without rebuilding the edited area."""
         task_list = self._panel.milling_task_chk_list
-        if task_list.GetSelection() == wx.NOT_FOUND and self._active_spot_size_pattern is None:
+        if not task_list.GetSelections() and self._active_spot_size_pattern is None:
             return
-        task_list.SetSelection(wx.NOT_FOUND)
-        self._active_spot_size_pattern = None
+        self._clear_milling_task_selection()
         self.draw_milling_tasks(redraw_alignment_area=False)
 
+    def _select_milling_pattern(self, task_name: str, pattern: MillingPatternParameters) -> bool:
+        """Highlight a task clicked in the viewport without changing checkboxes."""
+        task_list = self._panel.milling_task_chk_list
+        task_index = task_list.FindString(task_name)
+        if task_index == wx.NOT_FOUND:
+            return False
+
+        task_list.SetSelection(wx.NOT_FOUND)
+        task_list.SetSelection(task_index)
+        self._active_spot_size_pattern = pattern
+        self.alignment_area_overlay.deselect()
+        self.draw_milling_tasks(redraw_alignment_area=False)
+        return True
+
+    def _is_feature_marker_at(self, v_pos: Tuple[float, float]) -> bool:
+        """Return whether the canvas feature overlay owns a click position."""
+        overlay = getattr(self.canvas, "cryofeature_overlay", None)
+        if overlay is None:
+            return False
+        return overlay.show and overlay.active.value and overlay.get_feature_at(v_pos) is not None
+
+    def _blocks_alignment_area_interaction(self, v_pos: Tuple[float, float]) -> bool:
+        """Return whether a feature marker or milling pattern owns a position."""
+        return self._is_feature_marker_at(v_pos) or self.rectangles_overlay.get_pattern_at(v_pos) is not None
+
     def on_mouse_down(self, evt):
+        self._pattern_drag_start = None
         active_canvas = evt.GetEventObject()
         logging.debug(f"mouse down event, canvas: {active_canvas}")
 
         feature = self._tab_data.main.currentFeature.value
+        has_reference = feature is not None and feature.reference_image is not None
 
         # check if shift is pressed, and if a stream is selected
-        if (evt.ShiftDown() and evt.ControlDown()
-                and self.allow_milling_pattern_move
-                and feature and feature.reference_image is not None
-        ):
+        move_requested = evt.ShiftDown() and evt.ControlDown() and self.allow_milling_pattern_move
+        if move_requested and has_reference:
             # get the position of the mouse, convert to physical position
             pos = evt.GetPosition()
             p_pos = active_canvas.view_to_phys(pos, active_canvas.get_half_buffer_size())
@@ -686,18 +768,73 @@ class MillingTaskController:
                     "Select a milling pattern before moving it.")
                 return
 
-            anchor_pattern = None
+            anchor_position = _get_pattern_stack_center(patterns)
             if self._panel.chk_move_all_patterns.GetValue():
-                anchor_pattern = self._get_highlighted_pattern()
-                if anchor_pattern is None:
-                    self._show_pattern_selection_warning(
-                        "Select a milling pattern before moving all patterns.")
-                    return
-            self._move_patterns(patterns, pos_to_relative(p_pos, feature.reference_image), anchor_pattern)
+                self._clear_milling_task_selection()
+            self._move_patterns(patterns, pos_to_relative(p_pos, feature.reference_image), anchor_position)
             return
+
+        is_plain_click = not (evt.ControlDown() or evt.ShiftDown() or evt.AltDown())
+        if is_plain_click and has_reference:
+            click_position = evt.GetPosition()
+            if self._is_feature_marker_at(click_position):
+                self._deselect_milling_task_for_alignment_area()
+                evt.Skip()
+                return
+
+            if self.alignment_area_overlay.is_corner_handle_at(click_position):
+                self._deselect_milling_task_for_alignment_area()
+                evt.Skip()
+                return
+
+            clicked_pattern = self.rectangles_overlay.get_pattern_at(click_position)
+            if clicked_pattern is not None and self._select_milling_pattern(*clicked_pattern):
+                self._pattern_drag_start = Vec(click_position)
+                evt.Skip(False)
+                return
+
+        if not evt.ControlDown():
+            # The alignment overlay handles the same click after this canvas
+            # handler. Keep its current shape alive so it can be selected on
+            # the first click instead of being recreated as unselected.
+            self._deselect_milling_task_for_alignment_area()
 
         # super event passthrough
         evt.Skip()
+
+    def on_mouse_motion(self, evt: wx.MouseEvent) -> None:
+        """Show guidance when a user tries to drag a milling pattern."""
+        start = self._pattern_drag_start
+        if start is None:
+            evt.Skip()
+            return
+
+        if not evt.LeftIsDown():
+            self._pattern_drag_start = None
+            evt.Skip()
+            return
+
+        current = Vec(evt.GetPosition())
+        distance_squared = (current.x - start.x) ** 2 + (current.y - start.y) ** 2
+        if distance_squared >= PATTERN_DRAG_HINT_THRESHOLD ** 2:
+            self._pattern_drag_start = None
+            self._show_pattern_drag_hint()
+
+        # The initial click was consumed for pattern selection. Keep the rest
+        # of that gesture away from the image and alignment-area handlers too.
+        evt.Skip(False)
+
+    def _show_pattern_drag_hint(self) -> None:
+        """Tell the user how milling patterns are moved in this viewport."""
+        message = "To move milling patterns, use Shift+Ctrl+click."
+        logging.info(message)
+        show_message(
+            self._tab.main_frame,
+            title="Pattern movement",
+            message=message,
+            timeout=PATTERN_MOVE_WARNING_TIMEOUT,
+            level=logging.WARNING,
+        )
 
     def _show_pattern_selection_warning(self, message: str) -> None:
         """Log and temporarily display a pattern-selection warning.
@@ -754,8 +891,11 @@ class MillingTaskController:
 
             patterns = self._get_patterns_for_manual_move()
             if not patterns:
-                logging.info("Select a milling pattern before moving it.")
+                self._show_pattern_selection_warning(
+                    "Select a milling pattern before moving it.")
                 return
+            if self._panel.chk_move_all_patterns.GetValue():
+                self._clear_milling_task_selection()
             for pattern in patterns:
                 selected_center_rel = pattern.center.value
                 offset = active_canvas.get_half_buffer_size()
@@ -771,6 +911,8 @@ class MillingTaskController:
 
             save_project(self._tab_data.main)
             self.draw_milling_tasks()
+            self._update_milling_validation_message()
+            self._update_mill_btn()
             return
 
         # super event passthrough
@@ -824,27 +966,41 @@ class MillingTaskController:
         self._update_mill_btn()
 
     def _get_patterns_for_manual_move(self) -> List[MillingPatternParameters]:
-        """Return the highlighted pattern, or all patterns in grouped movement mode."""
-        highlighted_task = self._get_highlighted_task()
-        if highlighted_task is None or not highlighted_task.selected:
-            return []
-
+        """Return patterns affected by a manual movement command."""
         if self._panel.chk_move_all_patterns.GetValue():
             return [pattern for task in self.milling_tasks.values()
                     if task.selected for pattern in task.patterns]
 
-        return list(highlighted_task.patterns)
+        if not self._panel.milling_task_chk_list.GetSelections():
+            self._select_first_checked_milling_task()
+
+        highlighted_tasks = self._get_highlighted_tasks()
+        checked_tasks = [task for task in highlighted_tasks if task.selected]
+        return [pattern for task in checked_tasks for pattern in task.patterns]
+
+    def _get_highlighted_tasks(self) -> List[MillingTaskSettings]:
+        """Return milling tasks whose list rows are selected."""
+        task_list = self._panel.milling_task_chk_list
+        return [
+            self.milling_tasks[task_list.GetString(index)]
+            for index in task_list.GetSelections()
+            if task_list.GetString(index) in self.milling_tasks
+        ]
+
+    def _get_checked_highlighted_tasks(self) -> List[MillingTaskSettings]:
+        """Return selected milling-task rows that are also checked."""
+        return [task for task in self._get_highlighted_tasks() if task.selected]
 
     def _get_highlighted_task(self) -> Optional[MillingTaskSettings]:
-        """Return the milling task represented by the highlighted row.
+        """Return the milling task active for labels and movement.
 
-        :return: Highlighted milling task, or None when no row is highlighted.
+        :return: Active milling task, or None when no task is active.
         """
-        selection = self._panel.milling_task_chk_list.GetSelection()
-        if selection == wx.NOT_FOUND:
-            return None
-        task_name = self._panel.milling_task_chk_list.GetString(selection)
-        return self.milling_tasks.get(task_name)
+        highlighted_tasks = self._get_highlighted_tasks()
+        for task in highlighted_tasks:
+            if self._active_spot_size_pattern in task.patterns:
+                return task
+        return highlighted_tasks[-1] if highlighted_tasks else None
 
     def _get_highlighted_pattern(self) -> Optional[MillingPatternParameters]:
         """Return the first pattern from the highlighted milling-task row.
@@ -856,23 +1012,23 @@ class MillingTaskController:
 
     def _move_patterns(self, patterns: List[MillingPatternParameters],
                        pos: Tuple[float, float],
-                       anchor_pattern: Optional[MillingPatternParameters] = None,
+                       anchor_position: Optional[Tuple[float, float]] = None,
                        use_feature_offsets: bool = False) -> None:
         """Move patterns to a target position and persist the updated project.
 
-        When an anchor pattern is provided, translate every pattern by the
-        offset required to center the anchor at the target position.
+        When an anchor position is provided, translate every pattern by the
+        offset required to center that point at the target position.
 
         :param patterns: Patterns to move.
         :param pos: Target position relative to the reference-image center.
-        :param anchor_pattern: Pattern to center at the target while preserving
+        :param anchor_position: Point to center at the target while preserving
             the relative positions of all patterns.
         :param use_feature_offsets: Arrange patterns at their feature-relative
             default offsets instead of placing every center at the target.
         """
         offset = None
-        if anchor_pattern is not None:
-            anchor_x, anchor_y = anchor_pattern.center.value
+        if anchor_position is not None:
+            anchor_x, anchor_y = anchor_position
             offset = (pos[0] - anchor_x, pos[1] - anchor_y)
 
         for pattern in patterns:
@@ -886,6 +1042,8 @@ class MillingTaskController:
 
         save_project(self._tab_data.main)
         self.draw_milling_tasks()
+        self._update_milling_validation_message()
+        self._update_mill_btn()
 
     def move_milling_tasks(self, pos: Tuple[float, float]) -> None:
         """Arrange every displayed milling pattern around the current feature.
@@ -931,6 +1089,8 @@ class MillingTaskController:
 
         save_project(self._tab_data.main)
         self.draw_milling_tasks()
+        self._update_milling_validation_message()
+        self._update_mill_btn()
 
     @call_in_wx_main
     def draw_milling_tasks(self, _: Any = None, redraw_alignment_area: bool = True) -> None:
@@ -952,19 +1112,23 @@ class MillingTaskController:
             return
 
         highlighted_task = self._get_highlighted_task()
+        highlighted_tasks = set(self._get_checked_highlighted_tasks())
         indexed_tasks = list(enumerate(self.milling_tasks.items()))
-        # Draw the highlighted task last so it appears above overlapping
-        # patterns. This temporary rendering order does not mutate milling order.
+        # Draw selected tasks last, with the active task uppermost. This
+        # temporary rendering order does not mutate milling order.
         rendering_order = sorted(
             indexed_tasks,
-            key=lambda item: item[1][1] is highlighted_task,
+            key=lambda item: (
+                item[1][1] in highlighted_tasks,
+                item[1][1] is highlighted_task,
+            ),
         )
 
         # redraw all patterns
         for i, (task_name, task) in rendering_order:
             if not task.selected:
                 continue
-            show_labels = task is highlighted_task
+            show_labels = task in highlighted_tasks
             opacity = MILLING_OVERLAY_ACTIVE_OPACITY if show_labels else MILLING_OVERLAY_INACTIVE_OPACITY
             for pattern in task.patterns:
                 uses_shared_label = isinstance(
@@ -996,7 +1160,8 @@ class MillingTaskController:
                                                 show_labels and not uses_shared_label
                                             ),
                                             opacity=opacity)
-                    self.rectangles_overlay.add_shape(shape)
+                    self.rectangles_overlay.add_pattern_shape(
+                        shape, task_name, pattern)
                 if uses_top_label and show_labels:
                     center_x, _ = pattern.center.value
                     top_y = max(
@@ -1043,7 +1208,8 @@ class MillingTaskController:
         # validate the patterns
         self._on_shapes_update(self.rectangles_overlay._shapes.value)
 
-    def _update_selected_tasks(self, evt: wx.Event):
+    def _update_selected_tasks(self, _: Optional[wx.Event] = None) -> None:
+        """Synchronize checked pattern rows with milling tasks and controls."""
         self.selected_tasks.value = list(self._panel.milling_task_chk_list.GetCheckedStrings())
         # Update the 'Pattern' panel
         for task_name, controls in self.controls.items():
