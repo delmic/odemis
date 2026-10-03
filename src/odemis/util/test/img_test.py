@@ -2068,6 +2068,33 @@ class TestAssembleZCube(unittest.TestCase):
         self.assertGreater(output_rev_z.metadata[model.MD_PIXEL_SIZE][2], 0)
         numpy.testing.assert_array_equal(output_da_after, output_rev_z)
 
+    def test_assemble_zcube_empty_list_raises(self):
+        """
+        assembleZCube() must raise ValueError when given an empty image list.
+        """
+        with self.assertRaises(ValueError):
+            img.assembleZCube([], [])
+
+    def test_assemble_zcube_inconsistent_shapes_raises(self):
+        """
+        assembleZCube() must raise ValueError when z-level images have different shapes.
+
+        On NumPy < 1.24, numpy.array() silently creates an
+        object-dtype array, instead of returning the expected 3D array.  The fix detects this
+        early and raises explicitly.
+        """
+        images = [
+            model.DataArray(numpy.zeros(self.size, dtype=numpy.uint16), self.md),
+            model.DataArray(numpy.zeros(self.size, dtype=numpy.uint16), self.md),
+            model.DataArray(numpy.zeros((self.size[0] // 2, self.size[1]), dtype=numpy.uint16), self.md),
+        ]
+        zlevels = self.z_list[:3]
+
+        with self.assertRaises(ValueError) as ctx:
+            img.assembleZCube(images, zlevels)
+
+        self.assertIn("shape", str(ctx.exception).lower())
+
 
 class TestFloodFill(unittest.TestCase):
 
