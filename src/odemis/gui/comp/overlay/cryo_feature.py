@@ -349,6 +349,11 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
                     self._selected_feature.set_posture_position(self.pm.current_posture.value, stage_position)
                 self.cnvs.update_drawing()
                 return
+            if self.cnvs.left_dragging:
+                # The canvas owns the cursor while the reference image is
+                # being panned. Do not replace its drag cursor on motion.
+                evt.Skip()
+                return
             feature = self._detect_point_inside_feature(v_pos)
             if feature:
                 self._hover_feature = feature

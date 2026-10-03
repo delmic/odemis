@@ -293,6 +293,8 @@ class MillingTaskController:
         self._panel.btn_snap_patterns_to_feature.Bind(
             wx.EVT_BUTTON, self._snap_patterns_to_feature)
 
+        if self.viewport.view is not None:
+            self.viewport.view.stream_tree.flat.subscribe(self._redraw_alignment_area)
         self._tab_data.main.currentFeature.subscribe(self._on_current_feature_changes, init=True)
 
         # By default, all widgets are hidden => show button + estimated time at initialization
@@ -330,7 +332,12 @@ class MillingTaskController:
         self.set_milling_tasks(milling_tasks)
         self._update_pattern_panels()
         self._update_pattern_movement_controls()
-        self.draw_alignment_area()
+        if feature is None:
+            # The selected-task callback returns early without a feature, so
+            # explicitly remove previews left by the previous project.
+            self.draw_milling_tasks()
+        else:
+            self.draw_alignment_area()
 
     def _update_pattern_movement_controls(self) -> None:
         """Enable pattern movement controls when a feature can be edited."""
@@ -355,9 +362,11 @@ class MillingTaskController:
         for candidate in displayed_streams:
             if candidate.raw[0] is feature.reference_image:
                 return candidate
-        if len(displayed_streams) == 1:
-            return displayed_streams[0]
         return None
+
+    def _redraw_alignment_area(self, _: Any = None) -> None:
+        """Redraw alignment geometry after the displayed streams change."""
+        self.draw_alignment_area()
 
     @call_in_wx_main
     def draw_alignment_area(self, _: Any = None) -> None:
@@ -742,7 +751,11 @@ class MillingTaskController:
 
     def _blocks_alignment_area_interaction(self, v_pos: Tuple[float, float]) -> bool:
         """Return whether a feature marker or milling pattern owns a position."""
-        return self._is_feature_marker_at(v_pos) or self.rectangles_overlay.get_pattern_at(v_pos) is not None
+        if self._is_feature_marker_at(v_pos):
+            return True
+        if self.alignment_area_overlay.is_corner_handle_at(v_pos):
+            return False
+        return self.rectangles_overlay.get_pattern_at(v_pos) is not None
 
     def on_mouse_down(self, evt):
         self._pattern_drag_start = None
@@ -789,6 +802,7 @@ class MillingTaskController:
 
             clicked_pattern = self.rectangles_overlay.get_pattern_at(click_position)
             if clicked_pattern is not None and self._select_milling_pattern(*clicked_pattern):
+                self.canvas.SetFocus()
                 self._pattern_drag_start = Vec(click_position)
                 evt.Skip(False)
                 return

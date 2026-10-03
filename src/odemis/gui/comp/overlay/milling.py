@@ -16,6 +16,7 @@ from typing import Any, Callable, List, Optional, Tuple
 
 import cairo
 import wx
+from shapely.geometry import Point, Polygon
 
 import odemis.gui as gui
 from odemis.acq.feature import (
@@ -61,9 +62,28 @@ class MillingPatternOverlay(ShapesOverlay):
 
     def get_pattern_at(
             self, v_pos: Tuple[float, float]) -> Optional[Tuple[str, MillingPatternParameters]]:
-        """Return the task and pattern displayed at a viewport position."""
-        shape = self._get_shape(v_pos)
-        return self._shape_patterns.get(shape)
+        """Return the closest milling pattern at a viewport position.
+
+        Milling patterns can consist of many rectangles. Check every displayed
+        rectangle so dense patterns do not hide candidates that fall outside
+        the generic shape overlay's four-nearest-centers heuristic.
+
+        :param v_pos: Position in viewport coordinates.
+        :return: Task name and pattern, or None when no pattern is hit.
+        """
+        offset = self.cnvs.get_half_buffer_size()
+        p_pos = Point(self.cnvs.view_to_phys(v_pos, offset))
+        candidates = []
+        for draw_order, shape in enumerate(self._shapes.value):
+            pattern = self._shape_patterns.get(shape)
+            if pattern is None or shape.cnvs != self.cnvs or not shape.check_point_proximity(v_pos):
+                continue
+            distance = Polygon(shape.points.value).exterior.distance(p_pos)
+            candidates.append((distance, -draw_order, pattern))
+
+        if not candidates:
+            return None
+        return min(candidates, key=lambda candidate: candidate[:2])[2]
 
     def add_pattern_label(self, text: str, p_pos: Tuple[float, float],
                           align: int = wx.ALIGN_CENTRE_HORIZONTAL | wx.ALIGN_BOTTOM,
@@ -398,6 +418,7 @@ class MillingAlignmentAreaOverlay(ShapesOverlay):
         """Select and move an unselected area, or edit an already selected area."""
         if self.active.value and not evt.ControlDown() and self._blocks_area_interaction is not None:
             if self._blocks_area_interaction(evt.Position):
+                self.deselect()
                 evt.Skip()
                 return
 
@@ -418,9 +439,9 @@ class MillingAlignmentAreaOverlay(ShapesOverlay):
             clicked_shape.interaction_mode = SEL_MODE_DRAG
             clicked_shape.edit_hover = None
         if self.active.value and self._selected_shape is not None and not self.is_ctrl_down:
-            # ShapesOverlay propagates every mouse-down to permit canvas
-            # dragging. Once this overlay captures its rectangle, consume the
-            # event so the canvas does not pan during the same gesture.
+            # Preserve the canvas focus and mouse-capture lifecycle, then
+            # consume the event without starting an image-pan gesture.
+            self.cnvs.on_mouse_down()
             self.cnvs.cancel_drag()
             evt.Skip(False)
 
@@ -469,7 +490,11 @@ class MillingAlignmentAreaOverlay(ShapesOverlay):
         was_editing = can_edit and shape.selection_mode != SEL_MODE_NONE
         super().on_left_up(evt)
         if was_editing:
+            # The consumed mouse-down bypassed the canvas event handler, so
+            # finish its common release and cursor cleanup explicitly.
+            self.cnvs.on_mouse_up()
             self._on_area_changed(shape=shape, commit=True)
+            evt.Skip(False)
 
     def on_char(self, evt: wx.KeyEvent) -> None:
         """Allow deselection without deleting or copying the alignment area."""

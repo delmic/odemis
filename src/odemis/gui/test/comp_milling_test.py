@@ -85,6 +85,20 @@ class MillingTaskPanelTestCase(test.GuiTestCase):
         test.gui_loop()
         super().tearDown()
 
+    def test_resetting_current_feature_clears_milling_overlays(self) -> None:
+        """Redraw empty overlays when a new project removes its current feature."""
+        self.controller.set_milling_tasks = Mock()
+        self.controller._update_pattern_panels = Mock()
+        self.controller._update_pattern_movement_controls = Mock()
+        self.controller.draw_alignment_area = Mock()
+        self.controller.draw_milling_tasks.reset_mock()
+
+        self.controller._on_current_feature_changes(None)
+
+        self.controller.set_milling_tasks.assert_called_once_with({})
+        self.controller.draw_milling_tasks.assert_called_once_with()
+        self.controller.draw_alignment_area.assert_not_called()
+
     def test_pattern_specific_controls(self) -> None:
         """Show controls specific to the ruler pattern."""
         controls = self.controller.controls
@@ -496,7 +510,7 @@ class MillingTaskPanelTestCase(test.GuiTestCase):
                 ),
             ),
         )
-        self.controller.canvas = SimpleNamespace(cryofeature_overlay=None)
+        self.controller.canvas = Mock(cryofeature_overlay=None)
         self.controller.alignment_area_overlay = Mock()
         self.controller.alignment_area_overlay.is_corner_handle_at.return_value = False
         self.controller.rectangles_overlay = Mock()
@@ -516,6 +530,7 @@ class MillingTaskPanelTestCase(test.GuiTestCase):
         self.assertEqual(task_list.GetCheckedStrings(), checked_tasks)
         self.assertIs(self.controller._active_spot_size_pattern, clicked_pattern)
         self.controller.alignment_area_overlay.deselect.assert_called_once_with()
+        self.controller.canvas.SetFocus.assert_called_once_with()
         self.controller.draw_milling_tasks.assert_called_once_with(
             redraw_alignment_area=False)
         canvas_event.Skip.assert_called_once_with(False)
@@ -671,6 +686,19 @@ class MillingTaskPanelTestCase(test.GuiTestCase):
         self.controller.draw_milling_tasks.assert_called_once_with(
             redraw_alignment_area=False)
         canvas_event.Skip.assert_called_once_with()
+
+    def test_alignment_corner_is_not_blocked_by_overlapping_pattern(self) -> None:
+        """Let a selected alignment corner resize over a milling pattern."""
+        position = wx.Point(10, 20)
+        self.controller.canvas = SimpleNamespace(cryofeature_overlay=None)
+        self.controller.alignment_area_overlay = Mock()
+        self.controller.alignment_area_overlay.is_corner_handle_at.return_value = True
+        self.controller.rectangles_overlay = Mock()
+        self.controller.rectangles_overlay.get_pattern_at.return_value = Mock()
+
+        self.assertFalse(
+            self.controller._blocks_alignment_area_interaction(position))
+        self.controller.rectangles_overlay.get_pattern_at.assert_not_called()
 
     def test_select_first_checked_milling_task(self) -> None:
         """Highlight whichever checked task occurs first in the list."""
@@ -1093,20 +1121,47 @@ class MillingTaskPanelTestCase(test.GuiTestCase):
         self.assertAlmostEqual(
             inactive_rectangle.colour[3], MILLING_OVERLAY_INACTIVE_OPACITY)
 
-    def test_pattern_overlay_maps_shapes_to_tasks(self) -> None:
-        """Resolve a displayed rectangle back to its task and source pattern."""
+    def test_pattern_overlay_checks_all_shapes_for_clicked_pattern(self) -> None:
+        """Find patterns behind dense rectangles from Ruler or Notch."""
         canvas = Mock()
         canvas.get_half_buffer_size.return_value = (0, 0)
+        canvas.view_to_phys.return_value = (0, 0)
         overlay = MillingPatternOverlay(canvas)
-        shape = Mock(cnvs=canvas)
-        pattern = self.tasks["Ruler"].patterns[0]
-        overlay.add_pattern_shape(shape, "Ruler", pattern)
 
-        with patch.object(overlay, "_get_shape", return_value=shape):
-            self.assertEqual(
-                overlay.get_pattern_at((10, 20)), ("Ruler", pattern))
-            overlay.clear()
-            self.assertIsNone(overlay.get_pattern_at((10, 20)))
+        scenarios = (
+            ("Ruler", "Correlation (NΠ+⅂Ʇ)"),
+            ("Ruler", "Waffle Trench"),
+            ("Notch", "Correlation (NΠ+⅂Ʇ)"),
+            ("Notch", "Waffle Trench"),
+        )
+        for interfering_task, target_task in scenarios:
+            with self.subTest(interfering_task=interfering_task, target_task=target_task):
+                decoys = []
+                for index in range(5):
+                    decoy = Mock(cnvs=canvas)
+                    decoy.check_point_proximity.return_value = False
+                    decoy.points.value = [
+                        (index + 1, 0), (index + 2, 0),
+                        (index + 2, 1), (index + 1, 1),
+                    ]
+                    overlay.add_pattern_shape(
+                        decoy, interfering_task, self.tasks[interfering_task].patterns[0])
+                    decoys.append(decoy)
+
+                target = Mock(cnvs=canvas)
+                target.check_point_proximity.return_value = True
+                target.points.value = [(-2, -2), (2, -2), (2, 2), (-2, 2)]
+                pattern = self.tasks[target_task].patterns[0]
+                overlay.add_pattern_shape(target, target_task, pattern)
+
+                self.assertEqual(
+                    overlay.get_pattern_at((10, 20)), (target_task, pattern))
+                for decoy in decoys:
+                    decoy.check_point_proximity.assert_called_once_with((10, 20))
+                target.check_point_proximity.assert_called_once_with((10, 20))
+
+                overlay.clear()
+                self.assertIsNone(overlay.get_pattern_at((10, 20)))
 
     def test_alignment_overlay_uses_milling_style_without_hover_focus(self) -> None:
         """Use the milling rectangle style without activating the viewport on hover."""
@@ -1168,6 +1223,7 @@ class MillingTaskPanelTestCase(test.GuiTestCase):
             overlay.on_left_down(left_down_event)
         self.assertIs(overlay._selected_shape, shape)
         area_selected.assert_called_once_with()
+        canvas.on_mouse_down.assert_called_once_with()
         canvas.cancel_drag.assert_called_once_with()
         left_down_event.Skip.assert_called_with(False)
 
@@ -1187,6 +1243,12 @@ class MillingTaskPanelTestCase(test.GuiTestCase):
         overlay.on_motion(motion_event)
         canvas.set_dynamic_cursor.assert_called_with(wx.CURSOR_HAND)
 
+        shape.selection_mode = SEL_MODE_EDIT
+        left_up_event = Mock()
+        overlay.on_left_up(left_up_event)
+        canvas.on_mouse_up.assert_called_once_with()
+        left_up_event.Skip.assert_called_with(False)
+
         overlay._blocks_area_interaction = Mock(return_value=True)
         canvas.reset_dynamic_cursor.reset_mock()
         overlay.on_motion(motion_event)
@@ -1202,6 +1264,8 @@ class MillingTaskPanelTestCase(test.GuiTestCase):
             overlay.on_left_down(blocked_left_down_event)
         get_shape.assert_not_called()
         area_selected.assert_not_called()
+        self.assertIsNone(overlay._selected_shape)
+        self.assertFalse(shape.selected.value)
         blocked_left_down_event.Skip.assert_called_once_with()
 
     def test_unselected_alignment_corner_does_not_show_resize_cursor(self) -> None:
@@ -1568,6 +1632,43 @@ class MillingAlignmentAreaTestCase(test.GuiTestCase):
         self.assertGreaterEqual(self.area_changed.call_count, 2)
         self.assertTrue(self.area_changed.call_args.kwargs["commit"])
 
+    def test_reference_image_drag_keeps_canvas_cursor_until_release(self) -> None:
+        """Leave cursor ownership with the canvas throughout an image drag."""
+        self._send_mouse_event(wx.wxEVT_LEFT_DOWN, Vec(300, 300))
+        drag_cursor = self.canvas.dynamic_cursor
+
+        self.assertTrue(self.canvas.left_dragging)
+        self.assertIsNotNone(drag_cursor)
+
+        self._send_mouse_event(wx.wxEVT_MOTION, Vec(320, 310))
+
+        self.assertTrue(self.canvas.left_dragging)
+        self.assertIs(self.canvas.dynamic_cursor, drag_cursor)
+
+        # This lightweight canvas has no microscope view to recenter on release.
+        with patch.object(self.canvas, "recenter_buffer"), patch.object(
+                self.canvas, "update_drawing"):
+            self._send_mouse_event(wx.wxEVT_LEFT_UP, Vec(320, 310))
+
+        self.assertFalse(self.canvas.left_dragging)
+        self.assertIsNone(self.canvas.dynamic_cursor)
+
+    def test_feature_overlay_does_not_reset_reference_image_drag_cursor(self) -> None:
+        """Keep the canvas drag cursor when the feature overlay sees motion."""
+        feature_overlay = CryoFeatureOverlay.__new__(CryoFeatureOverlay)
+        feature_overlay.active = model.BooleanVA(True)
+        feature_overlay._left_dragging = False
+        feature_overlay._right_dragging = False
+        feature_overlay.cnvs = Mock(left_dragging=True)
+        event = Mock()
+        event.Position = wx.Point(200, 200)
+
+        feature_overlay.on_motion(event)
+
+        feature_overlay.cnvs.reset_dynamic_cursor.assert_not_called()
+        feature_overlay.cnvs.set_default_cursor.assert_not_called()
+        event.Skip.assert_called_once_with()
+
     def test_resizing_area_does_not_pan_canvas(self) -> None:
         """Move on the first corner gesture, then resize while staying selected."""
         self._send_mouse_event(wx.wxEVT_LEFT_DOWN, Vec(100, 100))
@@ -1922,6 +2023,24 @@ class MillingReferenceStreamTestCase(unittest.TestCase):
             self.controller._get_reference_stream(self.feature),
             displayed_stream,
         )
+
+    def test_ignores_single_stale_displayed_stream(self) -> None:
+        """Do not project alignment geometry through the previous feature's image."""
+        stale_stream = SimpleNamespace(raw=[object()])
+        self.controller.acq_cont.stream = stale_stream
+        self.controller.viewport = SimpleNamespace(
+            view=SimpleNamespace(getStreams=Mock(return_value=[stale_stream])))
+
+        self.assertIsNone(
+            self.controller._get_reference_stream(self.feature))
+
+    def test_stream_change_redraws_alignment_area(self) -> None:
+        """Rebuild alignment geometry when the matching stream is displayed."""
+        self.controller.draw_alignment_area = Mock()
+
+        self.controller._redraw_alignment_area([Mock()])
+
+        self.controller.draw_alignment_area.assert_called_once_with()
 
 
 if __name__ == "__main__":
