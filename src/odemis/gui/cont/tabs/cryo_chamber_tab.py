@@ -24,13 +24,11 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
 import collections
-import functools
 import itertools
 import logging
 import math
 import os.path
 from concurrent.futures import CancelledError
-from typing import Dict, List, Optional
 
 import wx
 
@@ -38,12 +36,7 @@ import odemis.gui.cont.views as viewcont
 import odemis.gui.model as guimod
 from odemis import model
 from odemis.acq.feature import feature_decoder
-from odemis.acq.move import (
-    ROT_DIST_SCALING_FACTOR,
-    ROTATION_AXES,
-    RTOL_PROGRESS,
-    Posture,
-)
+from odemis.acq.move import Posture
 from odemis.acq.stream import StaticStream
 from odemis.gui import conf
 from odemis.gui.comp.buttons import (
@@ -52,7 +45,8 @@ from odemis.gui.comp.buttons import (
     BTN_TOGGLE_PROGRESS,
 )
 from odemis.gui.comp.edit_position_metadata import EditMeteorCalibrationDialog
-from odemis.gui.cont.cryo_project import load_project, IMG_IN_FILE_IDS, IMG_FILENAME, save_project
+from odemis.gui.conf.licences import ODEMIS_ADVANCED_FLAG
+from odemis.gui.cont.cryo_project import load_project, IMG_IN_FILE_IDS, IMG_FILENAME, save_project, find_overviews_in_folder
 from odemis.gui.cont.tabs.correlation_tab import CorrelationTab
 from odemis.gui.cont.tabs.localization_tab import LocalizationTab
 from odemis.gui.cont.tabs.tab import Tab
@@ -61,8 +55,8 @@ from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.widgets import AxisConnector, VigilantAttributeConnector
 from odemis.gui.util.wx_adapter import fix_static_text_clipping
 from odemis.gui.win.acquisition import LoadProjectFileDialog, ShowChamberFileDialog
-from odemis.model import HwComponent, InstantaneousFuture
-from odemis.util import almost_equal, rot_shortest_move
+from odemis.model import InstantaneousFuture
+from odemis.util import almost_equal
 from odemis.util.dataio import data_to_static_streams, open_acquisition
 from odemis.util.filename import create_projectname, guess_pattern
 from odemis.util.units import readable_str
@@ -130,15 +124,8 @@ class CryoChamberTab(Tab):
         # (While "stage" is in the FLM referential)
         self._stage = self.tab_data_model.main.stage_bare
 
-        # Secondary actuators which are engaged/retracted right before/after the stage move,
-        # as part of a posture switch: the FM/FIB-view-FM objective focuser, and, if available,
-        # the SLM lens arm and SLM focus actuators. The progress bar tracks their movement too.
-        self._focus = self.tab_data_model.main.focus
-        self._slm_arm: Optional[HwComponent] = getattr(main_data, "lens_arm_coincident", None)
-        self._slm_focus: Optional[HwComponent] = getattr(main_data, "focus_coincident", None)
-
         # Fail early when required axes are not found on the focuser positions metadata
-        focuser = self._focus
+        focuser = self.tab_data_model.main.focus
         focus_md = focuser.getMetadata()
         required_axis = {'z'}
         for fmd_key, fmd_value in focus_md.items():
@@ -149,12 +136,17 @@ class CryoChamberTab(Tab):
             self.position_btns = {
                 Posture.SEM_IMAGING: self.panel.btn_switch_sem_imaging,
                 Posture.FM_IMAGING: self.panel.btn_switch_fm_imaging,
-                Posture.MILLING: self.panel.btn_switch_milling,
-                Posture.FIB_VIEW_FM: self.panel.btn_switch_fib_view_fm,
-                Posture.FIB_IMAGING: self.panel.btn_switch_fib_imaging,
-                Posture.TRENCHING: self.panel.btn_switch_trenching,
-                Posture.SLM_IMAGING: self.panel.btn_switch_slm_imaging,
             }
+
+            if ODEMIS_ADVANCED_FLAG:
+                self.position_btns.update({
+                    Posture.MILLING: self.panel.btn_switch_milling,
+                    Posture.FIB_IMAGING: self.panel.btn_switch_fib_imaging,
+                    Posture.FIB_VIEW_FM: self.panel.btn_switch_fib_view_fm,
+                    Posture.TRENCHING: self.panel.btn_switch_trenching,
+                    Posture.SLM_IMAGING: self.panel.btn_switch_slm_imaging,
+                })
+
             # Remove the ones which are not supported on this system
             self.position_btns = {posture: btn for posture, btn in self.position_btns.items()
                                   if posture in main_data.posture_manager.postures}
@@ -172,43 +164,16 @@ class CryoChamberTab(Tab):
         # start and end position are used for the gauge progress bar
         self._start_pos = self._stage.position.value
         self._end_pos = self._start_pos
-        # Ordered list of "legs" (dict with "component", "start", "end" keys) the current
-        # posture switch movement is expected to go through, and their respective weight
-        # (physical distance), used to compute the overall progress of the move.
-        # Set by _perform_switch_position_movement(), cleared once the move is done.
-        self._progress_legs: List[Dict] = []
-        self._progress_weights: List[float] = []
-        self._progress_total_weight: float = 0.0
-        # Index, within _progress_legs, of the leg currently expected to be "in progress".
-        # Only moves forward, so that if the same component appears in two different legs
-        # (eg, a focuser retracted and then re-engaged later on), position updates are matched
-        # against the correct (not-yet-completed) leg.
-        self._progress_leg_idx: int = 0
 
         # Event binding for position control
         for btn in itertools.chain(self.position_btns.values(), self._grid_btns.values()):
-            logging.debug("Binding button: %s", btn.GetName())
             btn.Show()
             btn.Bind(wx.EVT_BUTTON, self._on_switch_btn)
 
         panel.btn_cancel.Bind(wx.EVT_BUTTON, self._on_cancel)
 
-        # Show current position of the stage, the objective focuser, and (if present) the SLM
-        # lens arm/focus via the progress bar, as they can all be moved as part of a posture switch.
-        # NOTE: VigilantAttribute.subscribe() only keeps a *weak* reference to the callback, so
-        # the functools.partial objects must be kept alive as instance attributes as long as the
-        # subscription is active (otherwise they get garbage collected right away and the
-        # callback is never actually called).
-        self._on_stage_pos = functools.partial(self._update_progress_bar, self._stage)
-        self._on_focus_pos = functools.partial(self._update_progress_bar, self._focus)
-        self._stage.position.subscribe(self._on_stage_pos, init=False)
-        self._focus.position.subscribe(self._on_focus_pos, init=False)
-        if self._slm_arm is not None:
-            self._on_slm_arm_pos = functools.partial(self._update_progress_bar, self._slm_arm)
-            self._slm_arm.position.subscribe(self._on_slm_arm_pos, init=False)
-        if self._slm_focus is not None:
-            self._on_slm_focus_pos = functools.partial(self._update_progress_bar, self._slm_focus)
-            self._slm_focus.position.subscribe(self._on_slm_focus_pos, init=False)
+        # Show current position of the stage via the progress bar
+        self._stage.position.subscribe(self._update_progress_bar, init=False)
         self.posture_manager.current_posture.subscribe(self._on_posture, init=True)
         self._show_warning_msg(None)
 
@@ -346,6 +311,9 @@ class CryoChamberTab(Tab):
         self.conf.pj_ptn, self.conf.pj_count = guess_pattern(new_dir)
         self.txt_projectpath.Value = os.path.basename(self.conf.pj_last_path)
         self.tab_data_model.main.project_path.value = new_dir
+        # Decide for each new project whether features created from now on are
+        # eligible for data collection (it's also updated whenever the probability changes).
+        self.tab_data_model.main.reroll_collect_features()
         logging.debug("Generated project folder name pattern '%s'", self.conf.pj_ptn)
 
     def _create_new_dir(self):
@@ -438,9 +406,12 @@ class CryoChamberTab(Tab):
         # load project data
         proj_data = load_project(proj_path)
 
+        # Handle the cases where the overview files have been renamed
+        overviews_reconciled = find_overviews_in_folder(proj_data["overviews"], proj_path)
+
         # no data found in the project directory, not necessarily an error as the
         # user may create a project, but not have any data yet. so we just inform the user
-        if len(proj_data["features"]) == 0 and len(proj_data["overviews"]) == 0:
+        if len(proj_data["features"]) == 0 and len(overviews_reconciled) == 0:
             logging.warning("No data found in the project directory.")
             box = wx.MessageDialog(self.main_frame,
                                f"No data found in the selected directory: {proj_path}.",
@@ -465,16 +436,30 @@ class CryoChamberTab(Tab):
             logging.info("Fibsem tab does not exists.")
 
         # Load features
-        decoded_features = [feature_decoder(f) for f in proj_data["features"]]
-        self.tab_data_model.main.features.value = [df for df in decoded_features if df is not None]
+        # Immediately mark all as not collectable.
+        # Loaded features were either already collected in a previous session or
+        # were never selected; the new per-project sampling decision (set in
+        # _change_project_conf above) applies only to features created after this.
+        decoded_features = []
+        for feature_raw in proj_data["features"]:
+            feature = feature_decoder(feature_raw)
+            if feature is None:
+                continue
+            feature.is_collectible = False
+            decoded_features.append(feature)
+        self.tab_data_model.main.features.value = decoded_features
 
         # Load overview streams in the Localization and Fibsem tabs
-        self.tab_data_model.main.overviews.value = proj_data["overviews"]
+        self.tab_data_model.main.overviews.value = overviews_reconciled
+        if overviews_reconciled != proj_data["overviews"]:
+            save_project(self.tab_data_model.main)
 
         overviews = []
         for overview in self.tab_data_model.main.overviews.value:
             in_file_ids = overview.get(IMG_IN_FILE_IDS)
             if in_file_ids == []:  # If empty list, don't load at all
+                continue
+            if not os.path.isfile(overview[IMG_FILENAME]):  # Kept in the project, in case the file comes back
                 continue
 
             overview_das = open_acquisition(overview[IMG_FILENAME])
@@ -534,23 +519,20 @@ class CryoChamberTab(Tab):
         dialog.Destroy()
 
     @call_in_wx_main
-    def _update_progress_bar(self, component: HwComponent, pos: Dict[str, float]) -> None:
+    def _update_progress_bar(self, pos):
         """
-        Update the progress bar, based on the current position of the component which just
-        moved. The component can be the stage, the objective focuser, or (if present) the SLM
-        lens arm/focus, as they can all be involved, one after the other, in a posture switch
-        movement. Called whenever the position of one of these actuators changes.
-
-        :param component: the component whose position changed
-        :param pos: current position of that component
+        Update the progress bar, based on the current position of the stage.
+        Called when the position of the stage changes.
+        pos (dict str->float): current position of the sample stage
         """
         if not self.IsShown():
             return
-        # The legs should be set for the progress bar to update, otherwise the movement is not
-        # coming from the tab switching buttons
-        if not self._progress_legs:
+        # start and end position should be set for the progress bar to update
+        # otherwise, the movement is not coming from the tab switching buttons
+        if not self._start_pos or not self._end_pos:
             return
-        val = self._compute_overall_progress(component, pos)
+        # Get the ratio of the current position in respect to the start/end position
+        val = self.posture_manager.get_movement_progress(pos, self._start_pos, self._end_pos)
         if val is None:
             return
         val = min(max(0, int(round(val * 100))), 100)
@@ -558,169 +540,6 @@ class CryoChamberTab(Tab):
         # Set the move gauge with the movement progress percentage
         self.panel.gauge_move.Value = val
         self.panel.gauge_move.Refresh()
-
-    def _build_progress_legs(self, current_posture: Posture, target_posture: Posture,
-                              start_stage_pos: Dict[str, float], end_stage_pos: Dict[str, float]
-                              ) -> List[Dict]:
-        """
-        Build the ordered list of legs odemis.acq.move.PostureManager.switch_posture() is
-        expected to go through, so that the progress bar can track the whole movement, and not
-        just the stage move. Each leg corresponds to one actuator moving from a start to an end
-        position. This only needs to approximate the actual choreography enough to know which
-        actuator moves, and from/to which position, at each step.
-
-        :param current_posture: the posture before starting the move
-        :param target_posture: the requested posture to switch to
-        :param start_stage_pos: the stage position at the start of the move
-        :param end_stage_pos: the stage position to reach
-        :return: ordered list of legs, each a dict with keys component, start, end
-        """
-        legs = []
-
-        # The currently-engaged objective focuser or SLM optics are retracted first, before the
-        # stage starts moving.
-        if current_posture in (Posture.FM_IMAGING, Posture.FIB_VIEW_FM):
-            focus_deactive = self._focus.getMetadata().get(model.MD_FAV_POS_DEACTIVE)
-            if focus_deactive:
-                legs.append({"component": self._focus,
-                             "start": self._focus.position.value,
-                             "end": focus_deactive})
-        elif current_posture == Posture.SLM_IMAGING and self._slm_arm is not None and self._slm_focus is not None:
-            focus_deactive = self._slm_focus.getMetadata().get(model.MD_FAV_POS_DEACTIVE)
-            arm_deactive = self._slm_arm.getMetadata().get(model.MD_FAV_POS_DEACTIVE)
-            # Retract order is focus, then arm (see _append_slm_arm_focus_moves)
-            if focus_deactive:
-                legs.append({"component": self._slm_focus,
-                             "start": self._slm_focus.position.value,
-                             "end": focus_deactive})
-            if arm_deactive:
-                legs.append({"component": self._slm_arm,
-                             "start": self._slm_arm.position.value,
-                             "end": arm_deactive})
-
-        # The stage move itself
-        legs.append({"component": self._stage, "start": start_stage_pos, "end": end_stage_pos})
-
-        # The target objective focuser or SLM optics are engaged last, after the stage reached
-        # its target position.
-        if target_posture in (Posture.FM_IMAGING, Posture.FIB_VIEW_FM):
-            focus_active = self._focus.getMetadata().get(model.MD_FAV_POS_ACTIVE)
-            if focus_active:
-                focus_deactive = self._focus.getMetadata().get(model.MD_FAV_POS_DEACTIVE,
-                                                                 self._focus.position.value)
-                legs.append({"component": self._focus, "start": focus_deactive, "end": focus_active})
-        elif target_posture == Posture.SLM_IMAGING and self._slm_arm is not None and self._slm_focus is not None:
-            arm_active = self._slm_arm.getMetadata().get(model.MD_FAV_POS_ACTIVE)
-            focus_active = self._slm_focus.getMetadata().get(model.MD_FAV_POS_ACTIVE)
-            # Engage order is arm, then focus (see _append_slm_arm_focus_moves)
-            if arm_active:
-                arm_deactive = self._slm_arm.getMetadata().get(model.MD_FAV_POS_DEACTIVE,
-                                                                self._slm_arm.position.value)
-                legs.append({"component": self._slm_arm, "start": arm_deactive, "end": arm_active})
-            if focus_active:
-                focus_deactive = self._slm_focus.getMetadata().get(model.MD_FAV_POS_DEACTIVE,
-                                                                     self._slm_focus.position.value)
-                legs.append({"component": self._slm_focus, "start": focus_deactive, "end": focus_active})
-
-        return legs
-
-    @staticmethod
-    def _axes_distance(start: Dict[str, float], end: Dict[str, float]) -> float:
-        """
-        Compute a rough Euclidean-like distance between two positions, accepting any axes (not
-        restricted to the standard stage axes, unlike
-        odemis.acq.move.PostureManager._get_distance). Rotation axes are scaled to the same
-        order of magnitude as linear axes (in meters), so they can be combined together.
-
-        :param start: start position
-        :param end: end position
-        :return: the computed distance, always >= 0
-        """
-        axes = start.keys() & end.keys()
-        if not axes:
-            return 0.0
-        sq_sum = 0.0
-        for a in axes:
-            if a in ROTATION_AXES:
-                sq_sum += (ROT_DIST_SCALING_FACTOR * rot_shortest_move(start[a], end[a])) ** 2
-            else:
-                sq_sum += (end[a] - start[a]) ** 2
-        return math.sqrt(sq_sum)
-
-    def _axes_progress(self, current: Dict[str, float], start: Dict[str, float],
-                        end: Dict[str, float]) -> Optional[float]:
-        """
-        Compute the ratio of progress of a linear movement between start and end, based on the
-        current position. Generalization of
-        odemis.acq.move.PostureManager.get_movement_progress, accepting any axes.
-
-        :param current: current position
-        :param start: start position
-        :param end: end position
-        :return: ratio of the progress, between 0 and 1, or None if the current position is too
-         far away from the start/end path
-        """
-        from_start = self._axes_distance(start, current)
-        to_end = self._axes_distance(current, end)
-        total_length = self._axes_distance(start, end)
-        if total_length == 0:
-            return 1.0
-        if almost_equal(from_start + to_end, total_length, rtol=RTOL_PROGRESS):
-            return min(from_start / total_length, 1.0)
-        return None
-
-    # Once a leg's progress reaches this ratio, it is considered done, so that later position
-    # updates for the same component (eg, a focuser retracted, then later re-engaged) are
-    # matched against the next leg using that component, not this (already completed) one.
-    _LEG_DONE_RATIO = 0.98
-
-    def _compute_overall_progress(self, component: HwComponent, pos: Dict[str, float]) -> Optional[float]:
-        """
-        Compute the overall progress ratio of the whole posture switch movement, which can be
-        composed of several legs executed one after the other (eg, retracting the current
-        objective/SLM optics, then moving the stage, then engaging the target objective/SLM
-        optics). Each leg contributes to the overall progress proportionally to its physical
-        distance.
-
-        The same component can appear in more than one leg (eg, the objective focuser is first
-        retracted, and later re-engaged). To always match the position update against the
-        correct (not-yet-completed) leg, the search only looks forward from the last leg known
-        to still be in progress, never backward.
-
-        :param component: the component that triggered the position update
-        :param pos: current position of that component
-        :return: the overall progress ratio, between 0 and 1, or None if it cannot be determined
-         (eg, the component is not part of the currently running move, or its position is too
-         far away from the expected path)
-        """
-        for i in range(self._progress_leg_idx, len(self._progress_legs)):
-            leg = self._progress_legs[i]
-            if leg["component"] is not component:
-                continue
-
-            if component is self._stage:
-                # Use the posture manager, as it handles the stage axes semantics
-                leg_progress = self.posture_manager.get_movement_progress(pos, leg["start"], leg["end"])
-            else:
-                leg_progress = self._axes_progress(pos, leg["start"], leg["end"])
-            if leg_progress is None:
-                # Not (yet) on this leg's path: maybe a later leg with the same component fits
-                continue
-
-            completed_weight = sum(self._progress_weights[:i])
-            weight = self._progress_weights[i]
-            overall = (completed_weight + leg_progress * weight) / self._progress_total_weight
-
-            if leg_progress >= self._LEG_DONE_RATIO:
-                # This leg is (almost) done: advance so the next match starts from there
-                self._progress_leg_idx = i + 1
-            else:
-                self._progress_leg_idx = i
-
-            return min(max(overall, 0.0), 1.0)
-
-        # The component is not part of the currently tracked move (anymore, or not yet)
-        return None
 
     @call_in_wx_main
     def _control_warning_msg(self, posture: "Posture"):
@@ -935,10 +754,6 @@ class CryoChamberTab(Tab):
         self._target_posture = None
         self._start_pos = None
         self._end_pos = None
-        self._progress_legs = []
-        self._progress_weights = []
-        self._progress_total_weight = 0.0
-        self._progress_leg_idx = 0
 
     def _on_cancel(self, evt):
         """
@@ -983,8 +798,8 @@ class CryoChamberTab(Tab):
                 Posture.FM_IMAGING,
                 Posture.MILLING,
                 Posture.SEM_IMAGING,
-                Posture.TRENCHING,
                 Posture.SLM_IMAGING,
+                Posture.TRENCHING,
             ]
             and current_posture in [
                 Posture.FIB_IMAGING,
@@ -993,38 +808,15 @@ class CryoChamberTab(Tab):
                 Posture.LOADING,
                 Posture.MILLING,
                 Posture.SEM_IMAGING,
-                Posture.TRENCHING,
                 Posture.SLM_IMAGING,
+                Posture.TRENCHING,
             ]
             and not self._display_meteor_pos_warning_msg(end_pos)
         ):
             return None
 
         self._end_pos = end_pos
-        self._set_progress_legs(current_posture, self._target_posture, self._start_pos, self._end_pos)
         return self.posture_manager.switch_posture(self._target_posture)
-
-    def _set_progress_legs(self, current_posture: Posture, target_posture: Posture,
-                            start_stage_pos: Dict[str, float], end_stage_pos: Dict[str, float]) -> None:
-        """
-        Build and store the progress legs (and their weights) for the move about to be started,
-        so that _update_progress_bar() can track the overall progress of the whole movement.
-
-        :param current_posture: the posture before starting the move
-        :param target_posture: the requested posture to switch to
-        :param start_stage_pos: the stage position at the start of the move
-        :param end_stage_pos: the stage position to reach
-        """
-        legs = self._build_progress_legs(current_posture, target_posture, start_stage_pos, end_stage_pos)
-        weights = [max(self._axes_distance(leg["start"], leg["end"]), 0.0) for leg in legs]
-        total_weight = sum(weights)
-        if total_weight == 0:
-            # Avoid dividing by 0 later; all legs are considered instantaneous
-            total_weight = 1.0
-        self._progress_legs = legs
-        self._progress_weights = weights
-        self._progress_total_weight = total_weight
-        self._progress_leg_idx = 0
 
     @call_in_wx_main
     def _on_posture(self, posture: "Posture") -> None:

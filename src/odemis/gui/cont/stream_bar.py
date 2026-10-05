@@ -1233,7 +1233,7 @@ class SecomStreamsController(StreamBarController):
                                                                        guimodel.CHAMBER_UNKNOWN}
                 view = self._tab_data_model.focussedView.value
                 compatible = view.is_compatible(acqstream.FluoStream)
-                return enabled and compatible
+                return enabled and compatible and self._can_add_fluo_stream()
 
             # Add most recently used settings from a JSON file
             if self.stream_settings.config_data:
@@ -1325,24 +1325,38 @@ class SecomStreamsController(StreamBarController):
 
     def _onStreamUpdate(self, stream, updated):
         # When a stream starts playing, ensure it's visible in at least one view
-        if updated:
+        if updated and stream is not self._spot_stream:
             fv = self._tab_data_model.focussedView.value
-            if stream not in fv.stream_tree.flat.value and stream is not self._spot_stream:
-                # if the stream is hidden in the current focused view, then unhide
-                # it everywhere
-                for v in self._tab_data_model.views.value:
-                    if isinstance(stream, acqstream.SEMStream) and (not v.is_compatible(acqstream.SEMStream)):
-                        continue
-                    elif isinstance(stream, acqstream.FluoStream) and (not v.is_compatible(acqstream.FluoStream)):
-                        continue
-                    else:
-                        if stream not in v.stream_tree.flat.value:
-                            # make sure we don't display old data
-                            str_img = stream.image.value
-                            if ((str_img is not None) and
-                                (str_img.metadata.get(model.MD_POS, (0, 0)) != self._main_data_model.stage)):
-                                stream.image.value = None
-                            v.addStream(stream)
+            # If the stream is hidden in the current focused view, make it visible
+            if stream not in fv.stream_tree.flat.value:
+                receiving_views = []
+                # 1. Add it to the focused view if it's compatible
+                if isinstance(stream, fv.stream_classes):
+                    receiving_views.append(fv)
+                # 2. If there is a view already showing it, then we are fine
+                elif any(stream in v.stream_tree.flat.value for v in self._tab_data_model.views.value):
+                    pass
+                # 3. If no view is showing it, then add it to all the compatible views
+                else:
+                    for v in self._tab_data_model.views.value:
+                        if isinstance(stream, v.stream_classes):
+                            receiving_views.append(v)
+
+                    # 4. If no compatible view is found, then add it to the focused view anyway
+                    if not receiving_views:
+                        receiving_views.append(fv)
+
+                if receiving_views:
+                    # make sure we don't display old data on views that just received a new stream
+                    raw_md = [md for md in stream.getRawMetadata() if md]
+                    if raw_md:
+                        last_acq_date = raw_md[0].get(model.MD_ACQ_DATE, 0)
+                        if last_acq_date < time.time() - 5.0:
+                            stream.image.value = None
+
+                for v in receiving_views:
+                    v.addStream(stream)
+
         super(SecomStreamsController, self)._onStreamUpdate(stream, updated)
         self._updateMicroscopeStates()
 
@@ -2081,41 +2095,57 @@ class CryoStreamsController(SecomStreamsController):
         posture = self._main_data_model.posture_manager.get_current_posture()
         return posture == Posture.SLM_IMAGING
 
+    def _can_add_fluo_stream(self) -> bool:
+        """
+        Check whether a new fluorescence stream can be created for the current state.
+
+        :returns: True if in SLM posture, or if the lens arm is retracted and the
+         posture is FM imaging or FIB view FM. False otherwise (eg, SEM imaging posture, or
+         lens arm inserted while the stage is not at the SLM orientation).
+        """
+        pm = self._main_data_model.posture_manager
+        return pm.get_current_posture() in (Posture.FM_IMAGING, Posture.FIB_VIEW_FM, Posture.SLM_IMAGING)
+
     def _is_slm_stream(self, stream) -> bool:
         """
-        Check if the given stream is associated with SLM imaging posture based on its focuser.
+        Check if the given stream is associated with SLM imaging posture based on its z-stack focuser.
         """
-        focuser = getattr(stream, "focuser", None)
-        return focuser is self._main_data_model.focus_coincident
+        focuser = getattr(stream, "zstack_focuser", None)
+        return focuser is not None and focuser is self._main_data_model.focus_coincident
 
-    def _get_fluo_components(self) -> Tuple[object, object, object, object]:
+    def _get_fluo_components(self) -> Tuple[object, object, object, object, object]:
         """
         Pick optical components for a fluorescence stream based on posture.
 
-        Returns detector, light source, filter and focuser.
+        Returns detector, light source, filter, focuser, and z-stack focuser. In SLM posture,
+        the focuser (used for viewport focus and autofocus) is the sample stage, while the
+        z-stack focuser is the SLM focus.
         """
         if self._is_slm_posture():
             logging.debug("SLM components enabled for imaging")
             ccd = self._main_data_model.ccd_coincident
             light = self._main_data_model.light_coincident
             light_filter = self._main_data_model.filter_coincident
-            focuser = self._main_data_model.focus_coincident
-            if all((ccd, light, light_filter, focuser)):
+            zstack_focuser = self._main_data_model.focus_coincident
+            focuser = self._main_data_model.get_posture_focuser()
+            if all((ccd, light, light_filter, zstack_focuser, focuser)):
                 logging.debug("FM components enabled for imaging")
-                return ccd, light, light_filter, focuser
+                return ccd, light, light_filter, focuser, zstack_focuser
 
+        focuser = self._main_data_model.focus
         return (
             self._main_data_model.ccd,
             self._main_data_model.light,
             self._main_data_model.light_filter,
-            self._main_data_model.focus,
+            focuser,
+            focuser,
         )
 
     def _create_fluo_stream(self, name: str) -> acqstream.FluoStream:
         """
         Create a fluorescence stream bound to posture-specific optics.
         """
-        ccd, light, light_filter, focuser = self._get_fluo_components()
+        ccd, light, light_filter, focuser, zstack_focuser = self._get_fluo_components()
         return acqstream.FluoStream(
             name,
             ccd,
@@ -2123,6 +2153,7 @@ class CryoStreamsController(SecomStreamsController):
             light,
             light_filter,
             focuser=focuser,
+            zstack_focuser=zstack_focuser,
             opm=self._main_data_model.opm,
             detvas={"exposureTime"},
         )
@@ -2159,10 +2190,28 @@ class CryoStreamsController(SecomStreamsController):
     @call_in_wx_main
     def _on_posture_change(self, _posture) -> None:
         """
-        Refresh stream panel visibility whenever posture changes.
+        Refresh stream panel visibility and the add stream button tooltip whenever
+        the posture or the SLM lens arm position changes.
+
+        :param _posture: the new value of the changed VA (unused, the state is read again)
         """
         view = self._tab_data_model.focussedView.value
         self._onView(view)
+        self._update_add_stream_tooltip()
+
+    def _update_add_stream_tooltip(self) -> None:
+        """
+        Explain on the add stream button why fluorescence streams cannot be added
+        in the current posture.
+        """
+        btn = self._stream_bar.btn_add_stream
+        if self._can_add_fluo_stream():
+            btn.SetToolTip("")
+            btn.Enable(True)
+        else:
+            btn.SetToolTip("Fluorescence streams can only be added in the FM, FIB view FM, "
+                           "or SLM imaging posture.")
+            btn.Enable(False)
 
     def _add_fluo_streams_actions(self) -> None:
         """
@@ -2178,7 +2227,7 @@ class CryoStreamsController(SecomStreamsController):
                                                                        guimodel.CHAMBER_UNKNOWN}
                 view = self._tab_data_model.focussedView.value
                 compatible = view.is_compatible(acqstream.FluoStream)
-                return enabled and compatible
+                return enabled and compatible and self._can_add_fluo_stream()
 
             if self.stream_settings.config_data:
                 acq_names = sorted(self.stream_settings.entries)
@@ -2228,7 +2277,7 @@ class CryoStreamsController(SecomStreamsController):
                     is_slm_posture = self._is_slm_posture()
                     # It is True when (SLM stream + SLM posture) and (FM stream + FM posture)
                     # such that the compatible optical stream for the posture is shown.
-                    show = is_slm_stream == is_slm_posture
+                    show = (is_slm_stream == is_slm_posture) and self._can_add_fluo_stream()
 
                 e.Show(show)
 
@@ -2331,6 +2380,14 @@ class CryoAcquiredStreamsController(CryoStreamsController):
 
         # Clear all features except the newly selected one
         self._clear_all_feature_streams_except(feature)
+
+        # The previous feature might have just been deleted, so it's no longer in
+        # features.value, and its streams would otherwise stay displayed.
+        prev_feature = self._current_feature
+        if (prev_feature is not None and prev_feature is not feature
+                and prev_feature not in self._tab_data_model.main.features.value
+                and prev_feature.streams.value):
+            self.clear_feature_streams(prev_feature)
 
         self._current_feature = feature
 
@@ -2573,7 +2630,9 @@ class CryoFIBAcquiredStreamsController(CryoStreamsController):
         self._ov_view = ov_view
         self.stream: Optional[StaticStream] = None  # The stream currently displayed, related the selected Feature
 
-        tab_data.main.currentFeature.subscribe(self._on_current_feature_changes)
+        # Initialize the saved-image stream before controllers that draw
+        # feature overlays attempt to resolve its physical coordinates.
+        tab_data.main.currentFeature.subscribe(self._on_current_feature_changes, init=True)
         stream_bar = getattr(self, "_stream_bar", None)
 
         if stream_bar is not None:

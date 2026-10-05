@@ -42,7 +42,6 @@ from odemis.acq.align import AutoFocus
 from odemis.acq.move import Posture
 from odemis.acq.stream import LiveStream, StaticStream
 from odemis.gui import conf
-from odemis.gui.conf.data import get_local_vas
 from odemis.gui.cont import settings
 from odemis.gui.cont.acquisition.cryo_acq import CryoAcquiController
 from odemis.gui.cont.acquisition.cryo_z_localization import CryoZLocalizationController
@@ -326,6 +325,11 @@ class LocalizationTab(Tab):
 
     def _onAutofocus(self, active):
         if active:
+            if self._is_slm_posture():
+                logging.info("Autofocus is disabled in SLM posture")
+                self.tab_data_model.autofocus_active.value = False
+                return
+
             # Determine which stream is active
             try:
                 self.curr_s = self.tab_data_model.streams.value[0]
@@ -380,10 +384,28 @@ class LocalizationTab(Tab):
         else:
             f = self.curr_s.focuser
 
-        f_enable = all((updated, f))
+        f_enable = all((updated, f)) and not self._is_slm_posture()
         if not f_enable:
             self.tab_data_model.autofocus_active.value = False
         wx.CallAfter(self.tb.enable_button, TOOL_AUTO_FOCUS, f_enable)
+        self._update_autofocus_tooltip()
+
+    def _is_slm_posture(self) -> bool:
+        """
+        :returns: True if the microscope is currently in the SLM imaging posture
+        """
+        return self.main_data.posture_manager.current_posture.value == Posture.SLM_IMAGING
+
+    @call_in_wx_main
+    def _update_autofocus_tooltip(self) -> None:
+        """
+        Explain in the autofocus tool tip why it is disabled in SLM posture
+        """
+        if self._is_slm_posture():
+            tooltip = "Autofocus is disabled for SLM posture"
+        else:
+            tooltip = "Apply autofocus"
+        self.tb.get_button(TOOL_AUTO_FOCUS).SetToolTip(tooltip)
 
     @call_in_wx_main
     def _remove_deleted_acquired_streams(self, streams):
@@ -449,12 +471,9 @@ class LocalizationTab(Tab):
             self.main_data.posture_manager.current_posture.unsubscribe(self._on_current_posture)
         else:
             self.main_data.posture_manager.current_posture.subscribe(self._on_current_posture, init=True)
-    # role -> tooltip message
-    DISABLED_TAB_TOOLTIP = {
-        "meteor": "Localization can only be performed in FM mode",
-    }
 
-    def _on_current_posture(self, posture:Posture):
+    @call_in_wx_main
+    def _on_current_posture(self, posture: Posture) -> None:
         """
         Called when the posture is changed and perform the following actions:
         - enable the tab if posture is fm imaging, slm imaging or fib-view fm, disable otherwise
@@ -465,15 +484,25 @@ class LocalizationTab(Tab):
             self,
             self.main_data.posture_manager,
             self._allowed_targets,
-            tooltip=self.DISABLED_TAB_TOOLTIP.get(self.main_data.role)
+            tooltip="Localization can only be performed in FM mode",
         )
         self._acquisition_controller._update_overview_acquisition_button()
+        # Autofocus availability depends on the posture
+        curr_s = getattr(self, "curr_s", None)
+        if curr_s:
+            self._on_stream_update(curr_s.should_update.value)
+        else:
+            self._update_autofocus_tooltip()
         # Update the current posture read-only indicator if needed
         if posture in self._allowed_targets:
             self.panel.lbl_current_posture.SetLabel(posture.value)
             self.panel.bmp_current_posture.SetBitmap(self.posture_to_bmp.get(posture))
+            self.panel.bmp_current_posture.Show()
         else:
-            logging.info(f"Unknown posture {posture} for localization")
+            logging.warning(f"Unknown posture {posture} for localization")
+            self.panel.lbl_current_posture.SetLabel("")
+            self.panel.bmp_current_posture.Hide()
+        self.panel.pnl_current_posture.Layout()
 
     def terminate(self):
         super(LocalizationTab, self).terminate()

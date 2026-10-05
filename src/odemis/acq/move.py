@@ -69,6 +69,9 @@ class Posture(str, Enum):
         """Return the string value of the posture."""
         return self.value
 
+# All the postures where an FM lens is used
+FM_POSTURES = {Posture.FM_IMAGING, Posture.FIB_VIEW_FM}
+
 RTOL_PROGRESS = 0.3
 # Compensation factor for a rotational move to take the same amount of time as a linear move
 ROT_DIST_SCALING_FACTOR = 0.06  # m/rad, 1° ~ 1mm
@@ -105,6 +108,35 @@ TRENCHING_RANGE = (math.radians(90), MILLING_RANGE[1] + math.radians(90))
 POSTURE_ANGLE_ATOL = math.radians(1)
 
 MIN_LENS_WD_FIB_VIEW_FM = 10e-3  # m, minimum working distance of the objective lens to allow FIB-view FM imaging
+
+# The offset in radians to add to the SEM imaging scan rotation per posture.
+# For each posture, the scan rotation of both the e-beam and the ion-beam (if present) is set
+# to the reference scan rotation (read from stage-bare), plus the given offset. The offset
+# compensates for a rotated stage position (e.g. the sample is imaged from the "other side").
+# Both scanners always get the same rotation, as they can image the sample from the same
+# stage position (SEM_IMAGING and MILLING), and must be kept in sync to stay aligned.
+_SCAN_ROTATION_OFFSET = {
+    Posture.SEM_IMAGING: 0,
+    Posture.TRENCHING: math.pi,  # Compensate for 180° stage rotation
+    Posture.MILLING: 0,
+}
+
+# For these postures, only MD_ROTATION_COR of the "ccd" component is updated (the actual
+# rotation is not driven, as the camera orientation is fixed per installation).
+_CAMERA_ROTATION_COR = {
+    Posture.FM_IMAGING: 0,  # Installation is calibrated for FM_IMAGING, no correction needed
+    Posture.FIB_VIEW_FM: math.pi,
+}
+
+
+# Per posture: stage-bare axes which must be moved first or last, relative to the other axes.
+# The value is the direction (sign) for which the axis moves first; for the opposite direction it moves last.
+# In SLM posture, a sample-stage Y move is a mix of stage-bare y and z. When z increases it must move
+# before y, and when z decreases it must move after y.
+_STAGE_MOVE_ORDER = {
+    Posture.SLM_IMAGING: {"z": -1},
+}
+
 
 def filter_dict(keys: set, d: Dict[str, float]) -> Dict[str, float]:
     """
@@ -320,6 +352,43 @@ class MicroscopePostureManager:
             logging.info("Move procedure is cancelled after moving %s -> %s", component.name, sub_move)
             raise CancelledError()
 
+    def move_stage_in_order(self, pos: Dict[str, float]) -> Optional[Future]:
+        """
+        Move the stage-bare to the position, with the axes in the order required by the current posture
+        (see _STAGE_MOVE_ORDER). A forced axis moves before the other axes if it moves in its "first"
+        direction, and after the other axes otherwise.
+        :param pos: the absolute stage-bare position (linear axes)
+        :returns: a cancellable future, or None if the current posture doesn't require any specific order
+        """
+        order = _STAGE_MOVE_ORDER.get(self.current_posture.value)
+        if not order:
+            return None
+
+        cur_pos = self.stage.position.value
+        first = {an: v for an, v in pos.items() if an in order and (v - cur_pos[an]) * order[an] >= 0}
+        last = {an: v for an, v in pos.items() if an in order and (v - cur_pos[an]) * order[an] < 0}
+        normal = {an: v for an, v in pos.items() if an not in order}
+        sub_moves = [(self.stage, m) for m in (first, normal, last) if m]
+        if len(sub_moves) < 2:
+            return None
+
+        f = model.CancellableFuture()
+        f.task_canceller = self._cancel_switch_posture
+        f._task_state = RUNNING
+        f._task_lock = threading.Lock()
+        f._running_subf = model.InstantaneousFuture()
+        executeAsyncTask(f, self._run_sub_moves, args=(f, sub_moves))
+        return f
+
+    def _run_sub_moves(self, future: Future, sub_moves: List[Tuple[model.Component, Dict[str, float]]]) -> None:
+        """
+        Execute the sub-moves one after the other
+        :param future: the future of the whole move
+        :param sub_moves: list of (component, absolute position)
+        """
+        for component, sub_move in sub_moves:
+            self._run_sub_move(future, component, sub_move)
+
     def _update_posture(self, position: Dict[str, float]):
         """
         Update the current posture of the microscope
@@ -369,6 +438,11 @@ class MeteorPostureManager(MicroscopePostureManager):
             self._slm_focus = model.getComponent(role="focus-coincident")
             self._align_coincident = model.getComponent(role="align-coincident")
             self._slm_arm = model.getComponent(role="lens-arm-coincident")
+            md_slm_arm = self._slm_arm.getMetadata()
+            required_slm_keys = {model.MD_FAV_POS_ACTIVE, model.MD_POS_ACTIVE_RANGE}
+            if not required_slm_keys.issubset(md_slm_arm.keys()):
+                missing_keys = required_slm_keys - md_slm_arm.keys()
+                raise ValueError(f"SLM lens arm metadata is missing the following required keys: {missing_keys}.")
             self._slm_available = True
         except LookupError:
             pass
@@ -424,6 +498,9 @@ class MeteorPostureManager(MicroscopePostureManager):
         # current posture va
         self.current_posture = model.VigilantAttribute(Posture.UNKNOWN)
         self.stage.position.subscribe(self._update_posture)
+        if self._slm_available:
+            # The SLM posture also depends on the lens arm position
+            self._slm_arm.position.subscribe(self._on_slm_arm_position)
 
         # Supported postures for sample stage (can be extended by the subclass)
         self.postures = (Posture.SEM_IMAGING, Posture.FM_IMAGING)
@@ -478,6 +555,7 @@ class MeteorPostureManager(MicroscopePostureManager):
                 Posture.SEM_IMAGING: self._transform_from_trenching_to_sem,
                 # trenching position can be dynamically updated, so we need to support this recalculation
                 Posture.TRENCHING: self._transform_from_trenching_to_trenching,
+                Posture.SLM_IMAGING: self._transform_from_trenching_to_slm,
             },
             Posture.SLM_IMAGING: {
                 Posture.SEM_IMAGING: self._transform_from_slm_to_sem,
@@ -485,6 +563,7 @@ class MeteorPostureManager(MicroscopePostureManager):
                 Posture.MILLING: self._transform_from_slm_to_milling,
                 Posture.FIB_IMAGING: self._transform_from_slm_to_fib,
                 Posture.FIB_VIEW_FM: self._transform_from_slm_to_fib_view_fm,
+                Posture.TRENCHING: self._transform_from_slm_to_trenching,
             },
             Posture.UNKNOWN: {
                 Posture.UNKNOWN: lambda x: x
@@ -519,6 +598,12 @@ class MeteorPostureManager(MicroscopePostureManager):
                 return Posture.FM_IMAGING
             if self.at_fib_view_fm_posture(position):
                 return Posture.FIB_VIEW_FM
+        if self.at_trenching_posture(position):
+            # Trenching rotates the sample out of the raw SEM XYZ range.
+            sem_position = self._transform_from_trenching_to_sem(position)
+            if isInRange(sem_position, stage_sem_imaging_rng, self.linear_axes):
+                return Posture.TRENCHING
+            return Posture.UNKNOWN
         if isInRange(position, stage_sem_imaging_rng, self.linear_axes):
             # the stage bare tilt are rotation is same between milling and slm
             # posture. In slm posture, slm objective is active.
@@ -528,8 +613,6 @@ class MeteorPostureManager(MicroscopePostureManager):
                 return Posture.MILLING
             if self.at_fib_imaging_posture(position):
                 return Posture.FIB_IMAGING
-            if self.at_trenching_posture(position):
-                return Posture.TRENCHING
             return Posture.SEM_IMAGING
         # None of the above -> unknown position
         return Posture.UNKNOWN
@@ -624,12 +707,21 @@ class MeteorPostureManager(MicroscopePostureManager):
         fm_orientation = self.get_posture_orientation(Posture.FM_IMAGING)
         return isNearPosition(pos, fm_orientation, self.rotational_axes, atol_rotation=POSTURE_ANGLE_ATOL)
 
+    def _on_slm_arm_position(self, _pos: Dict[str, float]) -> None:
+        """
+        Update the current posture when the SLM lens arm moves.
+
+        :param _pos: the new lens arm position (unused, the stage position is read again)
+        """
+        self._update_posture(self.stage.position.value)
+
     def at_slm_imaging_posture(self, pos: Dict[str, float]) -> bool:
         """
-        Check if at SLM posture.
+        Check if at SLM posture: the stage is at the SLM orientation and the lens arm is
+        within its active range (MD_POS_ACTIVE_RANGE).
 
         :param pos: the stage position
-        :return: True if the stage is at the slm imaging posture
+        :return: True if the stage is at the slm imaging posture and lens arm in active range
         """
         if Posture.SLM_IMAGING not in self.postures:
             return False
@@ -638,11 +730,11 @@ class MeteorPostureManager(MicroscopePostureManager):
         logging.debug("Checking SLM posture against computed orientation: %s", stage_slm)
         if not isNearPosition(pos, stage_slm, self.rotational_axes, atol_rotation=math.radians(1.5)):
             return False
+        md = self._slm_arm.getMetadata()
+        lens_pos = self._slm_arm.position.value
+        lens_range = md.get(model.MD_POS_ACTIVE_RANGE)
 
-        slm_focus_active = self._slm_focus.getMetadata().get(model.MD_FAV_POS_ACTIVE)
-        if not slm_focus_active:
-            return False
-        return isNearPosition(self._slm_focus.position.value, slm_focus_active, self._slm_focus.axes)
+        return isInRange(lens_pos, lens_range, lens_range.keys())
 
     def at_fib_view_fm_posture(self, pos: Dict[str, float]) -> bool:
         """
@@ -654,7 +746,11 @@ class MeteorPostureManager(MicroscopePostureManager):
         if Posture.FIB_VIEW_FM not in self.postures:
             return False
         fib_view_fm_orientation = self.get_posture_orientation(Posture.FIB_VIEW_FM)
-        return isNearPosition(pos, fib_view_fm_orientation, self.rotational_axes, atol_rotation=POSTURE_ANGLE_ATOL)
+
+        stage_tilt_range = [self.calculate_stage_tilt(a, posture=Posture.FIB_VIEW_FM) for a in MILLING_RANGE]
+        tilt_in_range = isInRange(pos, active_range={"rx": stage_tilt_range}, axes={"rx"})
+        rotation_close = isNearPosition(pos, fib_view_fm_orientation, axes={"rz"}, atol_rotation=POSTURE_ANGLE_ATOL)
+        return tilt_in_range and rotation_close
 
     def get_posture_orientation(self, posture: Posture) -> Dict[str, float]:
         """Get the orientation of the stage for the given posture
@@ -765,17 +861,13 @@ class MeteorPostureManager(MicroscopePostureManager):
         tf_id = numpy.eye(3)  # identity transform for the UNKNOWN posture, to make it clear it's not handled
         tf_rz_180, _ = get_rotation_transforms(rz=math.pi)
 
+        # Compensate for the scan rotation (around Z)
+        sr = self._get_sem_imaging_scan_rotation()
+        tf_sr, _ = get_rotation_transforms(rz=sr)
+
         # Note that the tilt of the stage doesn't matter here, because the XYZ of the stage is
         # "after" the tilt axis.
 
-        # Compensate for the scan rotation (around Z)
-        sr = self._get_scan_rotation()   # Fails if ion-beam and e-beam have different scan rotations
-        # Make sure the SEM image is shown without rotation in the UI. This works by setting
-        # MD_ROTATION_COR as the same value as MD_ROTATION (automatically set on the image).
-        self._set_scanner_rotation_cor()
-        tf_sr, _ = get_rotation_transforms(rz=sr)
-
-        # We assume that FM & SEM are rotate by 180°. Let's warn if that's not the case.
         try:
             stage_md = self.stage.getMetadata()
             rz_fm = stage_md[model.MD_FAV_FM_POS_ACTIVE]["rz"]
@@ -917,47 +1009,66 @@ class MeteorPostureManager(MicroscopePostureManager):
 
         logging.debug("Sample stage transformation offsets: %s", self._offset)
 
-    def _get_scan_rotation(self) -> float:
+    def _get_sem_imaging_scan_rotation(self) -> float:
         """
-        Get the scan rotation value for SEM/FIB, and ensure they match.
-        If not both e-beam and ion-beam are available, the default scan rotation is used.
-        :return: the scan rotation value in radians
-        :raise: ValueError if the scan rotation values for e-beam and ion-beam do not match
+        Get the SEM imaging scan rotation, used both to enforce the scanners' rotation, and to
+        compute the sample-stage <-> stage-bare transformations.
+
+        :return: the SEM imaging scan rotation, in radians. Read from the MD_SEM_IMAGING_SCAN_ROTATION
+            metadata on the stage-bare component, if available, otherwise the default scan
+            rotation of this posture manager is used.
         """
-        # We only "trust" the scan rotation, if both the SEM and FIB have the same rotation.
-        # Otherwise, it might mean the user didn't really pay attention to it. The FM is calibrated
-        # for a given scan rotation, so picking the arbitrary scan rotation at startup could cause
-        # the sample stage to go in the wrong direction related to the FM image.
         try:
-            ebeam = model.getComponent(role='e-beam')
-            ion_beam = model.getComponent(role='ion-beam')
-        except LookupError:
-            logging.info("e-beam and/or ion-beam not available, scan rotation assumed to %s°",
-                         round(math.degrees(self._default_scan_rotation)))
+            stage = model.getComponent(role="stage-bare")
+            return stage.getMetadata()[model.MD_SEM_IMAGING_SCAN_ROTATION]
+        except (LookupError, KeyError):
+            logging.warning(
+                "No SEM imaging scan rotation was set on the stage-bare component, "
+                "assuming %s°", round(math.degrees(self._default_scan_rotation))
+            )
             return self._default_scan_rotation
 
-        # check if e-beam and ion-beam have the same rotation
-        sr = ebeam.rotation.value
-        ion_sr = ion_beam.rotation.value
-        if not numpy.isclose(sr, ion_sr, atol=ATOL_ROTATION_POS):
-            raise ValueError(f"The SEM and FIB rotations do not match {sr} != {ion_sr}")
-
-        return sr
-
-    def _set_scanner_rotation_cor(self):
+    def _enforce_scan_rotation(self, posture: Posture) -> None:
         """
-        Set the scanners' MD_ROTATION_COR metadata field to the current rotation, so that the
-        image is shown without rotation in the UI, as in the SEM UI. This is necessary, as
-        the sample stage compensates for the scan rotation already.
+        Set the scan rotation of the scanners (e-beam and ion-beam) or the rotation
+        correction of the camera, for the given posture, based on the SEM imaging scan rotation.
+
+        Both e-beam and ion-beam are always updated with the same rotation, so that they
+        stay in sync and remain aligned.
+
+        :param posture: the posture for which to enforce the scan rotation.
         """
-        for scanner_name in ["e-beam", "ion-beam"]:
+        sem_imaging_scan_rotation = self._get_sem_imaging_scan_rotation()
+
+        if posture in _SCAN_ROTATION_OFFSET:
+            scan_rotation = sem_imaging_scan_rotation + _SCAN_ROTATION_OFFSET[posture]
+            for role in ("e-beam", "ion-beam"):
+                try:
+                    scanner = model.getComponent(role=role)
+                except LookupError:
+                    # e.g. no ion-beam on this system
+                    continue
+                scanner.rotation.value = scan_rotation
+                scanner.updateMetadata({model.MD_ROTATION_COR: scan_rotation})
+        elif posture in _CAMERA_ROTATION_COR:
+            camera = model.getComponent(role="ccd")
+            camera.updateMetadata({model.MD_ROTATION_COR: _CAMERA_ROTATION_COR[posture]})
+        elif posture in (Posture.LOADING, Posture.GRID_1, Posture.GRID_2, Posture.UNKNOWN):
+            pass
+        else:
+            logging.warning(f"No implemented offset for scan rotation for posture: {posture}")
+
+    def _init_posture(self) -> None:
+        """
+        Update the current posture of the microscope at startup, and enforce the scan
+        rotation if starting in a known posture.
+        """
+        self._update_posture(self.stage.position.value)
+        if self.current_posture.value in _SCAN_ROTATION_OFFSET or self.current_posture.value in _CAMERA_ROTATION_COR:
             try:
-                scanner = model.getComponent(role=scanner_name)
-            except LookupError:
-                continue
-
-            rotation = scanner.rotation.value
-            scanner.updateMetadata({model.MD_ROTATION_COR: rotation})
+                self._enforce_scan_rotation(self.current_posture.value)
+            except Exception as e:
+                logging.warning("Failed to enforce scan rotation at startup: %s", e)
 
     def from_sample_stage_to_stage_movement(self, pos: Dict[str, float]) -> Dict[str, float]:
         """
@@ -1395,6 +1506,14 @@ class MeteorPostureManager(MicroscopePostureManager):
         """Transform from SLM posture to FIB-view FM posture."""
         return self._transform_from_sem_to_fib_view_fm(self._transform_from_slm_to_sem(pos))
 
+    def _transform_from_slm_to_trenching(self, pos: Dict[str, float]) -> Dict[str, float]:
+        """Transform from SLM posture to trenching posture."""
+        return self._transform_from_sem_to_trenching(self._transform_from_slm_to_sem(pos))
+
+    def _transform_from_trenching_to_slm(self, pos: Dict[str, float]) -> Dict[str, float]:
+        """Transform from trenching posture to SLM posture."""
+        return self._transform_from_sem_to_slm(self._transform_from_trenching_to_sem(pos))
+
     def is_posture_switch_allowed(self, source_posture: Posture, target_posture: Posture) -> bool:
         """
         Check if it is allowed to move from source to target posture. This is a combination of availability of
@@ -1455,8 +1574,8 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
         self.postures = [Posture.SEM_IMAGING, Posture.FM_IMAGING]
         self._initialise_transformation(axes=["y", "z"], rotation=self.pre_tilt)
         self.create_sample_stage()
-        # Update the posture based on the actual metadata
-        self._update_posture(self.stage.position.value)
+        # Update the posture and enforce scan rotation if in a known posture
+        self._init_posture()
 
     def get_target_position(self, target_posture: Posture) -> Dict[str, float]:
         """
@@ -1724,7 +1843,7 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
                     else:  # Direct move between postures near SEM or near FM
                         sub_moves.append((self.stage, target_position))
 
-                if target_posture in [Posture.FM_IMAGING, Posture.FIB_VIEW_FM]:
+                if target_posture in FM_POSTURES:
                     # Engage the focuser
                     sub_moves.append((self.focus, focus_active))
                 elif target_posture == Posture.SLM_IMAGING:
@@ -1740,7 +1859,6 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
                 if slm_engage_index is not None and index == slm_engage_index:
                     self._reference_slm_axes_before_engage(future)
                 self._run_sub_move(future, component, sub_move)
-
         except CancelledError:
             logging.info("CryoSwitchSamplePosition cancelled.")
         except Exception:
@@ -1749,6 +1867,7 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
         finally:
             try:
                 self._update_posture(self.stage.position.value)
+                self._enforce_scan_rotation(target_posture)
             except Exception as e:
                 logging.warning("Failed to update posture after move: %s", e)
 
@@ -1812,8 +1931,8 @@ class MeteorTFS3PostureManager(MeteorTFS1PostureManager):
             fixed_fm_sample = {"z": fixed_fm_sample["z"]}  # Drop x and y, to make clear only z is used
             self.stage.updateMetadata({model.MD_FM_POS_SAMPLE_ACTIVE: fixed_fm_sample})
 
-        # Update the posture based on the actual metadata
-        self._update_posture(self.stage.position.value)
+        # Update the posture and enforce scan rotation if in a known posture
+        self._init_posture()
 
     def _transform_from_sem_to_fm(self, pos: Dict[str, float], fix_fm_plane: bool = True) -> Dict[str, float]:
         """
@@ -2014,8 +2133,8 @@ class MeteorZeiss1PostureManager(MeteorPostureManager):
         # Automatic conversion to sample-stage axes
         self._initialise_transformation(axes=["y", "m"], rotation=self.pre_tilt)
         self.create_sample_stage()
-        # Update the posture based on the actual metadata
-        self._update_posture(self.stage.position.value)
+        # Update the posture and enforce scan rotation if in a known posture
+        self._init_posture()
 
     def from_sample_stage_to_stage_position(self, pos: Dict[str, float]) -> Dict[str, float]:
         new_pos = super().from_sample_stage_to_stage_position(pos)
@@ -2287,6 +2406,7 @@ class MeteorZeiss1PostureManager(MeteorPostureManager):
         finally:
             try:
                 self._update_posture(self.stage.position.value)
+                self._enforce_scan_rotation(target_posture)
             except Exception as e:
                 logging.warning("Failed to update posture after move: %s", e)
 
@@ -2312,6 +2432,7 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
             missed_axes = {'x', 'y', 'z', 'rx', 'rz'} - self.stage.axes.keys()
             raise KeyError("The stage misses %s axes" % missed_axes)
         self.fib_column_tilt = TESCAN_FIB_COLUMN_TILT
+        self._default_scan_rotation = math.pi  # rad
 
         if self.pre_tilt is None: # pre-tilt not available in the stage calib metadata
             # First version of the microscope file had it hard-coded on the Linked YM wrapper component
@@ -2344,8 +2465,8 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
         self.milling_angle.subscribe(self._initialise_transformation, init=True)
         self.create_sample_stage()
 
-        # Update the posture based on the actual metadata
-        self._update_posture(self.stage.position.value)
+        # Update the posture and enforce scan rotation if in a known posture
+        self._init_posture()
 
     def _initialise_transformation(self, angle):
         """
@@ -2370,8 +2491,7 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
         tf_rz_180, _ = get_rotation_transforms(rz=math.pi)
 
         # Compensate for the scan rotation (around Z)
-        sr = self._get_scan_rotation()  # Fails if ion-beam and e-beam have different scan rotations
-        self._set_scanner_rotation_cor()  # Makes sure total image rotation is 0
+        sr = self._get_sem_imaging_scan_rotation()
         tf_sr, _ = get_rotation_transforms(rz=-sr)
 
         # FM imaging
@@ -2684,7 +2804,7 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
 
         # Define values that are used more than once
         rx_sem = sem_pos_active["rx"]
-        rx_mill = self.calculate_stage_tilt(posture=Posture.MILLING)
+        rx_mill = pos["rx"]  # Since we are already in milling, just take current rx
 
         z_ct = calibrated_values["z_ct"]
         b_y = calibrated_values["b_y"]
@@ -2744,8 +2864,8 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
         # at the milling position.
         # Note that the 180-degree rotation is taken care of by swapping the +/- signs for x and y (wrt the m equation).
         transformed_pos = {
-            "x": milling_reference_pos_x + (fib_view_fm_reference_pos_x - pos["x"]),
-            "y": milling_reference_pos_y + (fib_view_fm_reference_pos_y - pos["y"]),
+            "x": milling_reference_pos_x + (pos["x"] - fib_view_fm_reference_pos_x),
+            "y": milling_reference_pos_y + (pos["y"] - fib_view_fm_reference_pos_y),
             "z": milling_reference_pos_z + (pos["z"] - fib_view_fm_reference_pos_z),
             "rx": rx_milling,
             "rz": pos["rz"],
@@ -2783,8 +2903,8 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
         # at the FIB-view FM position.
         # Note that the 180-degree rotation is taken care of by swapping the +/- signs for x and y (wrt the m equation).
         transformed_pos = {
-            "x": fib_view_fm_reference_pos_x + (milling_reference_pos_x - pos["x"]),
-            "y": fib_view_fm_reference_pos_y + (milling_reference_pos_y - pos["y"]),
+            "x": fib_view_fm_reference_pos_x + (pos["x"] - milling_reference_pos_x),
+            "y": fib_view_fm_reference_pos_y + (pos["y"] - milling_reference_pos_y),
             "z": fib_view_fm_reference_pos_z + (pos["z"] - milling_reference_pos_z),
             "rx": rx_fib_view_fm,
             "rz": pos["rz"],
@@ -2960,11 +3080,26 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
                         self.stage.updateMetadata({model.MD_FAV_SEM_POS_ACTIVE: pos_rotation})
 
                 # Same order in every case:
-                sub_moves.append((self.stage, {'z': safety_z}))  # Move Z to really low position
-                sub_moves.append((self.stage, filter_dict({'x', 'y', 'rx', 'rz'}, target_position)))  # Do all moves simultaneously
-                sub_moves.append((self.stage, filter_dict({'z'}, target_position)))  # Move the final Z
+                # MILLING <-> SLM: if the orientation is the same, only the sample plane position changes,
+                # so no need to go via the safety Z. Otherwise, the tilt is corrected in the move.
+                same_orientation = False
+                if {current_posture, target_posture} == {Posture.MILLING, Posture.SLM_IMAGING}:
+                    orient_mill = self.get_posture_orientation(Posture.MILLING)
+                    orient_slm = self.get_posture_orientation(Posture.SLM_IMAGING)
+                    same_orientation = isNearPosition(orient_mill, orient_slm, {'rx', 'rz'})
+                    if not same_orientation:
+                        logging.info("Correcting tilt/rotation between MILLING %s and SLM %s",
+                                     orient_mill, orient_slm)
 
-                if target_posture in [Posture.FM_IMAGING, Posture.FIB_VIEW_FM]:
+                if same_orientation:
+                    sub_moves.append((self.stage, filter_dict({'x', 'y', 'z'}, target_position)))
+                else:
+                    sub_moves.append((self.stage, {'z': safety_z}))  # Move Z to really low position
+                    sub_moves.append((self.stage, filter_dict({'x', 'y', 'rx', 'rz'},
+                                                              target_position)))  # Do all moves simultaneously
+                    sub_moves.append((self.stage, filter_dict({'z'}, target_position)))  # Move the final Z
+
+                if target_posture in FM_POSTURES:
                     if self.shutter is not None:
                         logging.info("Retracting shutter before engaging the objective for FM imaging")
                         self.shutter.value = False  # False = retracted (open), blocking call
@@ -3000,6 +3135,7 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
         finally:
             try:
                 self._update_posture(self.stage.position.value)
+                self._enforce_scan_rotation(target_posture)
             except Exception as e:
                 logging.warning("Failed to update posture after move: %s", e)
 
@@ -3045,8 +3181,8 @@ class MeteorJeol1PostureManager(MeteorPostureManager):
         # Automatic conversion to sample-stage axes
         self._initialise_transformation(axes=["y", "z"])
         self.create_sample_stage()
-        # Update the posture based on the actual metadata
-        self._update_posture(self.stage.position.value)
+        # Update the posture and enforce scan rotation if in a known posture
+        self._init_posture()
 
     def _update_conversion(self,
                            rotation: float = 0,
@@ -3068,7 +3204,7 @@ class MeteorJeol1PostureManager(MeteorPostureManager):
         tf_fm_inv = numpy.linalg.inv(tf_fm)
 
         # get the scan rotation value
-        sr = self._get_scan_rotation()
+        sr = self._get_sem_imaging_scan_rotation()
 
         # get scan rotation matrix (rz -> rx)
         tf_sr, _ = get_rotation_transforms(rz=-sr)
@@ -3257,6 +3393,7 @@ class MeteorJeol1PostureManager(MeteorPostureManager):
         finally:
             try:
                 self._update_posture(self.stage.position.value)
+                self._enforce_scan_rotation(target_posture)
             except Exception as e:
                 logging.warning("Failed to update posture after move: %s", e)
 
@@ -3323,6 +3460,9 @@ class SampleStage(model.Actuator):
                                                 unit=("m", "m", "m"),  readonly=True)
         # it's just a conversion from the dep's position
         self._stage_bare.position.subscribe(self._updatePosition, init=True)
+        # The posture can change without the stage moving (eg, when only the SLM objective is engaged),
+        # in which case the sample stage position must be recomputed with the transform of the new posture.
+        self._pm.current_posture.subscribe(self._onPostureChange)
 
         if model.hasVA(self._stage_bare, "speed"):
             speed_axes = set(sample_stage_axes.keys())
@@ -3332,6 +3472,13 @@ class SampleStage(model.Actuator):
             else:
                 logging.info("Axes %s of dependency are missing from .speed, so not providing it",
                              set(self.axes) - speed_axes)
+
+    def _onPostureChange(self, posture: Posture) -> None:
+        """
+        Update the position VA when the posture changes, as the transform depends on it
+        :param posture: the new posture (unused, recomputed from the stage position)
+        """
+        self._updatePosition(self._stage_bare.position.value)
 
     def _updatePosition(self, pos_dep):
         """
@@ -3389,6 +3536,11 @@ class SampleStage(model.Actuator):
         # Only the linear axes are necessary for the move, so drop the others (to avoid extraneous moves)
         shift_stage = filter_dict(LINEAR_AXES, shift_stage)
         logging.debug("converted relative move from %s to %s", shift, shift_stage)
+        # Some postures require a specific order between the axes (executed as absolute moves)
+        cur_pos = self._stage_bare.position.value
+        f = self._pm.move_stage_in_order({an: cur_pos[an] + v for an, v in shift_stage.items()})
+        if f is not None:
+            return f
         return self._stage_bare.moveRel(shift_stage, **kwargs)
 
     def moveAbs(self, pos: Dict[str, float], **kwargs) -> Future:
@@ -3407,6 +3559,9 @@ class SampleStage(model.Actuator):
         # Only the linear axes are necessary for the move, so drop the others (to avoid extraneous moves)
         pos_stage = filter_dict(LINEAR_AXES, pos_stage)
         logging.debug("converted absolute move from %s to %s", pos, pos_stage)
+        f = self._pm.move_stage_in_order(pos_stage)
+        if f is not None:
+            return f
         return self._stage_bare.moveAbs(pos_stage, **kwargs)
 
     def moveRelChamberCoordinates(self, shift: Dict[str, float]) -> Future:

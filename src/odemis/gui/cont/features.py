@@ -22,7 +22,13 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 import itertools
 import logging
+import math
 import os
+from pathlib import Path
+import threading
+from typing import Optional
+
+from typing import Dict
 
 import wx
 
@@ -33,24 +39,37 @@ from odemis.acq.feature import (
     FEATURE_POLISHED,
     FEATURE_READY_TO_MILL,
     FEATURE_ROUGH_MILLED,
+    REFERENCE_IMAGE_FILENAME,
     CryoFeature,
-    get_feature_position_at_posture,
+    collect_feature_data,
     FIBFMCorrelationData,
+    MillingAlignmentAreaTooSmallError,
     Target,
-    TargetType
+    TargetType,
+    constrain_milling_alignment_area,
+    get_feature_position_at_posture,
 )
-from odemis.acq.move import Posture
+from odemis.acq.milling.system_state import capture_system_state, validate_system_state
+from odemis.acq.move import Posture, FM_POSTURES
 from odemis.gui import model as guimod
 from odemis.gui.comp.popup import show_message
 from odemis.gui.conf.licences import LICENCE_MILLING_ENABLED
-from odemis.gui.cont.cryo_project import save_project
+from odemis.gui.cont.cryo_project import get_feature_dir, sanitize_feature_name, save_project, trash_feature_dir
 from odemis.gui.model import TOOL_FEATURE, TOOL_NONE
 from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.widgets import VigilantAttributeConnector
 
 SUPPORTED_POSTURES = [Posture.SEM_IMAGING, Posture.FM_IMAGING, Posture.MILLING, Posture.FIB_IMAGING,
                       Posture.FIB_VIEW_FM, Posture.TRENCHING, Posture.SLM_IMAGING]
+MILLING_REFERENCE_TOO_SMALL_MESSAGE = (
+    "The reference image resolution is too low for milling alignment. "
+    "Try acquiring a higher-resolution reference image."
+)
 
+
+# Maximum distance (in metres) within which another feature is considered "nearby"
+# for the feature-deletion data-collection trigger.
+NEARBY_FEATURE_DISTANCE_M = 100e-6
 
 class CryoFeatureController(object):
     """ controller to handle the cryo feature panel elements
@@ -81,6 +100,9 @@ class CryoFeatureController(object):
         self._feature_status_va_connector = None
         self._feature_z_va_connector = None
 
+        # Feature whose status VA we are subscribed to for data-collection triggering.
+        self._feature_for_collection: Optional[CryoFeature] = None
+
         self._tab_data_model.main.features.subscribe(self._on_features_changes, init=True)
         self._tab_data_model.main.currentFeature.subscribe(self._on_current_feature_changes, init=True)
 
@@ -102,10 +124,14 @@ class CryoFeatureController(object):
         fibsem_mode = self.acqui_mode is guimod.AcquiMode.FIBSEM
         if fm_mode:
             self._panel.btn_use_current_z.Bind(wx.EVT_BUTTON, self._on_btn_use_current_z)
+            self.pm.current_posture.subscribe(self._update_ctrl_feature_z)
         if fibsem_mode:
             self._panel.btn_feature_save_position.Bind(wx.EVT_BUTTON, self.save_milling_position)
             self._panel.btn_feature_save_position.Show(LICENCE_MILLING_ENABLED)
             self.pm.current_posture.subscribe(self._on_posture_change)
+
+        # Track previous posture so we can detect FM → SEM/FIB transitions.
+        self._prev_posture = self.pm.get_current_posture()
 
     def _on_btn_create_move_feature(self, _):
         if self._tab_data_model.tool.value == TOOL_FEATURE:
@@ -125,6 +151,12 @@ class CryoFeatureController(object):
                                style=wx.YES_NO | wx.ICON_QUESTION | wx.CENTER)
         ans = box.ShowModal()
         if ans == wx.ID_YES:
+            self._maybe_collect_on_delete(current_feature)
+            # Keep the data on disk, but out of the way of any future feature with the same name
+            feature_dir = get_feature_dir(self._tab.conf.pj_last_path, feature_name)
+            if feature_dir is not None:
+                trash_feature_dir(feature_dir)
+            current_feature.path = None
             self._tab_data_model.main.features.value.remove(current_feature)
             self._tab_data_model.main.currentFeature.value = None
             if self.acqui_mode is guimod.AcquiMode.FIBSEM:
@@ -136,7 +168,11 @@ class CryoFeatureController(object):
         # Use current focus to set currently selected feature
         feature: CryoFeature = self._tab_data_model.main.currentFeature.value
         if feature:
-            feature.fm_focus_position.value = self._main_data_model.focus.position.value
+            current_posture = self.pm.get_current_posture()
+            # In SLM posture, the focus position is the sample stage z
+            focuser = self._main_data_model.get_posture_focuser()
+            feature.fm_focus_position.value = {**feature.fm_focus_position.value,
+                                               current_posture: {"z": focuser.position.value["z"]}}
 
     def _on_btn_go_to_feature(self, _):
         """
@@ -168,15 +204,21 @@ class CryoFeatureController(object):
         stage_position = get_feature_position_at_posture(pm=self.pm, feature=feature, posture=current_posture)
         # Older projects may contain posture metadata that is not a movable stage axis.
         stage_position = {axis: value for axis, value in stage_position.items() if axis in self.pm.stage.axes}
-        fm_focus_position = feature.fm_focus_position.value
+        focuser = self._main_data_model.get_posture_focuser()
+        fm_focus_position = feature.get_fm_focus_position(current_posture, focuser)
 
         # move to feature position
         logging.info(f"Moving to position: {stage_position}, focus: {fm_focus_position}, posture: {current_posture}")
+        if fm_focus_position and current_posture in FM_POSTURES and focuser is self.pm.stage:
+            # In SLM posture, the focus is the sample stage z: a single move, to not conflict with the stage move
+            self.pm.stage.moveAbs({**stage_position, **fm_focus_position})
+            return
+
         self.pm.stage.moveAbs(stage_position)
 
-        # if fm imaging, move focus too
-        if current_posture == Posture.FM_IMAGING:
-            self._main_data_model.focus.moveAbs(fm_focus_position)
+        # if fm mode, move focus too
+        if fm_focus_position and current_posture in FM_POSTURES:
+            focuser.moveAbs(fm_focus_position)
 
         return
 
@@ -222,7 +264,15 @@ class CryoFeatureController(object):
         # -> disable if no selected tasks
         # -> disable if invalid tasks
 
-        stream = self._tab.fib_stream # the fib stream
+        stream = self._tab.fib_stream  # the fib stream
+
+        # Validate the resolution that the stream will use before starting a
+        # potentially slow FIB acquisition. ScannerStream applies these same
+        # ROI settings when the acquisition starts.
+        resolution, _ = stream._computeROISettings(stream.roi.value)
+        image_shape = (resolution[1], resolution[0])
+        if not self._validate_milling_reference_shape(feature, image_shape):
+            return
 
         # Preserve the physical feature position before the milling posture is
         # updated to the current stage position (the center of the reference
@@ -246,7 +296,7 @@ class CryoFeatureController(object):
                 feature_sample_pos = (sample_pos["x"], sample_pos["y"])
             else:
                 current_posture = self.pm.get_current_posture()
-                if current_posture in (Posture.MILLING, Posture.TRENCHING):
+                if current_posture in (Posture.MILLING, Posture.TRENCHING, Posture.SLM_IMAGING):
                     sample_pos = self.pm.to_sample_stage_from_stage_position(
                         self.pm.stage.position.value, posture=current_posture)
                     feature_sample_pos = (sample_pos["x"], sample_pos["y"])
@@ -255,18 +305,29 @@ class CryoFeatureController(object):
         from odemis.acq import acqmng
         self._acq_future = acqmng.acquire(
                 [stream], self._tab_data_model.main.settings_obs)
-        self._acq_future.result()
+        acquired_data, error = self._acq_future.result()
+        if error is not None:
+            raise error
 
-        if stream.raw is None:
+        if not acquired_data:
             logging.warning(f"No FIB image available to save for {feature.name.value}")
             return
 
-        # save the milling data (tasks, reference image)
-        feature.save_milling_task_data(
-                                stage_position=self.pm.stage.position.value,
-                                # milling_tasks=milling_tasks,
-                                path=os.path.join(self._tab.conf.pj_last_path, feature.name.value),
-                                reference_image=stream.raw[0])
+        reference_image = acquired_data[0]
+        # Save the settings belonging to this reference for later alignment.
+        # The user may change imaging settings before milling starts. A separate
+        # snapshot taken then is used only to restore those settings afterward.
+        try:
+            system_state = capture_system_state()
+            validate_system_state(system_state)
+        except ValueError as exc:
+            logging.warning("Cannot save FIB reference image for %s: %s", feature.name.value, exc)
+            show_message(self._tab.main_frame, "Unable to save milling reference",
+                         "The microscope has missing or invalid acquisition settings. "
+                         "Check the microscope settings and acquire a new FIB reference image.", level=logging.WARNING)
+            return
+        if not self._save_milling_reference(feature, reference_image, system_state):
+            return
 
         # Store the feature within the newly acquired image. Position the
         # milling patterns around it only when its offset is initialized. The
@@ -297,6 +358,55 @@ class CryoFeatureController(object):
         self._tab_data_model.main.currentFeature.value = None
         self._tab_data_model.main.currentFeature.value = feature
 
+    def _save_milling_reference(self, feature: CryoFeature, reference_image: model.DataArray,
+                               system_state: dict) -> bool:
+        """Save the reference and recorded state or show its alignment-area validation warning.
+
+        :param feature: Feature whose milling reference is being saved.
+        :param reference_image: Acquired FIB reference image.
+        :param system_state: Settings recorded with the reference acquisition, indexed by role.
+        :returns: True if saved, or False if the feature directory or alignment area is invalid.
+        """
+        feature_dir = get_feature_dir(self._tab.conf.pj_last_path, feature.name.value)
+        if feature_dir is None:
+            logging.warning(f"Feature name {feature.name.value!r} cannot be used as directory name")
+            return False
+
+        try:
+            feature.save_milling_task_data(
+                stage_position=system_state["stage-bare"]["position"][0],
+                path=str(feature_dir),
+                reference_image=reference_image,
+                system_state=system_state,
+            )
+        except MillingAlignmentAreaTooSmallError as exc:
+            self._show_milling_reference_warning(feature, exc)
+            return False
+        return True
+
+    def _validate_milling_reference_shape(self, feature: CryoFeature, image_shape: tuple) -> bool:
+        """Check that an image can contain a valid milling alignment area."""
+        try:
+            constrain_milling_alignment_area(feature.milling_alignment_area.value, image_shape)
+        except MillingAlignmentAreaTooSmallError as exc:
+            self._show_milling_reference_warning(feature, exc)
+            return False
+        return True
+
+    def _show_milling_reference_warning(
+            self, feature: CryoFeature, error: MillingAlignmentAreaTooSmallError) -> None:
+        """Log and display an alignment-area validation warning."""
+        message = str(error)
+        logging.warning("Cannot save FIB reference image for %s: %s", feature.name.value, message)
+        box = wx.MessageDialog(
+            self._tab.main_frame,
+            message=MILLING_REFERENCE_TOO_SMALL_MESSAGE,
+            caption="Unable to Save Reference Image",
+            style=wx.OK | wx.ICON_WARNING | wx.CENTER,
+        )
+        box.SetOKLabel("OK")
+        box.ShowModal()
+
     def _display_go_to_feature_warning(self) -> bool:
         box = wx.MessageDialog(self._tab.main_frame,
                                message="The stage is currently in the SEM imaging position. "
@@ -312,6 +422,11 @@ class CryoFeatureController(object):
             return
         self._enable_feature_ctrls(True)
 
+        prev = self._prev_posture
+        self._prev_posture = posture
+        if prev == Posture.FM_IMAGING and (posture in (Posture.SEM_IMAGING, Posture.FIB_IMAGING)):
+            self._collect_features_in_thread(self._tab_data_model.main.features.value)
+
     def _enable_feature_ctrls(self, enable: bool):
         """
         Enables/disables the feature controls
@@ -326,13 +441,13 @@ class CryoFeatureController(object):
             self._panel.btn_use_current_z.Enable(enable)
         if self.acqui_mode is guimod.AcquiMode.FIBSEM:
             current_posture = self.pm.get_current_posture()
-            save_position_postures = (Posture.MILLING, Posture.TRENCHING)
+            save_position_postures = (Posture.MILLING, Posture.TRENCHING, Posture.SLM_IMAGING)
             # TODO: check if current position is near the feature position, if not, disable and show warning to user
             # TODO: acquire a new fib image for the reference, dont use the existing.
             self._panel.btn_feature_save_position.Enable(enable and current_posture in save_position_postures)
             if current_posture not in save_position_postures:
                 self._panel.btn_feature_save_position.SetToolTip(
-                    "Move to the milling or trenching posture to save the position."
+                    "Move to the milling, trenching or SLM imaging posture to save the position."
                 )
             else:
                 self._panel.btn_feature_save_position.SetToolTip("")
@@ -399,6 +514,11 @@ class CryoFeatureController(object):
         if self._feature_z_va_connector:
             self._feature_z_va_connector.disconnect()
 
+        # Unsubscribe status-change data-collection trigger from the previous feature.
+        if self._feature_for_collection is not None:
+            self._feature_for_collection.status.unsubscribe(self._on_feature_status_collection)
+            self._feature_for_collection = None
+
         self._update_feature_cmb_list()
 
         if feature is None:
@@ -422,36 +542,45 @@ class CryoFeatureController(object):
                                                                        ctrl_2_va=self._on_cmb_feature_status_change,
                                                                        va_2_ctrl=self._on_feature_status)
 
-        correlation_data = self._tab_data_model.main.currentFeature.value.correlation_data
+        current_feature = self._tab_data_model.main.currentFeature.value
+        correlation_data = current_feature.correlation_data
+        invalid_focus = False
         # Check if the correlation data is already present in the current feature
         # If present, load the streams and targets accordingly,
         # otherwise, initialize the correlation data
         if correlation_data:
             self.correlation_target = correlation_data
-
+            # The FM targets are expressed in the posture at which the correlated FM data was acquired, which is
+            # independent of the current posture of the microscope.
+            fm_posture = self.correlation_target.fm_posture
             # Load the target
             targets = []
             if self.correlation_target.fm_fiducials:
                 targets.append(self.correlation_target.fm_fiducials)
-            stage_pos = feature.get_posture_position(Posture.FM_IMAGING)
-            feature_sample_stage = self.pm.to_sample_stage_from_stage_position(stage_pos, posture=Posture.FM_IMAGING)
-            feature_focus = feature.fm_focus_position.value
+            stage_pos = get_feature_position_at_posture(self.pm, feature, fm_posture)
+            feature_sample_stage = self.pm.to_sample_stage_from_stage_position(stage_pos, posture=fm_posture)
+            feature_focus = feature.get_fm_focus_position(fm_posture, self._main_data_model.focus)
 
-            poi = Target(x=feature_sample_stage["x"], y=feature_sample_stage["y"],
-                         z=feature_focus["z"], name="POI-1", type=TargetType.PointOfInterest,
-                         index=1, fm_focus_position=feature_focus["z"], superz_focused=feature.superz_focused)
-            targets.append([poi])
-            if self.correlation_target.fib_fiducials:
-                targets.append(self.correlation_target.fib_fiducials)
-            if self.correlation_target.fib_surface_fiducial:
-                targets.append([self.correlation_target.fib_surface_fiducial])
+            if feature_focus:
+                poi = Target(x=feature_sample_stage["x"], y=feature_sample_stage["y"],
+                             z=feature_focus["z"], name="POI-1", type=TargetType.PointOfInterest,
+                             index=1, fm_focus_position=feature_focus["z"], superz_focused=feature.superz_focused)
+                targets.append([poi])
+                if self.correlation_target.fib_fiducials:
+                    targets.append(self.correlation_target.fib_fiducials)
+                if self.correlation_target.fib_surface_fiducial:
+                    targets.append([self.correlation_target.fib_surface_fiducial])
 
-            # flatten the list of lists
-            targets = list(
-                itertools.chain.from_iterable([x] if not isinstance(x, list) else x for x in targets))
-            self._tab_data_model.main.targets.value = targets
-            self._tab_data_model.main.currentTarget.value = targets[0] if targets else None
-        else:
+                # flatten the list of lists
+                targets = list(
+                    itertools.chain.from_iterable([x] if not isinstance(x, list) else x for x in targets))
+                self._tab_data_model.main.targets.value = targets
+                self._tab_data_model.main.currentTarget.value = targets[0] if targets else None
+            else:
+                invalid_focus = True
+                logging.warning(f"Invalid focus data in correlation data for feature {current_feature.name.value}")
+
+        if not correlation_data or invalid_focus:
             self._tab_data_model.main.currentFeature.value.correlation_data = FIBFMCorrelationData()
             self._tab_data_model.main.currentTarget.value = None
             self._tab_data_model.main.targets.value = []
@@ -465,10 +594,31 @@ class CryoFeatureController(object):
                                                                     ctrl_2_va=self._on_ctrl_feature_z_change,
                                                                     va_2_ctrl=self._on_feature_focus_pos)
 
-    def _on_feature_focus_pos(self, fm_focus_position: dict):
-        # Set the feature Z ctrl with the focus position
-        self._panel.ctrl_feature_z.SetValue(fm_focus_position["z"])
+        # Subscribe to status changes to trigger data collection (init=False: skip current value).
+        feature.status.subscribe(self._on_feature_status_collection, init=False)
+        self._feature_for_collection = feature
+
+    def _on_feature_focus_pos(self, fm_focus_position: Dict[Posture, Dict[str, float]]) -> None:
+        """
+        Called when the focus positions of the current feature change
+        :param fm_focus_position: the focus position for each posture
+        """
+        self._update_ctrl_feature_z()
         save_project(self._tab_data_model.main)
+
+    @call_in_wx_main
+    def _update_ctrl_feature_z(self, _=None) -> None:
+        """
+        Set the feature Z ctrl with the focus position of the current feature at the current posture.
+        It is also used as a callback when the posture changes, as the feature Z is specific to each posture.
+        """
+        feature = self._tab_data_model.main.currentFeature.value
+        if feature is None:
+            return
+        focus = feature.get_fm_focus_position(self.pm.get_current_posture(),
+                                              self._main_data_model.get_posture_focuser())
+        if focus is not None:
+            self._panel.ctrl_feature_z.SetValue(focus["z"])
 
     def _on_feature_name(self, _):
         # Force an update of the list of features
@@ -477,11 +627,45 @@ class CryoFeatureController(object):
 
     def _on_cmb_feature_name_change(self):
         feature = self._tab_data_model.main.currentFeature.value
-        value = self._panel.cmb_features.GetValue()  # Old name
+        value = sanitize_feature_name(self._panel.cmb_features.GetValue())  # New name, safe as directory name
+        if not value:
+            logging.warning("Feature name is empty or invalid, keeping the previous one")
+            value = feature.name.value
         # Update the name of the streams with the new name
         for stream in feature.streams.value:
             stream.name.value = stream.name.value.replace(feature.name.value, value)
+        self._rename_feature_path(feature, value)
         return value
+
+    def _rename_feature_path(self, feature: CryoFeature, new_name: str) -> None:
+        """
+        Update the feature directory (and its reference image) so that it follows the new feature name.
+        The feature name must not have been updated yet.
+        :param feature: the feature being renamed
+        :param new_name: the new name of the feature
+        """
+        old_name = feature.name.value
+        if not feature.path or new_name == old_name:
+            return
+
+        old_path = Path(feature.path)
+        new_path = get_feature_dir(self._tab.conf.pj_last_path, new_name)
+        if new_path is None or old_path == new_path:
+            return
+        if new_path.exists():
+            logging.warning(f"Cannot move feature directory to {new_path}, as it already exists")
+            return
+
+        try:
+            if old_path.is_dir():
+                old_path.rename(new_path)
+                old_ref = new_path / f"{old_name}-{REFERENCE_IMAGE_FILENAME}"
+                if old_ref.exists():
+                    old_ref.rename(new_path / f"{new_name}-{REFERENCE_IMAGE_FILENAME}")
+        except OSError:
+            logging.exception(f"Failed to move feature directory {old_path} to {new_path}")
+            return
+        feature.path = str(new_path)
 
     def _on_feature_status(self, feature_status):
         """
@@ -490,6 +674,15 @@ class CryoFeatureController(object):
         """
         self._panel.cmb_feature_status.SetValue(feature_status)
         save_project(self._tab_data_model.main)
+
+    def _on_feature_status_collection(self, _status: str) -> None:
+        """
+        Trigger data collection when the current feature's status changes.
+        :param _status: The new feature status value
+        """
+        feature = self._feature_for_collection
+        if feature is not None and feature.is_collectible:
+            self._collect_features_in_thread([feature])
 
     def _on_cmb_features_change(self, evt):
         """
@@ -514,11 +707,86 @@ class CryoFeatureController(object):
     def _on_ctrl_feature_z_change(self):
         """
         Get the current feature Z ctrl value to set feature focus position
-        :return: (dict) feature focus position
+        :return: (dict) feature focus position for each posture
         """
         # HACK: sometimes the event is first received by this handler and later
         # by the UnitFloatCtrl. So the value is not yet computed => Force it, just in case.
         self._panel.ctrl_feature_z.on_text_enter(None)
         zpos = self._panel.ctrl_feature_z.GetValue()
 
-        return {"z": zpos}
+        feature = self._tab_data_model.main.currentFeature.value
+        current_posture = self.pm.get_current_posture()
+        if current_posture in FM_POSTURES:
+            return {**feature.fm_focus_position.value, current_posture: {"z": zpos}}
+        else:
+            return feature.fm_focus_position.value
+
+    def _collect_features_in_thread(self, features: list[CryoFeature]) -> None:
+        """
+        Launch collect_feature_data for all features with collect=True in a background thread.
+        :param features: List of features for which to collect data
+        """
+        overview_streams = self._tab_data_model.overviewStreams.value
+        project_dir = self._tab.conf.pj_last_path
+
+        def _run():
+            for feature in features:
+                if feature.is_collectible:
+                    collect_feature_data(
+                        feature,
+                        overview_streams=overview_streams,
+                        project_dir=project_dir,
+                    )
+
+        t = threading.Thread(target=_run, name="FeatureDataCollectionBulk", daemon=True)
+        t.start()
+
+    def _has_zstack_stream(self, feature: CryoFeature) -> bool:
+        """Return True if the feature has at least one z-stack stream.
+
+        :param feature: The feature to check.
+        :returns: True when a z-stack stream is present, False otherwise.
+        """
+        return any(hasattr(s, "zIndex") for s in feature.streams.value)
+
+    def _has_nearby_feature(self, feature: CryoFeature, distance_m: float = NEARBY_FEATURE_DISTANCE_M) -> bool:
+        """Return True if any other feature is within distance_m of the given feature.
+
+        :param feature: The feature to check proximity for.
+        :param distance_m: Maximum distance in metres to be considered nearby.
+        :returns: True when another feature is within the threshold distance.
+        """
+        # Any posture can be used, using FM Imaging as the current posture can be any posture
+        # Get the sample stage values in the selected posture to calculate the proximity
+        stage_pos = feature.get_posture_position(Posture.FM_IMAGING)
+        feature_sample_stage = self.pm.to_sample_stage_from_stage_position(stage_pos, posture=Posture.FM_IMAGING)
+        fx, fy, fz = feature_sample_stage["x"], feature_sample_stage["y"], feature_sample_stage["z"]
+
+        for other in self._tab_data_model.main.features.value:
+            if other is feature:
+                continue
+            other_pos = other.get_posture_position(Posture.FM_IMAGING)
+            other_sample_stage = self.pm.to_sample_stage_from_stage_position(other_pos, posture=Posture.FM_IMAGING)
+            ox, oy, oz = other_sample_stage["x"], other_sample_stage["y"], other_sample_stage["z"]
+            dist = math.dist((fx, fy, fz), (ox, oy, oz))
+            if dist <= distance_m:
+                return True
+        return False
+
+    def _maybe_collect_on_delete(self, feature: CryoFeature) -> None:
+        """Trigger data collection before a feature is deleted if eligible.
+
+        Collection is triggered when all three conditions are met:
+        - feature.is_collectible is True
+        - The feature has at least one z-stack stream
+        - No other feature is within 100 µm
+
+        :param feature: The feature about to be deleted.
+        """
+        if not feature.is_collectible:
+            return
+        if not self._has_zstack_stream(feature):
+            return
+        if self._has_nearby_feature(feature):
+            return
+        self._collect_features_in_thread([feature])
