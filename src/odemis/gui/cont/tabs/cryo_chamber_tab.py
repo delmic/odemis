@@ -139,6 +139,7 @@ class CryoChamberTab(Tab):
                 Posture.FIB_VIEW_FM: self.panel.btn_switch_fib_view_fm,
                 Posture.FIB_IMAGING: self.panel.btn_switch_fib_imaging,
                 Posture.TRENCHING: self.panel.btn_switch_trenching,
+                Posture.SLM_IMAGING: self.panel.btn_switch_slm_imaging,
             }
             # Remove the ones which are not supported on this system
             self.position_btns = {posture: btn for posture, btn in self.position_btns.items()
@@ -771,6 +772,7 @@ class CryoChamberTab(Tab):
                 Posture.FM_IMAGING,
                 Posture.MILLING,
                 Posture.SEM_IMAGING,
+                Posture.SLM_IMAGING,
                 Posture.TRENCHING,
             ]
             and current_posture in [
@@ -780,6 +782,7 @@ class CryoChamberTab(Tab):
                 Posture.LOADING,
                 Posture.MILLING,
                 Posture.SEM_IMAGING,
+                Posture.SLM_IMAGING,
                 Posture.TRENCHING,
             ]
             and not self._display_meteor_pos_warning_msg(end_pos)
