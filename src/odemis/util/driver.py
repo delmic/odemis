@@ -28,7 +28,9 @@ import sys
 import threading
 from collections.abc import Iterable
 from concurrent.futures import CancelledError
-from typing import Dict, List, Set, Optional
+from typing import Dict, List, Set, Optional, Tuple
+
+import numpy
 
 from Pyro4.errors import CommunicationError
 
@@ -210,6 +212,29 @@ def notify_to_user(target_user: str, title: str, message: str,
 
 ATOL_LINEAR_POS = 100e-6  # m
 ATOL_ROTATION_POS = 1e-3  # rad (~0.5°)
+
+
+def shiftBy(scanner: model.HwComponent, dx: float, dy: float) -> Tuple[float, float]:
+    """
+    Move the beam shift by a relative amount, compensating for the current
+    scan rotation. When the scan is rotated by 180 degrees, the image is
+    flipped on screen, so a relative displacement expressed in the (rotated)
+    image coordinate system must be inverted before being applied to the
+    beam shift, which is always expressed in the unrotated coordinate system.
+    :param scanner: the scanner component, with a shift and a rotation VA.
+    :param dx: relative displacement along X, in meters.
+    :param dy: relative displacement along Y, in meters.
+    :returns: the new absolute x and y beam shift, in meters.
+    """
+    # invert direction for scan rotated images
+    if numpy.isclose(math.degrees(scanner.rotation.value), 180):
+        dx *= -1.0
+        dy *= -1.0
+    cur_shift = scanner.shift.value
+    new_shift = (cur_shift[0] + dx, cur_shift[1] + dy)
+    logging.debug("Shifting beam by (%s, %s) m, new absolute shift: %s", dx, dy, new_shift)
+    scanner.shift.value = new_shift
+    return scanner.shift.value
 
 
 def estimateMoveDuration(distance, speed, accel):
