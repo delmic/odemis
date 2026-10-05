@@ -262,9 +262,11 @@
 }
 
 # CLS3252dsc-1
-"Optical Focus": {
+# Single SmarAct controller shared by the METEOR and SLM optical focus,
+# each exposed via a MultiplexActuator wrapper.
+"Optical Actuator": {
     class: smaract.MCS2,
-    role: focus,
+    role: null,
     init: {
         locator: "fake",
         ref_on_init: True,
@@ -272,16 +274,30 @@
         speed: 0.003,  # m/s
         accel: 0.003,  # m/s²
         #hold_time: 5 # s, default = infinite
-        # TODO: check the ranges, and the channel
+        # TODO: check the ranges, and the channels
         axes: {
-            'z': {
+            'z_meteor': {
                 # -11.5mm is safely parked (FAV_POS_DEACTIVE)
                 # 1.7mm is typically in focus (FAV_POS_ACTIVE)
                 range: [-15.e-3, 5.e-3],
                 unit: 'm',
                 channel: 0,
             },
+            'z_slm': {
+                range: [-11.e-3, 15.e-3],
+                unit: 'm',
+                channel: 1,
+            },
         },
+    },
+}
+
+"Optical Focus": {
+    class: actuator.MultiplexActuator,
+    role: focus,
+    dependencies: {"z": "Optical Actuator"},
+    init: {
+        axes_map: {"z": "z_meteor"},
     },
     metadata: {
         # Loading position to retract lens
@@ -311,6 +327,8 @@
         # Default position of the mirror engaged (will be improved during alignment)
         FAV_POS_ACTIVE: {"l": 122.2e-3, "s": 0},  # m, m
         FAV_POS_DEACTIVE:{"l":-2.5e-3, "s": 0},
+        # Range of positions where the lens arm is considered inserted (ie, SLM posture)
+        POS_ACTIVE_RANGE: {"l": [100.e-3, 125.5e-3], "s": [-2.1e-3, 2.1e-3]},
     },
 }
 
@@ -408,31 +426,15 @@
         },
         cycle: 6.283185, # position of ref switch (0) after a full turn
     },
-    # TODO: a way to indicate the best filter to use during alignement and brightfield? via some metadata?
     affects: ["SLM Camera"],
 }
 
-# CLS3252dsc-1
 "SLM Optical Focus": {
-    class: smaract.MCS2,
+    class: actuator.MultiplexActuator,
     role: focus-coincident,
+    dependencies: {"z": "Optical Actuator"},
     init: {
-        locator: "fake",
-        ref_on_init: True,
-        # TODO: check speed/accel
-        speed: 0.003,  # m/s
-        accel: 0.003,  # m/s²
-        #hold_time: 5 # s, default = infinite
-        # TODO: check the ranges, and the channel
-        axes: {
-            'z': {
-                # -11.5mm is safely parked (FAV_POS_DEACTIVE)
-                # 1.7mm is typically in focus (FAV_POS_ACTIVE)
-                range: [-11.e-3, 15.e-3],
-                unit: 'm',
-                channel: 0,
-            },
-        },
+        axes_map: {"z": "z_slm"},
     },
     metadata: {
         # Loading position to retract lens
@@ -465,7 +467,7 @@
     role: null,
     dependencies: {"slave": "SLM LZ Axes"},
     init: {
-        backlash: {
+        forced_axes: {
             # Only the sign matters: positive direction moves last.
             "l": -1,
             "z": -1,

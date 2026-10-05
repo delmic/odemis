@@ -1233,7 +1233,7 @@ class SecomStreamsController(StreamBarController):
                                                                        guimodel.CHAMBER_UNKNOWN}
                 view = self._tab_data_model.focussedView.value
                 compatible = view.is_compatible(acqstream.FluoStream)
-                return enabled and compatible
+                return enabled and compatible and self._can_add_fluo_stream()
 
             # Add most recently used settings from a JSON file
             if self.stream_settings.config_data:
@@ -2095,41 +2095,57 @@ class CryoStreamsController(SecomStreamsController):
         posture = self._main_data_model.posture_manager.get_current_posture()
         return posture == Posture.SLM_IMAGING
 
+    def _can_add_fluo_stream(self) -> bool:
+        """
+        Check whether a new fluorescence stream can be created for the current state.
+
+        :returns: True if in SLM posture, or if the lens arm is retracted and the
+         posture is FM imaging or FIB view FM. False otherwise (eg, SEM imaging posture, or
+         lens arm inserted while the stage is not at the SLM orientation).
+        """
+        pm = self._main_data_model.posture_manager
+        return pm.get_current_posture() in (Posture.FM_IMAGING, Posture.FIB_VIEW_FM, Posture.SLM_IMAGING)
+
     def _is_slm_stream(self, stream) -> bool:
         """
-        Check if the given stream is associated with SLM imaging posture based on its focuser.
+        Check if the given stream is associated with SLM imaging posture based on its z-stack focuser.
         """
-        focuser = getattr(stream, "focuser", None)
-        return focuser is self._main_data_model.focus_coincident
+        focuser = getattr(stream, "zstack_focuser", None)
+        return focuser is not None and focuser is self._main_data_model.focus_coincident
 
-    def _get_fluo_components(self) -> Tuple[object, object, object, object]:
+    def _get_fluo_components(self) -> Tuple[object, object, object, object, object]:
         """
         Pick optical components for a fluorescence stream based on posture.
 
-        Returns detector, light source, filter and focuser.
+        Returns detector, light source, filter, focuser, and z-stack focuser. In SLM posture,
+        the focuser (used for viewport focus and autofocus) is the sample stage, while the
+        z-stack focuser is the SLM focus.
         """
         if self._is_slm_posture():
             logging.debug("SLM components enabled for imaging")
             ccd = self._main_data_model.ccd_coincident
             light = self._main_data_model.light_coincident
             light_filter = self._main_data_model.filter_coincident
-            focuser = self._main_data_model.focus_coincident
-            if all((ccd, light, light_filter, focuser)):
+            zstack_focuser = self._main_data_model.focus_coincident
+            focuser = self._main_data_model.get_posture_focuser()
+            if all((ccd, light, light_filter, zstack_focuser, focuser)):
                 logging.debug("FM components enabled for imaging")
-                return ccd, light, light_filter, focuser
+                return ccd, light, light_filter, focuser, zstack_focuser
 
+        focuser = self._main_data_model.focus
         return (
             self._main_data_model.ccd,
             self._main_data_model.light,
             self._main_data_model.light_filter,
-            self._main_data_model.focus,
+            focuser,
+            focuser,
         )
 
     def _create_fluo_stream(self, name: str) -> acqstream.FluoStream:
         """
         Create a fluorescence stream bound to posture-specific optics.
         """
-        ccd, light, light_filter, focuser = self._get_fluo_components()
+        ccd, light, light_filter, focuser, zstack_focuser = self._get_fluo_components()
         return acqstream.FluoStream(
             name,
             ccd,
@@ -2137,6 +2153,7 @@ class CryoStreamsController(SecomStreamsController):
             light,
             light_filter,
             focuser=focuser,
+            zstack_focuser=zstack_focuser,
             opm=self._main_data_model.opm,
             detvas={"exposureTime"},
         )
@@ -2173,10 +2190,28 @@ class CryoStreamsController(SecomStreamsController):
     @call_in_wx_main
     def _on_posture_change(self, _posture) -> None:
         """
-        Refresh stream panel visibility whenever posture changes.
+        Refresh stream panel visibility and the add stream button tooltip whenever
+        the posture or the SLM lens arm position changes.
+
+        :param _posture: the new value of the changed VA (unused, the state is read again)
         """
         view = self._tab_data_model.focussedView.value
         self._onView(view)
+        self._update_add_stream_tooltip()
+
+    def _update_add_stream_tooltip(self) -> None:
+        """
+        Explain on the add stream button why fluorescence streams cannot be added
+        in the current posture.
+        """
+        btn = self._stream_bar.btn_add_stream
+        if self._can_add_fluo_stream():
+            btn.SetToolTip("")
+            btn.Enable(True)
+        else:
+            btn.SetToolTip("Fluorescence streams can only be added in the FM, FIB view FM, "
+                           "or SLM imaging posture.")
+            btn.Enable(False)
 
     def _add_fluo_streams_actions(self) -> None:
         """
@@ -2192,7 +2227,7 @@ class CryoStreamsController(SecomStreamsController):
                                                                        guimodel.CHAMBER_UNKNOWN}
                 view = self._tab_data_model.focussedView.value
                 compatible = view.is_compatible(acqstream.FluoStream)
-                return enabled and compatible
+                return enabled and compatible and self._can_add_fluo_stream()
 
             if self.stream_settings.config_data:
                 acq_names = sorted(self.stream_settings.entries)
@@ -2242,7 +2277,7 @@ class CryoStreamsController(SecomStreamsController):
                     is_slm_posture = self._is_slm_posture()
                     # It is True when (SLM stream + SLM posture) and (FM stream + FM posture)
                     # such that the compatible optical stream for the posture is shown.
-                    show = is_slm_stream == is_slm_posture
+                    show = (is_slm_stream == is_slm_posture) and self._can_add_fluo_stream()
 
                 e.Show(show)
 

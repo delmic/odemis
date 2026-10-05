@@ -129,6 +129,15 @@ _CAMERA_ROTATION_COR = {
 }
 
 
+# Per posture: stage-bare axes which must be moved first or last, relative to the other axes.
+# The value is the direction (sign) for which the axis moves first; for the opposite direction it moves last.
+# In SLM posture, a sample-stage Y move is a mix of stage-bare y and z. When z increases it must move
+# before y, and when z decreases it must move after y.
+_STAGE_MOVE_ORDER = {
+    Posture.SLM_IMAGING: {"z": -1},
+}
+
+
 def filter_dict(keys: set, d: Dict[str, float]) -> Dict[str, float]:
     """
     Filter a dictionary to only keep the given keys
@@ -343,6 +352,43 @@ class MicroscopePostureManager:
             logging.info("Move procedure is cancelled after moving %s -> %s", component.name, sub_move)
             raise CancelledError()
 
+    def move_stage_in_order(self, pos: Dict[str, float]) -> Optional[Future]:
+        """
+        Move the stage-bare to the position, with the axes in the order required by the current posture
+        (see _STAGE_MOVE_ORDER). A forced axis moves before the other axes if it moves in its "first"
+        direction, and after the other axes otherwise.
+        :param pos: the absolute stage-bare position (linear axes)
+        :returns: a cancellable future, or None if the current posture doesn't require any specific order
+        """
+        order = _STAGE_MOVE_ORDER.get(self.current_posture.value)
+        if not order:
+            return None
+
+        cur_pos = self.stage.position.value
+        first = {an: v for an, v in pos.items() if an in order and (v - cur_pos[an]) * order[an] >= 0}
+        last = {an: v for an, v in pos.items() if an in order and (v - cur_pos[an]) * order[an] < 0}
+        normal = {an: v for an, v in pos.items() if an not in order}
+        sub_moves = [(self.stage, m) for m in (first, normal, last) if m]
+        if len(sub_moves) < 2:
+            return None
+
+        f = model.CancellableFuture()
+        f.task_canceller = self._cancel_switch_posture
+        f._task_state = RUNNING
+        f._task_lock = threading.Lock()
+        f._running_subf = model.InstantaneousFuture()
+        executeAsyncTask(f, self._run_sub_moves, args=(f, sub_moves))
+        return f
+
+    def _run_sub_moves(self, future: Future, sub_moves: List[Tuple[model.Component, Dict[str, float]]]) -> None:
+        """
+        Execute the sub-moves one after the other
+        :param future: the future of the whole move
+        :param sub_moves: list of (component, absolute position)
+        """
+        for component, sub_move in sub_moves:
+            self._run_sub_move(future, component, sub_move)
+
     def _update_posture(self, position: Dict[str, float]):
         """
         Update the current posture of the microscope
@@ -392,6 +438,11 @@ class MeteorPostureManager(MicroscopePostureManager):
             self._slm_focus = model.getComponent(role="focus-coincident")
             self._align_coincident = model.getComponent(role="align-coincident")
             self._slm_arm = model.getComponent(role="lens-arm-coincident")
+            md_slm_arm = self._slm_arm.getMetadata()
+            required_slm_keys = {model.MD_FAV_POS_ACTIVE, model.MD_POS_ACTIVE_RANGE}
+            if not required_slm_keys.issubset(md_slm_arm.keys()):
+                missing_keys = required_slm_keys - md_slm_arm.keys()
+                raise ValueError(f"SLM lens arm metadata is missing the following required keys: {missing_keys}.")
             self._slm_available = True
         except LookupError:
             pass
@@ -447,6 +498,9 @@ class MeteorPostureManager(MicroscopePostureManager):
         # current posture va
         self.current_posture = model.VigilantAttribute(Posture.UNKNOWN)
         self.stage.position.subscribe(self._update_posture)
+        if self._slm_available:
+            # The SLM posture also depends on the lens arm position
+            self._slm_arm.position.subscribe(self._on_slm_arm_position)
 
         # Supported postures for sample stage (can be extended by the subclass)
         self.postures = (Posture.SEM_IMAGING, Posture.FM_IMAGING)
@@ -501,6 +555,7 @@ class MeteorPostureManager(MicroscopePostureManager):
                 Posture.SEM_IMAGING: self._transform_from_trenching_to_sem,
                 # trenching position can be dynamically updated, so we need to support this recalculation
                 Posture.TRENCHING: self._transform_from_trenching_to_trenching,
+                Posture.SLM_IMAGING: self._transform_from_trenching_to_slm,
             },
             Posture.SLM_IMAGING: {
                 Posture.SEM_IMAGING: self._transform_from_slm_to_sem,
@@ -508,6 +563,7 @@ class MeteorPostureManager(MicroscopePostureManager):
                 Posture.MILLING: self._transform_from_slm_to_milling,
                 Posture.FIB_IMAGING: self._transform_from_slm_to_fib,
                 Posture.FIB_VIEW_FM: self._transform_from_slm_to_fib_view_fm,
+                Posture.TRENCHING: self._transform_from_slm_to_trenching,
             },
             Posture.SLM_IMAGING: {
                 Posture.SEM_IMAGING: self._transform_from_slm_to_sem,
@@ -564,8 +620,6 @@ class MeteorPostureManager(MicroscopePostureManager):
                 return Posture.MILLING
             if self.at_fib_imaging_posture(position):
                 return Posture.FIB_IMAGING
-            if self.at_trenching_posture(position):
-                return Posture.TRENCHING
             return Posture.SEM_IMAGING
         # None of the above -> unknown position
         return Posture.UNKNOWN
@@ -660,12 +714,21 @@ class MeteorPostureManager(MicroscopePostureManager):
         fm_orientation = self.get_posture_orientation(Posture.FM_IMAGING)
         return isNearPosition(pos, fm_orientation, self.rotational_axes, atol_rotation=POSTURE_ANGLE_ATOL)
 
+    def _on_slm_arm_position(self, _pos: Dict[str, float]) -> None:
+        """
+        Update the current posture when the SLM lens arm moves.
+
+        :param _pos: the new lens arm position (unused, the stage position is read again)
+        """
+        self._update_posture(self.stage.position.value)
+
     def at_slm_imaging_posture(self, pos: Dict[str, float]) -> bool:
         """
-        Check if at SLM posture.
+        Check if at SLM posture: the stage is at the SLM orientation and the lens arm is
+        within its active range (MD_POS_ACTIVE_RANGE).
 
         :param pos: the stage position
-        :return: True if the stage is at the slm imaging posture
+        :return: True if the stage is at the slm imaging posture and lens arm in active range
         """
         if Posture.SLM_IMAGING not in self.postures:
             return False
@@ -674,11 +737,11 @@ class MeteorPostureManager(MicroscopePostureManager):
         logging.debug("Checking SLM posture against computed orientation: %s", stage_slm)
         if not isNearPosition(pos, stage_slm, self.rotational_axes, atol_rotation=math.radians(1.5)):
             return False
+        md = self._slm_arm.getMetadata()
+        lens_pos = self._slm_arm.position.value
+        lens_range = md.get(model.MD_POS_ACTIVE_RANGE)
 
-        slm_focus_active = self._slm_focus.getMetadata().get(model.MD_FAV_POS_ACTIVE)
-        if not slm_focus_active:
-            return False
-        return isNearPosition(self._slm_focus.position.value, slm_focus_active, self._slm_focus.axes)
+        return isInRange(lens_pos, lens_range, lens_range.keys())
 
     def at_fib_view_fm_posture(self, pos: Dict[str, float]) -> bool:
         """
@@ -1449,6 +1512,14 @@ class MeteorPostureManager(MicroscopePostureManager):
     def _transform_from_slm_to_fib_view_fm(self, pos: Dict[str, float]) -> Dict[str, float]:
         """Transform from SLM posture to FIB-view FM posture."""
         return self._transform_from_sem_to_fib_view_fm(self._transform_from_slm_to_sem(pos))
+
+    def _transform_from_slm_to_trenching(self, pos: Dict[str, float]) -> Dict[str, float]:
+        """Transform from SLM posture to trenching posture."""
+        return self._transform_from_sem_to_trenching(self._transform_from_slm_to_sem(pos))
+
+    def _transform_from_trenching_to_slm(self, pos: Dict[str, float]) -> Dict[str, float]:
+        """Transform from trenching posture to SLM posture."""
+        return self._transform_from_sem_to_slm(self._transform_from_trenching_to_sem(pos))
 
     def is_posture_switch_allowed(self, source_posture: Posture, target_posture: Posture) -> bool:
         """
@@ -3016,9 +3087,24 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
                         self.stage.updateMetadata({model.MD_FAV_SEM_POS_ACTIVE: pos_rotation})
 
                 # Same order in every case:
-                sub_moves.append((self.stage, {'z': safety_z}))  # Move Z to really low position
-                sub_moves.append((self.stage, filter_dict({'x', 'y', 'rx', 'rz'}, target_position)))  # Do all moves simultaneously
-                sub_moves.append((self.stage, filter_dict({'z'}, target_position)))  # Move the final Z
+                # MILLING <-> SLM: if the orientation is the same, only the sample plane position changes,
+                # so no need to go via the safety Z. Otherwise, the tilt is corrected in the move.
+                same_orientation = False
+                if {current_posture, target_posture} == {Posture.MILLING, Posture.SLM_IMAGING}:
+                    orient_mill = self.get_posture_orientation(Posture.MILLING)
+                    orient_slm = self.get_posture_orientation(Posture.SLM_IMAGING)
+                    same_orientation = isNearPosition(orient_mill, orient_slm, {'rx', 'rz'})
+                    if not same_orientation:
+                        logging.info("Correcting tilt/rotation between MILLING %s and SLM %s",
+                                     orient_mill, orient_slm)
+
+                if same_orientation:
+                    sub_moves.append((self.stage, filter_dict({'x', 'y', 'z'}, target_position)))
+                else:
+                    sub_moves.append((self.stage, {'z': safety_z}))  # Move Z to really low position
+                    sub_moves.append((self.stage, filter_dict({'x', 'y', 'rx', 'rz'},
+                                                              target_position)))  # Do all moves simultaneously
+                    sub_moves.append((self.stage, filter_dict({'z'}, target_position)))  # Move the final Z
 
                 if target_posture in FM_POSTURES:
                     if self.shutter is not None:
@@ -3381,6 +3467,9 @@ class SampleStage(model.Actuator):
                                                 unit=("m", "m", "m"),  readonly=True)
         # it's just a conversion from the dep's position
         self._stage_bare.position.subscribe(self._updatePosition, init=True)
+        # The posture can change without the stage moving (eg, when only the SLM objective is engaged),
+        # in which case the sample stage position must be recomputed with the transform of the new posture.
+        self._pm.current_posture.subscribe(self._onPostureChange)
 
         if model.hasVA(self._stage_bare, "speed"):
             speed_axes = set(sample_stage_axes.keys())
@@ -3390,6 +3479,13 @@ class SampleStage(model.Actuator):
             else:
                 logging.info("Axes %s of dependency are missing from .speed, so not providing it",
                              set(self.axes) - speed_axes)
+
+    def _onPostureChange(self, posture: Posture) -> None:
+        """
+        Update the position VA when the posture changes, as the transform depends on it
+        :param posture: the new posture (unused, recomputed from the stage position)
+        """
+        self._updatePosition(self._stage_bare.position.value)
 
     def _updatePosition(self, pos_dep):
         """
@@ -3447,6 +3543,11 @@ class SampleStage(model.Actuator):
         # Only the linear axes are necessary for the move, so drop the others (to avoid extraneous moves)
         shift_stage = filter_dict(LINEAR_AXES, shift_stage)
         logging.debug("converted relative move from %s to %s", shift, shift_stage)
+        # Some postures require a specific order between the axes (executed as absolute moves)
+        cur_pos = self._stage_bare.position.value
+        f = self._pm.move_stage_in_order({an: cur_pos[an] + v for an, v in shift_stage.items()})
+        if f is not None:
+            return f
         return self._stage_bare.moveRel(shift_stage, **kwargs)
 
     def moveAbs(self, pos: Dict[str, float], **kwargs) -> Future:
@@ -3465,6 +3566,9 @@ class SampleStage(model.Actuator):
         # Only the linear axes are necessary for the move, so drop the others (to avoid extraneous moves)
         pos_stage = filter_dict(LINEAR_AXES, pos_stage)
         logging.debug("converted absolute move from %s to %s", pos, pos_stage)
+        f = self._pm.move_stage_in_order(pos_stage)
+        if f is not None:
+            return f
         return self._stage_bare.moveAbs(pos_stage, **kwargs)
 
     def moveRelChamberCoordinates(self, shift: Dict[str, float]) -> Future:
