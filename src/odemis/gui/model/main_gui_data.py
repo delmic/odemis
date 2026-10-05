@@ -113,6 +113,8 @@ class MainGUIData(object):
         "scan-stage": "scan_stage",
         "stage-bare": "stage_bare",
         "focus": "focus",
+        "lens-arm-coincident": "lens_arm_coincident",
+        "focus-coincident": "focus_coincident",
         "spec-ded-focus": "spec_ded_focus",
         "pinhole": "pinhole",
         "stigmator": "stigmator",
@@ -184,6 +186,8 @@ class MainGUIData(object):
         self.scan_stage = None  # fast stage to scan, instead of the ebeam (SPARC)
         self.stage_bare = None # stage in the chamber referential
         self.focus = None  # actuator to change the camera focus
+        self.lens_arm_coincident = None  # actuator to move the SLM lens arm (METEOR, optional)
+        self.focus_coincident = None  # actuator to move the SLM focus (METEOR, optional)
         self.pinhole = None  # actuator to change the pinhole (confocal SECOM)
         self.stigmator = None  # actuator to change the optical astigmatism (METEOR)
         self.aligner = None  # actuator to align ebeam/ccd (SECOM)

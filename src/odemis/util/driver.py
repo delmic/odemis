@@ -210,6 +210,8 @@ def notify_to_user(target_user: str, title: str, message: str,
 
 ATOL_LINEAR_POS = 100e-6  # m
 ATOL_ROTATION_POS = 1e-3  # rad (~0.5°)
+# Compensation factor for a rotational move to take the same amount of time as a linear move
+ROT_DIST_SCALING_FACTOR = 0.06  # m/rad, 1° ~ 1mm
 
 
 def estimateMoveDuration(distance, speed, accel):
@@ -304,6 +306,32 @@ def isNearPosition(current_pos, target_position, axes, rot_axes: set = None,
         if not is_near:
             return False
     return True
+
+
+def estimate_distance(start: Dict[str, float], end: Dict[str, float]) -> float:
+    """
+    Estimate a human-meaningful distance between two positions, by combining the linear
+    and rotational axes into a single value. Only the axes present in both positions are used.
+    Axes whose name starts with "r" are considered rotational (in rad), the others linear (in m).
+    The rotational axes are scaled by ROT_DIST_SCALING_FACTOR, to have the same order of
+    magnitude as the linear distances.
+    :param start: position (axis -> value)
+    :param end: position (axis -> value)
+    :return: the distance (>= 0), in m
+    :raises ValueError: if there is no axis in common between the two positions
+    """
+    axes = start.keys() & end.keys()
+    if not axes:
+        raise ValueError("No common axes found between the two positions")
+
+    lin_axes = sorted(a for a in axes if not a.startswith("r"))
+    rot_axes = [a for a in axes if a.startswith("r")]
+
+    lin_dist = math.sqrt(sum((end[a] - start[a]) ** 2 for a in lin_axes))
+    # For the rotations: just the sum of all the (shortest) rotations
+    rot_dist = sum(abs(util.rot_shortest_move(start[a], end[a])) for a in rot_axes)
+
+    return lin_dist + ROT_DIST_SCALING_FACTOR * rot_dist
 
 
 def isInRange(current_pos: dict, active_range: dict, axes: set):

@@ -24,11 +24,13 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
 import collections
+import functools
 import itertools
 import logging
 import math
 import os.path
 from concurrent.futures import CancelledError
+from typing import Dict, List, Optional
 
 import wx
 
@@ -36,7 +38,7 @@ import odemis.gui.cont.views as viewcont
 import odemis.gui.model as guimod
 from odemis import model
 from odemis.acq.feature import feature_decoder
-from odemis.acq.move import Posture
+from odemis.acq.move import MoveSegment, Posture
 from odemis.acq.stream import StaticStream
 from odemis.gui import conf
 from odemis.gui.comp.buttons import (
@@ -54,7 +56,7 @@ from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.widgets import AxisConnector, VigilantAttributeConnector
 from odemis.gui.util.wx_adapter import fix_static_text_clipping
 from odemis.gui.win.acquisition import LoadProjectFileDialog, ShowChamberFileDialog
-from odemis.model import InstantaneousFuture
+from odemis.model import HwComponent, InstantaneousFuture
 from odemis.util import almost_equal
 from odemis.util.dataio import data_to_static_streams, open_acquisition
 from odemis.util.filename import create_projectname, guess_pattern
@@ -123,8 +125,15 @@ class CryoChamberTab(Tab):
         # (While "stage" is in the FLM referential)
         self._stage = self.tab_data_model.main.stage_bare
 
+        # Secondary actuators which are engaged/retracted right before/after the stage move,
+        # as part of a posture switch: the FM/FIB-view-FM objective focuser, and, if available,
+        # the SLM lens arm and SLM focus actuators. The progress bar tracks their movement too.
+        self._focus = self.tab_data_model.main.focus
+        self._slm_arm: Optional[HwComponent] = main_data.lens_arm_coincident
+        self._slm_focus: Optional[HwComponent] = main_data.focus_coincident
+
         # Fail early when required axes are not found on the focuser positions metadata
-        focuser = self.tab_data_model.main.focus
+        focuser = self._focus
         focus_md = focuser.getMetadata()
         required_axis = {'z'}
         for fmd_key, fmd_value in focus_md.items():
@@ -157,16 +166,41 @@ class CryoChamberTab(Tab):
         # start and end position are used for the gauge progress bar
         self._start_pos = self._stage.position.value
         self._end_pos = self._start_pos
+        # Ordered list of segments the current posture switch movement is expected to go
+        # through, and their total length, used to compute the overall progress of the move.
+        # Set by _perform_switch_position_movement(), cleared once the move is done.
+        self._progress_segments: List[MoveSegment] = []
+        self._progress_total_length: float = 0.0
+        # Index, within _progress_segments, of the segment currently expected to be "in progress".
+        # Only moves forward, so that if the same component appears in two different segments
+        # (eg, a focuser retracted and then re-engaged later on), position updates are matched
+        # against the correct (not-yet-completed) segment.
+        self._progress_segment_idx: int = 0
 
         # Event binding for position control
         for btn in itertools.chain(self.position_btns.values(), self._grid_btns.values()):
+            logging.debug("Binding button: %s", btn.GetName())
             btn.Show()
             btn.Bind(wx.EVT_BUTTON, self._on_switch_btn)
 
         panel.btn_cancel.Bind(wx.EVT_BUTTON, self._on_cancel)
 
-        # Show current position of the stage via the progress bar
-        self._stage.position.subscribe(self._update_progress_bar, init=False)
+        # Show current position of the stage, the objective focuser, and (if present) the SLM
+        # lens arm/focus via the progress bar, as they can all be moved as part of a posture switch.
+        # NOTE: VigilantAttribute.subscribe() only keeps a *weak* reference to the callback, so
+        # the functools.partial objects must be kept alive as instance attributes as long as the
+        # subscription is active (otherwise they get garbage collected right away and the
+        # callback is never actually called).
+        self._on_stage_pos = functools.partial(self._update_progress_bar, self._stage)
+        self._on_focus_pos = functools.partial(self._update_progress_bar, self._focus)
+        self._stage.position.subscribe(self._on_stage_pos, init=False)
+        self._focus.position.subscribe(self._on_focus_pos, init=False)
+        if self._slm_arm is not None:
+            self._on_slm_arm_pos = functools.partial(self._update_progress_bar, self._slm_arm)
+            self._slm_arm.position.subscribe(self._on_slm_arm_pos, init=False)
+        if self._slm_focus is not None:
+            self._on_slm_focus_pos = functools.partial(self._update_progress_bar, self._slm_focus)
+            self._slm_focus.position.subscribe(self._on_slm_focus_pos, init=False)
         self.posture_manager.current_posture.subscribe(self._on_posture, init=True)
         self._show_warning_msg(None)
 
@@ -492,20 +526,23 @@ class CryoChamberTab(Tab):
         dialog.Destroy()
 
     @call_in_wx_main
-    def _update_progress_bar(self, pos):
+    def _update_progress_bar(self, component: HwComponent, pos: Dict[str, float]) -> None:
         """
-        Update the progress bar, based on the current position of the stage.
-        Called when the position of the stage changes.
-        pos (dict str->float): current position of the sample stage
+        Update the progress bar, based on the current position of the component which just
+        moved. The component can be the stage, the objective focuser, or (if present) the SLM
+        lens arm/focus, as they can all be involved, one after the other, in a posture switch
+        movement. Called whenever the position of one of these actuators changes.
+
+        :param component: the component whose position changed
+        :param pos: current position of that component
         """
         if not self.IsShown():
             return
-        # start and end position should be set for the progress bar to update
-        # otherwise, the movement is not coming from the tab switching buttons
-        if not self._start_pos or not self._end_pos:
+        # The segments should be set for the progress bar to update, otherwise the movement is not
+        # coming from the tab switching buttons
+        if not self._progress_segments:
             return
-        # Get the ratio of the current position in respect to the start/end position
-        val = self.posture_manager.get_movement_progress(pos, self._start_pos, self._end_pos)
+        val = self._compute_overall_progress(component, pos)
         if val is None:
             return
         val = min(max(0, int(round(val * 100))), 100)
@@ -513,6 +550,112 @@ class CryoChamberTab(Tab):
         # Set the move gauge with the movement progress percentage
         self.panel.gauge_move.Value = val
         self.panel.gauge_move.Refresh()
+
+    def _build_progress_segments(self, current_posture: Posture, target_posture: Posture,
+                                 start_stage_pos: Dict[str, float], end_stage_pos: Dict[str, float]
+                                 ) -> List[MoveSegment]:
+        """
+        Build the ordered list of segments odemis.acq.move.PostureManager.switch_posture() is
+        expected to go through, so that the progress bar can track the whole movement, and not
+        just the stage move. Each segment corresponds to one actuator moving from a start to an
+        end position. This only needs to approximate the actual choreography enough to know which
+        actuator moves, and from/to which position, at each step.
+
+        :param current_posture: the posture before starting the move
+        :param target_posture: the requested posture to switch to
+        :param start_stage_pos: the stage position at the start of the move
+        :param end_stage_pos: the stage position to reach
+        :return: ordered list of segments
+        """
+        segments = []
+
+        # The currently-engaged objective focuser or SLM optics are retracted first, before the
+        # stage starts moving.
+        if current_posture in (Posture.FM_IMAGING, Posture.FIB_VIEW_FM):
+            focus_deactive = self._focus.getMetadata().get(model.MD_FAV_POS_DEACTIVE)
+            if focus_deactive:
+                segments.append(MoveSegment(self._focus, self._focus.position.value, focus_deactive))
+        elif current_posture == Posture.SLM_IMAGING and self._slm_arm and self._slm_focus:
+            focus_deactive = self._slm_focus.getMetadata().get(model.MD_FAV_POS_DEACTIVE)
+            arm_deactive = self._slm_arm.getMetadata().get(model.MD_FAV_POS_DEACTIVE)
+            # Retract order is focus, then arm (see _append_slm_arm_focus_moves)
+            if focus_deactive:
+                segments.append(MoveSegment(self._slm_focus, self._slm_focus.position.value, focus_deactive))
+            if arm_deactive:
+                segments.append(MoveSegment(self._slm_arm, self._slm_arm.position.value, arm_deactive))
+
+        # The stage move itself
+        segments.append(MoveSegment(self._stage, start_stage_pos, end_stage_pos))
+
+        # The target objective focuser or SLM optics are engaged last, after the stage reached
+        # its target position.
+        if target_posture in (Posture.FM_IMAGING, Posture.FIB_VIEW_FM):
+            focus_active = self._focus.getMetadata().get(model.MD_FAV_POS_ACTIVE)
+            if focus_active:
+                focus_deactive = self._focus.getMetadata().get(model.MD_FAV_POS_DEACTIVE,
+                                                               self._focus.position.value)
+                segments.append(MoveSegment(self._focus, focus_deactive, focus_active))
+        elif target_posture == Posture.SLM_IMAGING and self._slm_arm and self._slm_focus:
+            arm_active = self._slm_arm.getMetadata().get(model.MD_FAV_POS_ACTIVE)
+            focus_active = self._slm_focus.getMetadata().get(model.MD_FAV_POS_ACTIVE)
+            # Engage order is arm, then focus (see _append_slm_arm_focus_moves)
+            if arm_active:
+                arm_deactive = self._slm_arm.getMetadata().get(model.MD_FAV_POS_DEACTIVE,
+                                                               self._slm_arm.position.value)
+                segments.append(MoveSegment(self._slm_arm, arm_deactive, arm_active))
+            if focus_active:
+                focus_deactive = self._slm_focus.getMetadata().get(model.MD_FAV_POS_DEACTIVE,
+                                                                   self._slm_focus.position.value)
+                segments.append(MoveSegment(self._slm_focus, focus_deactive, focus_active))
+
+        return segments
+
+    # Once a segment's progress reaches this ratio, it is considered done, so that later position
+    # updates for the same component (eg, a focuser retracted, then later re-engaged) are
+    # matched against the next segment using that component, not this (already completed) one.
+    _SEGMENT_DONE_RATIO = 0.98
+
+    def _compute_overall_progress(self, component: HwComponent, pos: Dict[str, float]) -> Optional[float]:
+        """
+        Compute the overall progress ratio of the whole posture switch movement, which can be
+        composed of several segments executed one after the other (eg, retracting the current
+        objective/SLM optics, then moving the stage, then engaging the target objective/SLM
+        optics). Each segment contributes to the overall progress proportionally to its length.
+
+        The same component can appear in more than one segment (eg, the objective focuser is first
+        retracted, and later re-engaged). To always match the position update against the
+        correct (not-yet-completed) segment, the search only looks forward from the last segment
+        known to still be in progress, never backward.
+
+        :param component: the component that triggered the position update
+        :param pos: current position of that component
+        :return: the overall progress ratio, between 0 and 1, or None if it cannot be determined
+         (eg, the component is not part of the currently running move, or its position is too
+         far away from the expected path)
+        """
+        for i in range(self._progress_segment_idx, len(self._progress_segments)):
+            segment = self._progress_segments[i]
+            if segment.component is not component:
+                continue
+
+            segment_progress = segment.progress(pos)
+            if segment_progress is None:
+                # Not (yet) on this segment's path: maybe a later segment with the same component fits
+                continue
+
+            completed_length = sum(seg.length() for seg in self._progress_segments[:i])
+            overall = (completed_length + segment_progress * segment.length()) / self._progress_total_length
+
+            if segment_progress >= self._SEGMENT_DONE_RATIO:
+                # This segment is (almost) done: advance so the next match starts from there
+                self._progress_segment_idx = i + 1
+            else:
+                self._progress_segment_idx = i
+
+            return min(max(overall, 0.0), 1.0)
+
+        # The component is not part of the currently tracked move (anymore, or not yet)
+        return None
 
     @call_in_wx_main
     def _control_warning_msg(self, posture: "Posture"):
@@ -727,6 +870,9 @@ class CryoChamberTab(Tab):
         self._target_posture = None
         self._start_pos = None
         self._end_pos = None
+        self._progress_segments = []
+        self._progress_total_length = 0.0
+        self._progress_segment_idx = 0
 
     def _on_cancel(self, evt):
         """
@@ -787,7 +933,26 @@ class CryoChamberTab(Tab):
             return None
 
         self._end_pos = end_pos
+        self._set_progress_segments(current_posture, self._target_posture, self._start_pos, self._end_pos)
         return self.posture_manager.switch_posture(self._target_posture)
+
+    def _set_progress_segments(self, current_posture: Posture, target_posture: Posture,
+                               start_stage_pos: Dict[str, float], end_stage_pos: Dict[str, float]) -> None:
+        """
+        Build and store the progress segments (and their total length) for the move about to be
+        started, so that _update_progress_bar() can track the overall progress of the whole movement.
+
+        :param current_posture: the posture before starting the move
+        :param target_posture: the requested posture to switch to
+        :param start_stage_pos: the stage position at the start of the move
+        :param end_stage_pos: the stage position to reach
+        """
+        segments = self._build_progress_segments(current_posture, target_posture,
+                                                 start_stage_pos, end_stage_pos)
+        # If all the segments are instantaneous, use 1 to avoid dividing by 0 later
+        self._progress_total_length = sum(seg.length() for seg in segments) or 1.0
+        self._progress_segments = segments
+        self._progress_segment_idx = 0
 
     @call_in_wx_main
     def _on_posture(self, posture: "Posture") -> None:
