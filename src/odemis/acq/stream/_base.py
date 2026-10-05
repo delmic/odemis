@@ -114,7 +114,7 @@ class Stream(object):
 
     def __init__(self, name, detector, dataflow, emitter, focuser=None, opm=None,
                  hwdetvas=None, hwemtvas=None, detvas=None, emtvas=None, axis_map={},
-                 raw=None, acq_type=None):
+                 raw=None, acq_type=None, zstack_focuser=None):
         """
         name (string): user-friendly name of this stream
         detector (Detector): the detector which has the dataflow
@@ -123,6 +123,8 @@ class Stream(object):
         opm (OpticalPathManager): the optical path manager
         focuser (Actuator or None): an actuator with a 'z' axis that allows to change
           the focus
+        zstack_focuser (Actuator or None): an actuator with a 'z' axis used to move
+          between the z levels of a z-stack acquisition. If None, the focuser is used.
         hwdetvas (None or set of str): names of all detector hardware VAs to be controlled by this
             Stream
         hwemtvas (None or set of str): names of all emitter hardware VAs to be controlled by this
@@ -145,6 +147,7 @@ class Stream(object):
         self._detector = detector
         self._emitter = emitter
         self._focuser = focuser
+        self._zstack_focuser = zstack_focuser
         self._opm = opm
 
         # Dataflow (Live image stream with meta data)
@@ -304,6 +307,14 @@ class Stream(object):
     @property
     def focuser(self):
         return self._focuser
+
+    @property
+    def zstack_focuser(self):
+        """
+        The actuator used to move between the z levels during a z-stack. It is
+        the same as the focuser, unless explicitly specified.
+        """
+        return self._focuser if self._zstack_focuser is None else self._zstack_focuser
 
     @property
     def det_vas(self):

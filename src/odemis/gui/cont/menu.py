@@ -29,6 +29,7 @@ from odemis.gui.model import TabName, CHAMBER_VACUUM, CHAMBER_UNKNOWN
 from odemis.gui.model.dye import DyeDatabase
 from odemis.gui.model.main_gui_data import MainGUIData
 from odemis.gui.util import call_in_wx_main
+from odemis.acq.move import Posture
 from odemis.gui.win.data_sharing_dialog import DataSharingDialog
 from odemis.util.datacollector import DataCollector
 from odemis.util import driver
@@ -116,6 +117,8 @@ class MenuController(object):
         # View/fit to content
         main_frame.Bind(wx.EVT_MENU, self._on_fit_content, id=main_frame.menu_item_fit_content.GetId())
         main_data.tab.subscribe(self._on_tab_change, init=True)
+        if main_data.posture_manager is not None:
+            main_data.posture_manager.current_posture.subscribe(self._on_posture_change)
 
         # /Help
         gc = odemis.gui.conf.get_general_conf()
@@ -397,7 +400,26 @@ class MenuController(object):
             f_enable = (updated and curr_s.focuser is not None)
         else:
             f_enable = False
-        self._main_frame.menu_item_auto_focus.Enable(f_enable)
+        self._main_frame.menu_item_auto_focus.Enable(f_enable and not self._is_slm_posture())
+
+    def _is_slm_posture(self) -> bool:
+        """
+        :returns: True if the microscope is currently in the SLM imaging posture (autofocus is disabled there)
+        """
+        pm = self._main_data.posture_manager
+        return pm is not None and pm.current_posture.value == Posture.SLM_IMAGING
+
+    @call_in_wx_main
+    def _on_posture_change(self, posture) -> None:
+        """
+        Update the autofocus menu entry when the posture changes.
+        :param posture: the new posture
+        """
+        try:
+            curr_s = self._get_current_stream()
+        except LookupError:
+            return
+        self._on_stream_update(curr_s.should_update.value)
 
     @call_in_wx_main
     def _on_stream_autobc(self, autobc):
