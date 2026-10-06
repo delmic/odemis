@@ -513,11 +513,11 @@ class CryoZLocalizationController(object):
         fiducial_size = self._tab_data.fiducial_size.value
         correlation_data = self._tab_data.main.currentFeature.value.correlation_data
         pois = [Target(x= pos["x"],y=pos["y"],
-                     z=feature.fm_focus_position.value["z"],
+                     z=feature.get_fm_focus_position(Posture.FM_IMAGING, self._focus)["z"],
                      name="POI-1",
                      index=1,
                      type=TargetType.PointOfInterest,
-                     fm_focus_position=feature.fm_focus_position.value["z"])]
+                     fm_focus_position=feature.get_fm_focus_position(Posture.FM_IMAGING, self._focus)["z"])]
         fiducials = getattr(correlation_data, "fm_fiducials", [])
         self._acq_future = z_localization.measure_z_multi_targets(stigmator=self._stigmator, focus= self._focus,
                                                          stream=s, poi_size=poi_size,
@@ -541,22 +541,24 @@ class CryoZLocalizationController(object):
             feature = self._tab_data.main.currentFeature.value
             correlation_data = feature.correlation_data
             correlation_data.fm_fiducials = []
-            old_focus = feature.fm_focus_position.value["z"]
+            old_focus = feature.get_fm_focus_position(Posture.FM_IMAGING, self._focus)["z"]
             for target in targets:
                 if target.type.value == TargetType.Fiducial:
                     correlation_data.fm_fiducials.append(target)
                 elif target.type.value == TargetType.PointOfInterest:
                     # update feature focus position
-                    feature.fm_focus_position.value = {"z": target.coordinates.value[2]}
+                    feature.fm_focus_position.value = {**feature.fm_focus_position.value,
+                                                       Posture.FM_IMAGING: {"z": target.coordinates.value[2]}}
                     feature.superz_focused = target.superz_focused
 
             self._panel.cmb_targets.Clear()
             self._tab_data.main.targets.value = targets
             self._tab_data.main.currentTarget.value = targets[0] if targets else None
-            if abs(old_focus - feature.fm_focus_position.value["z"]) <= SUPERZ_THRESHOLD:
+            new_focus = feature.get_fm_focus_position(Posture.FM_IMAGING, self._focus)["z"]
+            if abs(old_focus - new_focus) <= SUPERZ_THRESHOLD:
                 logging.debug("Feature located at %s + %s m", old_focus,
-                              feature.fm_focus_position.value["z"] - old_focus)
-                self._tab_data.main.focus.moveAbs({"z": feature.fm_focus_position.value["z"]})
+                              new_focus - old_focus)
+                self._tab_data.main.focus.moveAbs({"z": new_focus})
                 # Don't wait for it to be complete, the user will notice anyway
         except CancelledError:
             logging.debug("Z localization cancelled")

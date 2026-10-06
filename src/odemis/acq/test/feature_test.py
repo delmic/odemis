@@ -64,7 +64,7 @@ class TestFeatureEncoderDecoder(unittest.TestCase):
         feature = CryoFeature(
             name="TestFeature-1",
             stage_position={"x": 0, "y": 0},
-            fm_focus_position={"z": 0},
+            fm_focus_position={Posture.FM_IMAGING: {"z": 0}},
             milling_tasks={
                 "Notch": tasks["Notch"],
                 "Polishing 02": tasks["Polishing 02"],
@@ -90,7 +90,7 @@ class TestFeatureEncoderDecoder(unittest.TestCase):
             "name": "Future feature",
             "status": FEATURE_READY_TO_MILL,
             "stage_position": {"x": 0, "y": 0},
-            "fm_focus_position": {"z": 0},
+            "fm_focus_position": {"FM IMAGING": 0},
             "milling_tasks": {
                 "Future task": {
                     "name": "Future task",
@@ -112,7 +112,7 @@ class TestFeatureEncoderDecoder(unittest.TestCase):
         feature = CryoFeature(
             name="TestFeature-1",
             stage_position={"x": 50e-6, "y": 25e-6, "z": 32e-3, "rx": 0.61, "rz": 0},
-            fm_focus_position={"z": 1.69e-3}
+            fm_focus_position={Posture.FM_IMAGING: {"z": 1.69e-3}}
         )
         stage_position = {"x": 25e-6, "y": 40e-6, "z": 32e-3, "rx": 0.31, "rz": 0}
         self.path = os.path.join(os.getcwd(), feature.name.value)

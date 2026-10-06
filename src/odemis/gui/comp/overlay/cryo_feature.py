@@ -39,7 +39,7 @@ from odemis.gui.comp.overlay.base import DragMixin, WorldOverlay
 from odemis.gui.comp.overlay.stage_point_select import StagePointSelectOverlay
 from odemis.gui.cont.cryo_project import save_project
 from odemis.gui.model import TOOL_FEATURE, TOOL_NONE, TOOL_FIDUCIAL, TOOL_REGION_OF_INTEREST, TOOL_SURFACE_FIDUCIAL
-from odemis.acq.move import Posture, MicroscopePostureManager
+from odemis.acq.move import Posture, MicroscopePostureManager, FM_POSTURES
 from odemis.util.conversion import hex_to_frgb
 
 
@@ -177,8 +177,10 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
                 #self.cnvs.view.moveStageTo((view_pos["x"], view_pos["y"]))
                 self.pm.stage.moveAbs(position_bare)
                 # if fm imaging, move focus too
-                if self.pm.current_posture.value == Posture.FM_IMAGING:
-                    self.tab_data.main.focus.moveAbs(feature.fm_focus_position.value)
+                if self.pm.current_posture.value in FM_POSTURES:
+                    focus_pos = feature.get_fm_focus_position(self.pm.current_posture.value, self.tab_data.main.focus)
+                    if focus_pos:
+                        self.tab_data.main.focus.moveAbs(focus_pos)
                 self.tab_data.main.currentFeature.value = feature
             else:
                 # Move to selected point (if normally allowed to move)

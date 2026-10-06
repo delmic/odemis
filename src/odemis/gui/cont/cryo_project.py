@@ -148,6 +148,12 @@ def load_project(project_dir: os.PathLike) -> dict:
                 continue  # already a string key, no migration needed
             new_key = LEGACY_POSTURE_REGISTRY.get(posture_key_int, Posture.UNKNOWN).value
             feature["posture_positions"][new_key] = feature["posture_positions"].pop(posture_key)
+
+    # Migrate the single focus position to a focus position per posture (legacy format)
+    for feature in features:
+        focus_pos = feature["fm_focus_position"]
+        if focus_pos and len(focus_pos) == 1 and "z" in focus_pos:
+            feature["fm_focus_position"] = {Posture.FM_IMAGING.value: focus_pos}
     return {"overviews": overviews, "features": features}
 
 

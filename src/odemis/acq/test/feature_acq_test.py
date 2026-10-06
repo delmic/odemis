@@ -181,7 +181,7 @@ class TestCryoFeaturePosturePositions(unittest.TestCase):
         # set the stage position
         feature = CryoFeature("Feature-1",
                               stage_position=pos,
-                              fm_focus_position={"z": 1.69e-3})
+                              fm_focus_position={Posture.FM_IMAGING: {"z": 1.69e-3}})
 
         # get posture position
         feature.set_posture_position(posture=Posture.SEM_IMAGING, position=pos)
