@@ -361,7 +361,7 @@ class PnlTabSparcAcqui(wx.Panel):
             )
             sizer.Add(
                 self._build_fold_acq_status(panel),
-                flag=wx.LEFT | wx.TOP | wx.BOTTOM | wx.EXPAND,
+                flag=wx.LEFT | wx.EXPAND,
                 border=12,
             )
             sizer.Add(
