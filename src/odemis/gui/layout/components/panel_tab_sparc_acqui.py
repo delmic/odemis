@@ -85,6 +85,17 @@ class PnlTabSparcAcqui(wx.Panel):
         self.pnl_left.SetBackgroundColour(self._theme.background)
 
         with vbox() as outer_sizer:
+            # Top spacer
+            outer_sizer.Add((0, 0), proportion=1, flag=wx.EXPAND)
+
+            # Toolbar in the middle
+            self.sparc_acq_toolbar = ToolBar(self.pnl_left, style=wx.VERTICAL)
+            outer_sizer.Add(self.sparc_acq_toolbar, flag=wx.ALIGN_RIGHT)
+
+            # Middle spacer
+            outer_sizer.Add((0, 0), proportion=1, flag=wx.EXPAND)
+
+            # View selector (without toolbar)
             outer_sizer.Add(
                 self._build_view_selector(self.pnl_left),
                 proportion=1,
@@ -101,28 +112,14 @@ class PnlTabSparcAcqui(wx.Panel):
         return self.pnl_left
 
     def _build_view_selector(self, parent: wx.Window) -> wx.Sizer:
-        """Build the view selector labels, buttons, and toolbar.
+        """Build the view selector labels and buttons.
 
         :param parent: Parent window.
         :returns: View selector sizer.
         """
         with vbox() as selector_sizer:
-            selector_sizer.Add(
-                self._build_view_label(parent, "lbl_sparc_view_all", top_padding=False),
-                flag=wx.RIGHT | wx.ALIGN_RIGHT,
-                border=18,
-            )
-            self.btn_sparc_view_all = self._view_button(parent)
-            selector_sizer.Add(
-                self.btn_sparc_view_all,
-                flag=wx.BOTTOM | wx.ALIGN_RIGHT,
-                border=6,
-            )
-
-            self.sparc_acq_toolbar = ToolBar(parent, style=wx.VERTICAL)
-            selector_sizer.Add(self.sparc_acq_toolbar, flag=wx.ALIGN_RIGHT)
-
             selector_specs = (
+                ("lbl_sparc_view_all", "btn_sparc_view_all", False, True),
                 ("lbl_sparc_view_tl", "btn_sparc_view_tl", True, True),
                 ("lbl_sparc_view_tr", "btn_sparc_view_tr", True, True),
                 ("lbl_sparc_view_bl", "btn_sparc_view_bl", True, True),
@@ -364,7 +361,7 @@ class PnlTabSparcAcqui(wx.Panel):
             )
             sizer.Add(
                 self._build_fold_acq_status(panel),
-                flag=wx.LEFT | wx.TOP | wx.BOTTOM | wx.EXPAND,
+                flag=wx.LEFT | wx.EXPAND,
                 border=12,
             )
             sizer.Add(
