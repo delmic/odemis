@@ -51,7 +51,7 @@ from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.widgets import VigilantAttributeConnector
 
 SUPPORTED_POSTURES = [Posture.SEM_IMAGING, Posture.FM_IMAGING, Posture.MILLING, Posture.FIB_IMAGING,
-                      Posture.FIB_VIEW_FM, Posture.TRENCHING]
+                      Posture.FIB_VIEW_FM, Posture.TRENCHING, Posture.SLM_IMAGING]
 
 
 class CryoFeatureController(object):

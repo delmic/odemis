@@ -23,6 +23,7 @@ from odemis.gui.util import wx_adapter
 import Pyro4.errors
 import argparse
 import logging
+from typing import Optional
 from odemis import model, gui
 import odemis
 from odemis.gui import log, img, plugin
@@ -60,13 +61,13 @@ class OdemisGUIApp(wx.App):
     """ This is Odemis' main GUI application class
     """
 
-    def __init__(self, standalone=False, file_name=None):
+    def __init__(self, standalone: bool = False, file_name: Optional[str] = None) -> None:
         """
+        Initialize the Odemis GUI application.
 
         Args:
-            standalone: (bool or str) False, if not standalone, name string otherwise
-            file_name: (str) Path to the file to open on launch
-
+            standalone: False if not standalone, name string otherwise
+            file_name: Path to the file to open on launch
         """
         # Declare attributes BEFORE calling the super class constructor
         # because it will call 'OnInit' which uses them.
@@ -80,7 +81,6 @@ class OdemisGUIApp(wx.App):
         self._menu_controller = None
         self._data_collector = DataCollector()
         self.plugins = []  # List of instances of plugin.Plugins
-
         # User input devices
         self.dev_powermate = None
 
@@ -566,7 +566,6 @@ def main(args):
                         default=0, help="set verbosity level (0-2, default = 0)")
     parser.add_argument('--log-target', dest='logtarget',
                         help="Location of the GUI log file")
-
     options = parser.parse_args(args[1:])
 
     # Cannot use the internal feature, because it doesn't support multiline
