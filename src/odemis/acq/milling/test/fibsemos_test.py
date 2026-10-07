@@ -49,6 +49,7 @@ except ImportError:
 from odemis.acq.milling.patterns import (
     CompositeRectanglePatternParameters,
     CorrelationPatternParameters,
+    CrossPatternParameters,
     MicroexpansionPatternParameters,
     NotchPatternParameters,
     RectanglePatternParameters,
@@ -388,6 +389,22 @@ class TestConvertMillingTasksToMillingStages(unittest.TestCase):
 
         self.assert_composite_pattern_uses_one_stage(pattern)
 
+    def test_cross_pattern_uses_one_milling_stage(self) -> None:
+        """Send both cross arms in one milling stage."""
+        pattern = CrossPatternParameters(
+            name="Cross-1",
+            width=2e-6,
+            height=20e-6,
+            depth=1e-6,
+            rotation=math.pi / 4,
+            center=(1e-6, -2e-6),
+        )
+
+        stage = self.assert_composite_pattern_uses_one_stage(pattern)
+
+        self.assertEqual(len(stage.patterns), 2)
+        self.assertEqual(len(stage.pattern.define()), 2)
+
 
 @unittest.skipUnless(fibsemos.FIBSEMOS_INSTALLED, "fibsemOS is not installed")
 class TestCompositeSpotSizeCorrection(unittest.TestCase):
@@ -433,6 +450,9 @@ class TestCompositeSpotSizeCorrection(unittest.TestCase):
             ("correlation", CorrelationPatternParameters(
                 width=900e-6, height=700e-6, marker_length=75e-6,
                 thickness=4e-6, depth=3e-6, center=(1e-6, -2e-6))),
+            ("cross", CrossPatternParameters(
+                name="Cross-1", width=2e-6, height=20e-6, depth=1e-6,
+                rotation=math.pi / 4, center=(1e-6, -2e-6))),
         )
         for name, pattern in patterns:
             with self.subTest(pattern=name):
