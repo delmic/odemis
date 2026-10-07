@@ -187,6 +187,11 @@ class TestMeteorTescan1FibsemMove(move_tfs3_test.TestMeteorTFS3Move):
         # get the stage components
         cls.stage_bare = model.getComponent(role="stage-bare")
         cls.stage = cls.pm.sample_stage
+        cls.stage_bare = model.getComponent(role="stage-bare")
+        cls.ebeam = model.getComponent(role="e-beam")
+        cls.ion_beam = model.getComponent(role="ion-beam")
+        cls.ccd = model.getComponent(role="ccd")
+        cls.sem_imaging_scan_rotation = cls.pm._get_sem_imaging_scan_rotation()
 
         # get the metadata
         cls.stage_md = cls.stage_bare.getMetadata()
@@ -196,6 +201,12 @@ class TestMeteorTescan1FibsemMove(move_tfs3_test.TestMeteorTFS3Move):
         # Reset to loading position (in case the backend was already running and in a different posture)
         f = cls.pm.switch_posture(Posture.LOADING)
         f.result()
+
+    def _assert_scanner_rotation(self, scanner, expected: float):
+        """Check that the scanner rotation, and its MD_ROTATION_COR, both match the expected value."""
+        expected = expected % (2 * math.pi)
+        self.assertAlmostEqual(scanner.rotation.value % (2 * math.pi), expected, places=6)
+        self.assertAlmostEqual(scanner.getMetadata()[model.MD_ROTATION_COR] % (2 * math.pi), expected, places=6)
 
     def test_fixed_fm_z(self):
         self.skipTest("Test not meaningful for Tescan")
@@ -341,6 +352,33 @@ class TestMeteorTescan1FibsemMove(move_tfs3_test.TestMeteorTFS3Move):
         self.assertEqual(resulting_posture, Posture.MILLING)
         final_pos = self.stage_bare.position.value
         testing.assert_pos_almost_equal(initial_pos, final_pos)
+
+    def test_sem_fib_scan_rotation(self):
+        """Test that a sequence of posture switches lead to the expected scan rotations"""
+        self.pm.switch_posture(Posture.SEM_IMAGING).result()
+        # Both scanners always get the same rotation, since these scanners are often used simultaneously for
+        # coincidental SEM imaging and MILLING.
+        self._assert_scanner_rotation(self.ebeam, self.sem_imaging_scan_rotation)
+        self._assert_scanner_rotation(self.ion_beam, self.sem_imaging_scan_rotation)
+
+        # TRENCHING compensates for the 180° stage rotation on both scanners.
+        self.pm.switch_posture(Posture.TRENCHING).result()
+        self._assert_scanner_rotation(self.ebeam, self.sem_imaging_scan_rotation + math.pi)
+        self._assert_scanner_rotation(self.ion_beam, self.sem_imaging_scan_rotation + math.pi)
+
+        # Switching to milling should yield same rotation as SEM imaging
+        self.pm.switch_posture(Posture.MILLING).result()
+        self._assert_scanner_rotation(self.ebeam, self.sem_imaging_scan_rotation)
+        self._assert_scanner_rotation(self.ion_beam, self.sem_imaging_scan_rotation)
+
+    def test_fm_rotation_cor(self):
+        """"Test that a sequence of posture switches lead to the expected fm rotation correction"""
+        self.pm.switch_posture(Posture.FM_IMAGING).result()
+        self.assertAlmostEqual(self.ccd.getMetadata()[model.MD_ROTATION_COR], 0, places=6)
+        # FIB_VIEW_FM is only reachable from MILLING
+        self.pm.switch_posture(Posture.MILLING).result()
+        self.pm.switch_posture(Posture.FIB_VIEW_FM).result()
+        self.assertAlmostEqual(self.ccd.getMetadata()[model.MD_ROTATION_COR], math.pi, places=6)
 
 
 if __name__ == "__main__":

@@ -245,6 +245,9 @@ MD_FM_POS_SAMPLE_DEACTIVE = "Sample FM position deactive"  #  dict[str, float] r
 # specific known positions for the actuators.
 MD_FAV_POS_ACTIVE_DEST = "Favourite position active destination"  # list or set of str
 MD_FAV_POS_DEACTIVE_DEST = "Favourite position deactive destination"  # list or set of str
+# The value of the SEM imaging scan rotation, enforced when switching to MILLING & SEM IMAGING postures, and
+# used to derive and enforce the scan rotation for the other postures.
+MD_SEM_IMAGING_SCAN_ROTATION = "SEM imaging scan rotation"  # rad (float)
 
 MD_AXES_ORDER_REF = "Axes order for referencing"  # list of str
 
