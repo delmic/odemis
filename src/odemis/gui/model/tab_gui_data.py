@@ -341,7 +341,8 @@ class CryoGUIData(MicroscopyGUIData):
                 fm_focus_position = {current_posture: self.main.focus.position.value}
             else:
                 fm_focus_position = {}
-        feature = CryoFeature(f_name, stage_position, fm_focus_position)
+        collect_features = self.main.collect_features
+        feature = CryoFeature(f_name, stage_position, fm_focus_position, is_collectible=collect_features)
         for p in pm.postures: # calculate the position at all postures
             get_feature_position_at_posture(pm, feature, p)
 

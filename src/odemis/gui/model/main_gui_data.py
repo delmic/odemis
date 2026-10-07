@@ -270,6 +270,9 @@ class MainGUIData(object):
         # Indicates whether the microscope is milling
         self.is_milling = model.BooleanVA(False)
 
+        # Controls if the acquired features should be collected by the DataCollector
+        self.collect_features = False
+
         # The microscope object will be probed for common detectors, actuators, emitters etc.
         if microscope:
             self.role = microscope.role
