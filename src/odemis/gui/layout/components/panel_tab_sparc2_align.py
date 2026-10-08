@@ -19,7 +19,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from typing import Optional, Tuple
 
 import wx
-import wx.adv
 import wx.html
 
 import odemis.gui.layout as layout
@@ -30,6 +29,7 @@ from odemis.gui.comp.buttons import (
     ImageTextButton,
     ImageTextToggleButton,
 )
+from odemis.gui.comp.combo import ComboBox
 from odemis.gui.comp.foldpanelbar import FoldPanelBar
 from odemis.gui.comp.grid import ViewportGrid
 from odemis.gui.comp.slider import UnitFloatSlider
@@ -60,14 +60,14 @@ _MODE_BUTTONS: Tuple[Tuple[str, str, str, str, int], ...] = (
     ("btn_align_ek", "EK CENTERING", "ico_ang_ek.png", "ico_ang_green_ek.png", 4),
     ("btn_align_streakcam", "STREAK", "ico_fib.png", "ico_fib_green.png", 5),
     ("btn_align_fiber", "FIBER", "ico_fib.png", "ico_fib_green.png", 6),
-    ("btn_align_light_in", "LIGHT-IN", "ico_fib.png", "ico_fib_green.png", 8),
-    ("btn_align_light_in_ar", "LIGHT-IN AR", "ico_fib.png", "ico_fib_green.png", 9),
+    ("btn_align_light_in", "LIGHT-IN", "ico_fib.png", "ico_fib_green.png", 7),
+    ("btn_align_light_in_ar", "LIGHT-IN AR", "ico_fib.png", "ico_fib_green.png", 8),
     (
         "btn_align_tunnel_lens",
         "TUNNEL",
         "ico_freespacetunnel.png",
         "ico_freespacetunnel_green.png",
-        10,
+        9,
     ),
 )
 
@@ -109,7 +109,8 @@ class PnlTabSparc2Align(wx.Panel):
 
         :returns: Left controls column.
         """
-        panel = wx.Panel(self, size=(400, -1))
+        panel = wx.Panel(self)
+        panel.SetMinSize((460, -1))
         panel.SetForegroundColour(self._theme.text_primary)
         panel.SetBackgroundColour(self._theme.background)
 
@@ -202,14 +203,14 @@ class PnlTabSparc2Align(wx.Panel):
         """
         panel = wx.Panel(parent)
         panel.SetForegroundColour(self._theme.text_primary)
-        panel.SetBackgroundColour(self._theme.field_background)
+        panel.SetBackgroundColour(self._theme.panel_background)
 
         with vbox() as sizer:
             grid = wx.GridBagSizer(vgap=10, hgap=10)
             for attribute, label, icon, icon_on, column in _MODE_BUTTONS:
                 button = self._mode_button(panel, label, icon, icon_on)
                 setattr(self, attribute, button)
-                grid.Add(button, pos=(5, column), flag=wx.EXPAND)
+                grid.Add(button, pos=(0, column), flag=wx.EXPAND)
             sizer.Add(grid, flag=wx.ALL, border=self._theme.spacing_standard)
 
         panel.SetSizer(sizer)
@@ -264,6 +265,7 @@ class PnlTabSparc2Align(wx.Panel):
                 "Auto focus",
                 height=24,
                 text_colour=self._theme.button_text,
+                min_size=(90, -1),
             )
             autofocus_btn.SetToolTip(
                 "Attempts to auto focus the spectrometer with all its "
@@ -292,6 +294,7 @@ class PnlTabSparc2Align(wx.Panel):
                 active_colour=self._theme.control_active,
                 style=wx.ALIGN_CENTRE,
             )
+            manual_focus_btn.SetMinSize((90, -1))
             manual_focus_btn.SetForegroundColour(self._theme.button_text)
             manual_focus_btn.SetToolTip(
                 "If active allows to manually focus the spectrometer for "
@@ -366,6 +369,7 @@ class PnlTabSparc2Align(wx.Panel):
                 "Auto calib",
                 height=24,
                 text_colour=self._theme.button_text,
+                min_size=(90, -1),
             )
             self.btn_auto_grating_center.SetToolTip(
                 "Auto-calibrate grating offset by centering the zero-th "
@@ -532,6 +536,7 @@ class PnlTabSparc2Align(wx.Panel):
                 "Auto align",
                 height=24,
                 text_colour=self._theme.button_text,
+                min_size=(90, -1),
             )
             self.btn_auto_align.Hide()
             grid.Add(self.btn_auto_align, pos=(0, 0), flag=wx.LEFT, border=5)
@@ -933,6 +938,7 @@ class PnlTabSparc2Align(wx.Panel):
                 "Auto focus",
                 height=24,
                 text_colour=self._theme.button_text,
+                min_size=(90, -1),
             )
             self.btn_fib_autofocus.SetToolTip(
                 "Attempts to auto focus the spectrometer, which is "
@@ -1196,7 +1202,7 @@ class PnlTabSparc2Align(wx.Panel):
         """
         panel = wx.Panel(parent)
         panel.SetForegroundColour(self._theme.text_primary)
-        panel.SetBackgroundColour(self._theme.field_background)
+        panel.SetBackgroundColour(self._theme.panel_background)
         return panel
 
     def _section_title(self, parent: wx.Window, text: str) -> wx.StaticText:
@@ -1277,13 +1283,13 @@ class PnlTabSparc2Align(wx.Panel):
 
         return sizer
 
-    def _combo_box(self, parent: wx.Window) -> wx.adv.OwnerDrawnComboBox:
+    def _combo_box(self, parent: wx.Window) -> ComboBox:
         """Create a styled read-only combo box.
 
         :param parent: Parent window.
-        :returns: Owner-drawn combo box.
+        :returns: Styled combo box.
         """
-        combo = wx.adv.OwnerDrawnComboBox(
+        combo = ComboBox(
             parent,
             size=(-1, 16),
             style=(
@@ -1294,7 +1300,6 @@ class PnlTabSparc2Align(wx.Panel):
             ),
         )
         combo.SetForegroundColour(self._theme.text_edit)
-        combo.SetBackgroundColour(self._theme.panel_background)
         return combo
 
     def _mode_button(
@@ -1315,6 +1320,7 @@ class PnlTabSparc2Align(wx.Panel):
             icon_on=img.getBitmap(f"icon/{icon_on}"),
             height=48,
             face_colour="def",
+            style=wx.ALIGN_CENTER,
         )
         button.SetForegroundColour(self._theme.button_text)
         set_font(button, self._theme.font_size_button)

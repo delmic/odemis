@@ -16,7 +16,7 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
-from typing import Any, Optional
+from typing import Any, Optional, Tuple
 
 import wx
 import wx.adv
@@ -58,6 +58,7 @@ def create_text_button(
     face_colour: str = "def",
     icon: Optional[str] = None,
     size: Any = wx.DefaultSize,
+    min_size: Optional[Tuple[int, int]] = None,
     font_size: Optional[int] = None,
     font_weight: int = wx.FONTWEIGHT_NORMAL,
     style: int = wx.ALIGN_CENTRE,
@@ -103,6 +104,8 @@ def create_text_button(
     )
     if font_size is not None:
         set_font(button, font_size, font_weight)
+    if min_size is not None:
+        button.SetMinSize(min_size)
     return button
 
 
