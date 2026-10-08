@@ -741,13 +741,24 @@ class PnlTabSparc2Align(wx.Panel):
         with vbox() as sizer:
             sizer.Add(self._section_title(panel, "Streak"), flag=wx.ALL, border=5)
 
+            # All the calibration file widgets are in a single panel, to
+            # easily hide/show them together.
+            self.pnl_streak_calib_file = wx.Panel(panel)
+            self.pnl_streak_calib_file.SetForegroundColour(
+                self._theme.text_primary
+            )
+            self.pnl_streak_calib_file.SetBackgroundColour(
+                self._theme.field_background
+            )
+            calib_panel = self.pnl_streak_calib_file
+
             with hbox() as file_sizer:
-                label = wx.StaticText(panel, label="Calibration File")
+                label = wx.StaticText(calib_panel, label="Calibration File")
                 set_font(label, 9)
                 file_sizer.Add(label, flag=wx.ALL | wx.ALIGN_CENTRE, border=5)
 
                 self.txt_StreakCalibFilename = wx.TextCtrl(
-                    panel,
+                    calib_panel,
                     value="Calibration not saved!",
                     style=wx.BORDER_NONE | wx.TE_READONLY,
                 )
@@ -765,7 +776,7 @@ class PnlTabSparc2Align(wx.Panel):
                 )
 
                 self.btn_open_streak_calib_file = create_text_button(
-                    panel,
+                    calib_panel,
                     "Load...",
                     height=16,
                     text_colour=self._theme.button_text,
@@ -780,7 +791,7 @@ class PnlTabSparc2Align(wx.Panel):
                 )
 
                 self.btn_save_streak_calib_file = create_text_button(
-                    panel,
+                    calib_panel,
                     "Save...",
                     height=16,
                     text_colour=self._theme.button_text,
@@ -794,9 +805,8 @@ class PnlTabSparc2Align(wx.Panel):
                     border=5,
                 )
 
-            sizer.Add(
-                file_sizer, flag=wx.EXPAND | wx.RIGHT, border=5
-            )
+            calib_panel.SetSizer(file_sizer)
+            sizer.Add(calib_panel, flag=wx.EXPAND | wx.RIGHT, border=5)
 
         panel.SetSizer(sizer)
         return panel
