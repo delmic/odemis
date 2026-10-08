@@ -278,7 +278,11 @@ class CorrelationPointsController:
         self.grid.DisableDragRowSize()
         self.grid.DisableDragColSize()
         # Allow selecting (and later deleting) multiple whole rows at once, e.g. via shift-click
-        self.grid.SetSelectionMode(wx.grid.Grid.GridSelectRows)
+        # The constant is named "SelectRows" in older wxPython (4.0.x, Ubuntu 22.04)
+        select_rows = getattr(wx.grid.Grid, "GridSelectRows", None)
+        if select_rows is None:
+            select_rows = wx.grid.Grid.SelectRows
+        self.grid.SetSelectionMode(select_rows)
         for col in GridColumns:
             self.grid.SetColLabelValue(col.value, col.name.replace("_", " "))
             attr = wx.grid.GridCellAttr()
