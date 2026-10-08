@@ -13,3 +13,7 @@ Clean-up code at the end of a task with:
 # Test cases
 Run tests with such template command:
 `env TEST_NOHW=1 python3 src/odemis/.../name_of_the_test_file.py TestCaseClassName.test_method_name`
+
+# General Code Review Standards
+## Compliance
+Check PR changes for adherence to coding standards and guidelines, and for potential security issues. If any items in PULL_REQUEST_TEMPLATE.md apply, ensure they are addressed.
