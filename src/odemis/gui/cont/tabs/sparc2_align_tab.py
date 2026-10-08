@@ -1038,7 +1038,7 @@ class Sparc2AlignTab(Tab):
             # are possible by summing the largest buttons per column.
             max_col_widths = [max(btn_sizes[i::3]) for i in range(3)]
             max_row_width = sum(max_col_widths)
-            available_row_width = gb_sizer.Size[0] - 2 * gb_sizer.HGap  # Also accounts for spacing
+            available_row_width = gb_sizer.MinSize[0] - 2 * gb_sizer.HGap  # Also accounts for spacing
             if max_row_width <= available_row_width:
                 width = 3
             else:
