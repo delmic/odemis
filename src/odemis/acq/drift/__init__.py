@@ -23,12 +23,13 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 import itertools
 import logging
 import math
+import os
 import threading
 
-import numpy
 import cv2
+import numpy
 
-from odemis import model
+from odemis import dataio, model
 from odemis.acq.align.shift import MeasureShift
 
 MIN_RESOLUTION = (20, 20)  # sometimes 8x8 works, but it's not reliable enough
@@ -46,7 +47,7 @@ class AnchoredEstimator(object):
     to measure the drift.
     """
 
-    def __init__(self, scanner, detector, region, dwell_time, max_pixels=MAX_PIXELS, follow_drift=True):
+    def __init__(self, scanner, detector, region, dwell_time, max_pixels=MAX_PIXELS, follow_drift=True, log_path=None):
         """
         scanner (Emitter)
         detector (Detector)
@@ -58,11 +59,14 @@ class AnchoredEstimator(object):
         follow_drift (bool): If True, the anchor region position is adjusted based on the drift measured. It is useful
          when drift compensation is done by adjusting the scanner settings. If False, the anchor region is fixed.
          It is useful when drift compensation is based on beam shift or stage movement.
+        log_path (Optional[str]): directory and filename pattern to save drift corrector images for debugging
         """
         self._emitter = scanner
         self._semd = detector
         self._dwell_time = dwell_time
         self._follow_drift = follow_drift
+        self._log_path = log_path
+        self._image_counter = 0
 
         # Latest drift vector from the previous acquisition
         self.drift = (0, 0)  # in sem px
@@ -142,6 +146,17 @@ class AnchoredEstimator(object):
             data = self._semd.data.get(asap=False)
             if data.shape[::-1] != self._res:
                 logging.warning("Shape of data is %s instead of %s", data.shape[::-1], self._res)
+
+            # Save all the drift region scans for offline autocorrelation purposes
+            if self._log_path is not None:
+                filename = os.path.basename(self._log_path)
+                if not filename:
+                    raise ValueError("Filename is not found on log path.")
+                exporter = dataio.find_fittest_converter(filename)
+                path, base = os.path.split(filename)
+                fn  = f"drift_{self._image_counter:05d}_" + base
+                exporter.export(data, os.path.join(path, fn))
+                self._image_counter += 1
 
             # TODO: allow to record just every Nth image, and separately record the
             # drift after every measurement
