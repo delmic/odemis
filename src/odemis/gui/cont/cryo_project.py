@@ -22,7 +22,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 import logging
 import json
 import os
-from packaging.version import Version
 from pathlib import Path
 from typing import Any, Dict, List, Iterable, Optional
 from odemis.acq.move import Posture
@@ -104,10 +103,11 @@ def load_project(project_dir: os.PathLike) -> dict:
         project = read_project_file(project_dir / PROJECT_NAME)
         features = project["features"]
         overviews = project["overviews"]
-        project_version = Version(project.get("version", "0.0"))
+        version_str = project.get("version", "0.0")
+        project_version = tuple(int(v) for v in version_str.split("."))
         # Section where we can handle backwards compatibility later.
-        if project_version.major < 1:
-            logging.error(f"Project version {project_version} not supported")
+        if project_version < (1,):
+            logging.error(f"Project version {version_str} not supported")
     except ValueError:
         try:
             project = read_project_file(project_dir / LEGACY_PROJECT_NAME)
