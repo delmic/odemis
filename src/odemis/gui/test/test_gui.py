@@ -255,6 +255,8 @@ class FoldPanelBarFrame(wx.Frame):
         """
         self.scrwin = wx.ScrolledWindow(self)
         self.scrwin.SetBackgroundColour("#A52A2A")
+        self.scrwin.EnableScrolling(False, True)
+        self.scrwin.SetScrollbars(-1, 10, 1, 1)
         self.scrwin.SetMinSize((100, 100))
 
         sizer = wx.BoxSizer(wx.VERTICAL)
