@@ -101,17 +101,17 @@ class MetadataUpdater(model.Component):
                 if a.role == "stage":
                     # update the image position
                     observed = self.observeStage(a, d)
-                elif a.role == "lens":
+                elif a.role in ("lens", "lens-coincident"):
                     # update the pixel size, mag, and pole position
                     observed = self.observeLens(a, d)
-                elif a.role == "light":
+                elif a.role in ("light", "light-coincident"):
                     # update the emitted light wavelength
                     observed = self.observeLight(a, d)
                 elif a.role and a.role.startswith("spectrograph"):  # spectrograph-XXX too
                     self._det_to_spectrograph[dn] = a
                     # update the output wavelength range
                     observed = self.observeSpectrograph(a, d)
-                elif a.role in ("cl-filter", "filter", "tc-filter"):
+                elif a.role in ("cl-filter", "filter", "tc-filter", "filter-coincident"):
                     self._det_to_filter[dn] = a
                     # update the output wavelength range
                     observed = self.observeFilter(a, d)

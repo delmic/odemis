@@ -1,35 +1,31 @@
-# This microscope file uses simplified simulated stage and not the realistic one.
-# The acquisition can be performed either with a real microscope or with a Tescan simulator
-# using the host info in the init section of the Tescan FIBSEM.
-
-"METEOR TESCAN FIBSEM Sim": {
+"METEOR TFSv3 FIB Sim": {
     class: Microscope,
     role: meteor,
 }
 
-# Connects to Tescan FIBSEM via SharkSEM
-"Tescan FIBSEM": {
-    class: tescan.SEM,
-    role: fibsem,
-    init: {
-        host: "192.168.56.101",
-        port: 8300
-    },
-    children: {
-        stage: "Stage",
-        scanner: "Electron-Beam",
-        detector0: "Electron-Detector",
-        focus: "Electron-Focus",
-        fib-scanner: "Ion-Beam",
-        fib-detector: "Ion-Detector",
-        #light: "Chamber Light"
-    }
+"FIBSEM": {
+  class: autoscript_client.SEM,
+  role: fibsem,
+  init: {
+    # address: "192.168.6.5",  # real
+    address: "localhost",    # simulator
+    port: "4243"
+  },
+  children: {
+    stage: "Stage",
+    sem-scanner: "Electron-Beam",
+    sem-detector: "Electron-Detector",
+    sem-focus: "Electron-Focus",
+    fib-scanner: "Ion-Beam",
+    fib-detector: "Ion-Detector",
+    fib-focus: "Ion-Focus",
+  }
 }
 
 "Electron-Beam": {
     role: e-beam,
     init: {
-        fov_range: [200.e-9, 6600.e-6]
+        hfw_nomag: 0.25, # hfw when mag == 1x
     },
     properties: {
         # Set scan rotation to 180°, which is the standard, to ensure the camera
@@ -40,25 +36,22 @@
 
 "Electron-Detector": {
     role: se-detector,
-    init: {
-        channel: 0,
-    },
+    init: {},
     properties: {
-        type: "SE",
-    }
+        # medianFilter: 3,
+    },
 }
 
 "Electron-Focus": {
     role: ebeam-focus,
-    init: {axes: [z]},
+    init: {},
     affects: ["Electron-Beam"]
 }
 
-# FIB specific components
 "Ion-Beam": {
-    role: ion-beam,
+    role: "ion-beam",
     init: {
-        fov_range: [196.e-9, 25586.e-6]
+        hfw_nomag: 0.25, # hfw when mag == 1x
     },
     properties: {
         # Set scan rotation to 180°, which is the standard, to ensure the camera
@@ -68,82 +61,46 @@
 }
 
 "Ion-Detector": {
-    role: se-detector-ion,
-    init: {
-        channel: 0,
-    },
+    role: "se-detector-ion",
+    init: {},
     properties: {
-        type: "SE",
-    }
+        medianFilter: 3,
+    },
 }
 
-# With calibration values for sample stage
+"Ion-Focus": {
+    role: ion-focus,
+    init: {},
+    affects: ["Ion-Beam"]
+}
+
+# Normally provided by the SEM
 "Stage": {
     role: stage-bare,
     init: {
-        # By default, the Odemis tescan driver inverts the XYZ axes. So, to get
-        # exactly the same reading as in the Tescan software, we invert it back.
-        # The Odemis Posture Manager takes care of inverting the axes again for
-        # the Sample Stage, depending on the scan rotation.
-        inverted: {"x", "y", "z"},
     },
     metadata: {
         # Loading position:
-        FAV_POS_DEACTIVE: {
-            'rx': 0.0,
-            'rz': 4.9567353,
-            'x': -30.e-3,
-            'y': -40.e-03,
-            'z': 45.e-3
-        },
-        # XYZ ranges for SEM & METEOR (FM imaging range should perfectly match the POS_ACTIVE_RANGE metadata of the "Meteor Stage" component!),
-        # Z range is based on centering a sample at the FIB/SEM coincident point at a Z coordinate of ~ 30 mm:
-        SEM_IMAGING_RANGE: {
-            "x": [-13.e-3, 7.e-3],
-            "y": [-20.e-3, 20.e-3],
-            "z": [28.e-3, 38.e-3]  # NOTE: increased max z, since grid 1 center was outside
-        },
-        FM_IMAGING_RANGE: {
-            "x": [44.e-3, 55.e-3],
-            "y": [-23.e-3, 3.e-3],
-            "z": [28.e-3, 32.e-3]
-        },
-        # Grid centers in SEM range, at rx = FAV_SEM_POS_ACTIVE,
-        # These values are based on the expectation from the CAD model. Recalibrate for each system:
-        SAMPLE_CENTERS: {
-            "GRID 1": {
-                'x': -2.611e-3,
-                'y': -13.540e-3,
-                'z': 35.651e-3
-            },
-            "GRID 2": {
-                'x': 1.389e-3,
-                'y': -13.540e-3,
-                'z': 35.651e-3
-            }
-        },
-        # Calibrated values used for the SEM/FM switching behaviour
+        FAV_POS_DEACTIVE: { 'rx': 0, 'rz': 1.9076449, 'x': -0.01529, 'y': 0.0506, 'z': 29.e-3 },
+        # XYZ ranges for SEM & METEOR
+        SEM_IMAGING_RANGE: {"x": [-10.e-3, 10.e-3], "y": [-30.e-3, 25.e-3], "z": [15.e-3, 37.e-3]},
+        FM_IMAGING_RANGE: {"x": [0.040, 0.054], "y": [-30.e-3, 25.e-3], "z": [15.e-3, 34.e-3]},
+        # Grid centers in SEM range
+        # Adjusted so that at init (0,0,0), it's at the Grid 1.
+        SAMPLE_CENTERS: {"GRID 1": {'x': 0, 'y': 0, 'z': 32.e-3}, "GRID 2": {'x': 5.0e-3, 'y': 0, 'z': 32.e-3}},
         CALIB: {
-            "version": "tescan_1",
-            "x_0": 3.577e-3,
-            "y_0": -0.164e-3,
-            "z_ct": 4.561291055e-3,
-            "dx": 40.419e-3,
-            "dy": 0.268e-3,
-            "b_y": -0.400216e-3,
-            "pre-tilt": 0.698132,  # Radians (40°).
-            "use_linked_sem_focus_compensation": false,
+            "version": "tfs_3",
+            "z_low": 27.e-3,
+            "dx": 0.0506252, "dy": 0.0049832,  # mirroring values between SEM - METEOR
+            "pre-tilt": 0.6108652381980153,  # rad, 35°
+            "use_linked_sem_focus_compensation": True,  # if True, use SEM-Eucentric-Focus
+            "SEM-Eucentric-Focus": 7.0e-3, # m, fixed e-beam focus position, aquilos=7.0e-3, hydra=4.0e-3
         },
-        # Active tilting (T/rx) & rotation (R/rz) angles positions when switching between SEM & FM.
-        # Calibrate for each system, and make sure the difference in rz between FM and SEM is exactly 180°
-        # The values are in radians. Please also update the values in degrees as written in the comments.
-        # Note that the rz range in the TESCAN software is between -170° and 40°
-        # Change the SEM tilt angle to a value that matches the customer's needs
-        # Note that the accuracy of the FM/SEM switch might be reduced if starting at a different angle.
-        FAV_FM_POS_ACTIVE: {"rx": 0.261799, "rz": 4.9567353}, # 15° tilt, 284° rotation
-        FAV_SEM_POS_ACTIVE: {"rx": 0.698132, "rz": 1.815142}, # 40° tilt, 104° rotation
-        # To compute the tilt angle: tilt = MillingAngle + PreTilt (40°) + ColumnTilt (55°) - 90
-        FAV_MILL_POS_ACTIVE: {"mill_angle": 0.174532925, "rz": 1.815142}, # Milling angle = 10°, 104° rotation
+        # Active tilting (rx) & rotation(rz) angles positions when switching between SEM & FM.
+        FAV_FM_POS_ACTIVE: {"rx": 0.2967059728390360  , "rz":  3.141592653589793}, # 17° - 180°
+        FAV_SEM_POS_ACTIVE: {"rx": 0.6108652381980153, "rz": 0},  # pre-tilt 35°
+        FAV_FIB_POS_ACTIVE: {"rx": 0.29670597283903605 , "rz": 3.141592653589793},
+        FAV_MILL_POS_ACTIVE: {"mill_angle": 0.2443461, "rz": 0},  # milling angle (14°) is the angle between ion beam column and sample plane
     },
 }
 
@@ -152,8 +109,8 @@
     role: light,
     init: {
         port: "/dev/fakehub", # Simulator
-        # port: "/dev/ttyFTDI*",
-    },
+        #port: "/dev/ttyFTDI*",
+        },
     affects: ["Camera"],
 }
 
@@ -161,14 +118,19 @@
     class: static.OpticalLens,
     role: lens,
     init: {
-        mag: 50.0, # ratio, (actually of the complete light path)
-        na: 0.8, # ratio, numerical aperture
+        mag: 84.0, # ratio, (actually of the complete light path)
+        na: 0.85, # ratio, numerical aperture
         ri: 1.0, # ratio, refractive index
         wd: 10.6e-3,  # m, working distance
     },
-    affects: ["Camera"],
+    metadata: {
+        # Refractive index mismatch correction factor
+        RIM_COR : 0.495,  # generally for 50x lens use 0.495, 100x0.9 na use 0.6
+    },
+    affects: ["Camera"]
 }
 
+# Normally a IDS uEye or Zyla
 # Axes: X is horizontal on screen (going left->right), physical: far->close when looking at the door
 #       Y is vertical on screen (going bottom->top), physical: left->right when looking at the door
 "Camera": {
@@ -196,7 +158,7 @@
         port: "/dev/fake6", # Simulator
         address: null, # Simulator
         axes: ["fw"],
-        ustepsize: [3.2724923e-4], # [rad/µstep]
+        ustepsize: [1.227184e-3], # [rad/µstep]  fake value for simulator
         rng: [[-14, 7]], # rad, more than 0->2 Pi, in order to allow one extra rotation in both direction, when quickly switching
         unit: ["rad"],
         refproc: "Standard",
@@ -236,8 +198,70 @@
         },
         cycle: 6.283185, # position of ref switch (0) after a full turn
     },
-    # TODO: a way to indicate the best filter to use during alignement and brightfield? via some metadata?
     affects: ["Camera"],
+}
+
+# Controller for the stigmator
+"Stigmator Actuator": {
+    class: tmcm.TMCLController,
+    role: null,
+    init: {
+        # address: 8,
+        port: "/dev/fake", # Simulator
+        address: null, # Simulator
+        axes: ["stig"],
+        ustepsize: [27.2e-6], # [rad/µstep]
+        rng: [[-14, 7]], # rad, more than 0->2 Pi, in order to allow one extra rotation in both direction, when quickly switching
+        unit: ["rad"],
+        refproc: "Standard",
+        refswitch: {"stig": 0}, #digital output used to switch on/off sensor
+    },
+}
+
+# Backlash corrected actuators for Stigmator
+"AntiBacklash for Stigmator": {
+    class: actuator.AntiBacklashActuator,
+    role: null,
+    init: {
+        backlash: {
+            "stig": 20.e-3,  # rad of move
+        },
+    },
+    children: {"slave": "Stigmator Actuator"},
+}
+
+"Stigmator": {
+    class: actuator.RotationActuator,
+    role: stigmator,
+    affects: ["Camera"],
+    children: {"rz": "AntiBacklash for Stigmator"},
+    init: {
+        axis_name: "stig",
+        #cycle: 2 * pi, # rad
+        # ref_start: null, # rad, value to where start the referencing, default is to start at 5% of cycle
+    },
+    metadata: {
+        POS_COR: -0.5,  # rad, adjustment needed for 0 = no astigmatism
+        # Z localization calibration: stigmator angle -> calibration
+        CALIB: {
+            1.e-09: {'angle':0.08726,
+                    'x': {'a': -0.24759672307261632, 'b': 1.0063089478825507, 'c': 653.0753677001792,  'd': 638.8463397122532,  'w0': 11.560179003062268},
+                    'y': {'a': 0.5893174060828265, 'b': 0.23950839318911246, 'c': 1202.1980639514566,  'd': 425.6030263781317, 'w0': 11.332043010740446},
+                    'feature_angle': -3.1416,
+                    'upsample_factor': 5,
+                    'z_least_confusion': 9.418563712742548e-07,
+                    'z_calibration_range': [-9.418563712742548e-07, 8.781436287257452e-07]
+            },
+            10.e-09: {'angle':0.17453,
+                    'x': {'a': -0.24759672307261632, 'b': 1.0063089478825507, 'c': 653.0753677001792,  'd': 638.8463397122532,  'w0': 11.560179003062268},
+                    'y': {'a': 0.5893174060828265, 'b': 0.23950839318911246, 'c': 1202.1980639514566,  'd': 425.6030263781317, 'w0': 11.332043010740446},
+                    'feature_angle': -3.1416,
+                    'upsample_factor': 5,
+                    'z_least_confusion': 9.418563712742548e-07,
+                    'z_calibration_range': [-9.418563712742548e-07, 8.781436287257452e-07]
+            },
+        },
+    },
 }
 
 # CLS3252dsc-1
@@ -247,11 +271,9 @@
     init: {
         locator: "fake",
         ref_on_init: True,
-        # TODO: check speed/accel
         speed: 0.003,  # m/s
         accel: 0.003,  # m/s²
         #hold_time: 5 # s, default = infinite
-        # TODO: check the ranges, and the channel
         axes: {
             'z': {
                 # -11.5mm is safely parked (FAV_POS_DEACTIVE)
@@ -266,11 +288,12 @@
         # Loading position to retract lens
         FAV_POS_DEACTIVE: {'z': -11.5e-3},
         # Initial active position (close from the sample, but not too close, for safety)
-        FAV_POS_ACTIVE: {'z': 1.69e-3},
+        FAV_POS_ACTIVE: {'z': 1.69e-3}
     },
     affects: ["Camera"],
 }
 
+## Lens arm coincident component controlled by TMCM 6214
 "SLM Lens Arm": {
     class: tmcm.TMCLController,
     role: "lens-arm-coincident",
