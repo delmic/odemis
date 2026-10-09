@@ -64,6 +64,7 @@ from odemis.gui.cont.fastem_project_tree import (
     NodeType,
     NodeWindow,
 )
+from odemis.gui.layout.constants.strings import LABEL_PAUSE, LABEL_RESUME
 from odemis.gui.model import CALIBRATION_1, CALIBRATION_2, CALIBRATION_3, STATE_OFF
 from odemis.gui.util import call_in_wx_main, get_picture_folder, wxlimit_invocation
 from odemis.gui.util.widgets import ProgressiveFutureConnector
@@ -173,8 +174,10 @@ class FastEMOverviewAcquiController(object):
         # For acquisition
         self.btn_acquire = self._tab_panel.btn_acq
         self.btn_cancel = self._tab_panel.btn_cancel_acq
+        self.btn_pause_resume = self._tab_panel.btn_pause_resume_acq
         self.acq_future = None  # ProgressiveBatchFuture
         self._fs_connector = None  # ProgressiveFutureConnector
+        self._is_paused = False
         self.gauge_acq = self._tab_panel.gauge_acq
         self.lbl_acqestimate = self._tab_panel.lbl_acq_estimate
         self.bmp_acq_status_warn = self._tab_panel.bmp_acq_status_warn
@@ -185,6 +188,7 @@ class FastEMOverviewAcquiController(object):
         # Link acquire/cancel buttons
         self.btn_acquire.Bind(wx.EVT_BUTTON, self.on_acquisition)
         self.btn_cancel.Bind(wx.EVT_BUTTON, self.on_cancel)
+        self.btn_pause_resume.Bind(wx.EVT_BUTTON, self.on_pause_resume)
 
         # Hide gauge, disable acquisition button
         self.gauge_acq.Hide()
@@ -198,12 +202,12 @@ class FastEMOverviewAcquiController(object):
         self._main_data_model.user_dwell_time_sb.subscribe(
             self._on_user_dwell_time, init=True
         )
-        self._main_data_model.is_optical_autofocus_done.subscribe(
-            self._on_va_change, init=True
-        )
+        self._main_data_model.is_optical_autofocus_done.subscribe(self._on_optical_autofocus_done, init=True)
         self._main_data_model.current_sample.subscribe(self._on_current_sample)
         self._main_tab_data.focussedView.subscribe(self._on_focussed_view)
         self._tab_data_model.is_calibrating.subscribe(self._on_is_calibrating)
+        self._main_tab_data.is_optical_autofocus_running.subscribe(self._on_optical_autofocus_state)
+        self._main_tab_data.is_acquisition_paused.value = False
 
     def _on_contrast_ctrl(self, evt):
         ctrl = evt.GetEventObject()
@@ -313,9 +317,12 @@ class FastEMOverviewAcquiController(object):
             ovv_ss[num] = s
             self._main_data_model.overview_streams.value = ovv_ss
 
-    def _on_va_change(self, _):
-        self.check_acquire_button()
-        self.update_acquisition_time()  # to update the message
+    def _on_optical_autofocus_done(self, _):
+        self.check_acquire_button()  # enable/disable start overview acquisition button
+
+        # when paused use the existing time estimate, otherwise update the message to show the new estimate
+        if not self._main_tab_data.is_acquisition_paused.value:
+            self.update_acquisition_time()  # to update the message
 
     @call_in_wx_main  # call in main thread as changes in GUI are triggered
     def check_acquire_button(self):
@@ -373,6 +380,7 @@ class FastEMOverviewAcquiController(object):
           If None, no icon is shown.
         """
         self.btn_cancel.Hide()
+        self.btn_pause_resume.Hide()
         self.btn_acquire.Show()
         self.btn_acquire.Enable()
         self.gauge_acq.Hide()
@@ -384,6 +392,9 @@ class FastEMOverviewAcquiController(object):
         self.acq_future = None
         self._fs_connector = None
         self._main_data_model.is_acquiring.value = False
+        self._main_tab_data.is_acquisition_paused.value = False
+        self._is_paused = False
+        self.btn_pause_resume.SetLabel(LABEL_PAUSE)
 
         if text is not None:
             self._set_status_message(text, level)
@@ -420,18 +431,14 @@ class FastEMOverviewAcquiController(object):
         self.btn_acquire.Hide()
         self.btn_cancel.Enable()
         self.btn_cancel.Show()
+        self.btn_pause_resume.Enable()
+        self.btn_pause_resume.Show()
         self.gauge_acq.Show()
         self._dwell_time_ctrl.Enable(False)
         self._contrast_ctrl.Enable(False)
         self._brightness_ctrl.Enable(False)
         self._load_overview_img_ctrl.Enable(False)
-        self._main_data_model.ebeam.dwellTime.value = float(
-            self._dwell_time_ctrl.GetValue()
-        )
-        self._main_data_model.sed.brightness.value = float(
-            self._brightness_ctrl.GetValue()
-        )
-        self._main_data_model.sed.contrast.value = float(self._contrast_ctrl.GetValue())
+        self._main_tab_data.is_acquisition_paused.value = False
 
         self.gauge_acq.Range = 1
         self.gauge_acq.Value = 0
@@ -441,10 +448,12 @@ class FastEMOverviewAcquiController(object):
         current_sample = self._tab_data_model.main.current_sample.value
         region = current_sample.scintillators[num].shape.get_region()
         try:
+            self._apply_acquisition_settings()
             self.acq_future = fastem.acquireTiledArea(
                 self._tab_data_model.semStream, self._main_data_model.stage, region,
                 overlap=self._overlap, centered_acq=True,
             )
+            self.acq_future.can_pause = True
             self.acq_future.add_done_callback(partial(self.on_acquisition_done, num=num))
             self.acq_future.add_done_callback(self.reset_acquisition_gui)
 
@@ -467,9 +476,93 @@ class FastEMOverviewAcquiController(object):
             self._reset_acquisition_gui()
             return
 
+        self.btn_pause_resume.Enable(False)
         self.acq_future.cancel()
         fastem._executor.cancel()
         # all the rest will be handled by on_acquisition_done()
+
+    def _apply_acquisition_settings(self) -> None:
+        """Apply the overview slider values to the acquisition hardware."""
+        self._main_data_model.sed.brightness.value = float(self._brightness_ctrl.GetValue())
+        self._main_data_model.sed.contrast.value = float(self._contrast_ctrl.GetValue())
+        self._main_data_model.ebeam.dwellTime.value = float(self._dwell_time_ctrl.GetValue())
+
+    def on_pause_resume(self, evt: wx.CommandEvent | None) -> None:
+        """
+        Called during acquisition when pressing the pause/resume button.
+        """
+        if not self.acq_future:
+            logging.warning("Tried to pause overview acquisition while it was not started")
+            return
+
+        if self._is_paused:
+            if self._main_tab_data.is_optical_autofocus_running.value:
+                logging.warning("Cannot resume overview acquisition while optical autofocus is running")
+                return
+            try:
+                self._apply_acquisition_settings()
+            except Exception:
+                logging.exception("Failed to apply overview acquisition settings")
+                self._set_status_message(
+                    "Cannot resume acquisition: failed to apply settings (see log panel).",
+                    level=logging.WARNING,
+                )
+                return
+            logging.debug("Resuming acquisition")
+            self.acq_future.resume()
+            self._is_paused = False
+            self._main_tab_data.is_acquisition_paused.value = False
+            self.btn_pause_resume.SetLabel(LABEL_PAUSE)
+            self._set_status_message("Acquisition resumed.")
+        else:
+            if not self.acq_future.can_pause:
+                logging.warning("Overview acquisition cannot be paused")
+                return
+            logging.debug("Pausing acquisition")
+            self.btn_pause_resume.Enable(False)
+            self.btn_pause_resume.SetLabel("Pausing...")
+            t = threading.Thread(target=self._do_pause, daemon=True)
+            t.start()
+
+    def _do_pause(self):
+        """Call pause() in a background thread so the GUI stays responsive.
+
+        Blocks until the acquisition has truly paused at a tile boundary, then
+        schedules a GUI update via wx.CallAfter.
+        """
+        if self.acq_future and self.acq_future.pause():
+            self._is_paused = True
+            wx.CallAfter(self._on_actually_paused)
+        else:
+            wx.CallAfter(self._on_pause_failed)
+
+    @call_in_wx_main
+    def _on_pause_failed(self):
+        """Reset GUI if pausing failed (e.g., the acquisition finished in the meantime)."""
+        self.btn_pause_resume.Enable()
+        self.btn_pause_resume.SetLabel(LABEL_PAUSE)
+        self.btn_cancel.Enable()
+        self._main_tab_data.is_acquisition_paused.value = False
+        if not self.acq_future or self.acq_future.done():
+            return  # reset_acquisition_gui will handle the full reset
+        self._set_status_message("Acquisition running.")
+
+    @call_in_wx_main
+    def _on_actually_paused(self):
+        """Re-enable the relevant buttons once the acquisition is truly paused.
+        The progress bar and label are automatically frozen while the future
+        reports itself as paused (see ProgressiveFutureConnector).
+        """
+        if not self._is_paused:
+            return  # Resumed or cancelled in the meantime; nothing to do.
+        self._main_tab_data.is_acquisition_paused.value = True
+        self.btn_pause_resume.SetLabel(LABEL_RESUME)
+        self.btn_pause_resume.Enable()
+        self.btn_cancel.Enable()
+        _, remaining = self.acq_future.get_progress()
+        remaining_txt = units.readable_time(math.ceil(remaining))
+        self._set_status_message(f"Acquisition paused, {remaining_txt} left.")
+        logging.debug("Overview acquisition paused at tile boundary.")
 
     def on_acquisition_done(self, future, num):
         """
@@ -513,6 +606,18 @@ class FastEMOverviewAcquiController(object):
             self._reset_acquisition_gui(
                 "Acquisition failed (see log panel).", level=logging.WARNING
             )
+
+    @call_in_wx_main
+    def _on_optical_autofocus_state(self, is_running: bool) -> None:
+        """
+        Prevent resuming or cancelling the acquisition during optical autofocus.
+
+        :param is_running: Whether optical autofocus is running.
+        """
+        if self._is_paused:
+            self.btn_pause_resume.Enable(not is_running)
+            self.btn_cancel.Enable(not is_running)
+
 
 
 class FastEMSingleBeamAcquiController(object):

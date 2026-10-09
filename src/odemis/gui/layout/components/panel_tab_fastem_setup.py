@@ -27,6 +27,7 @@ from odemis.gui.comp.foldpanelbar import CaptionBar, FoldPanelBar
 from odemis.gui.comp.stream_bar import StreamBar
 from odemis.gui.layout.constants.strings import (
     LABEL_CANCEL,
+    LABEL_PAUSE,
     LABEL_START,
 )
 from odemis.gui.layout.constants.themes import Theme
@@ -216,8 +217,8 @@ class PnlTabFastemSetup(wx.Panel):
                 border=12,
             )
 
-            progress_row, self.gauge_acq, self.btn_cancel_acq = (
-                self._build_progress_row(panel, gauge_hidden=False)
+            progress_row, self.gauge_acq, self.btn_cancel_acq, self.btn_pause_resume_acq = (
+                self._build_progress_row(panel, gauge_hidden=False, pause_hidden=False)
             )
             sizer.Add(progress_row, flag=wx.EXPAND)
 
@@ -268,7 +269,7 @@ class PnlTabFastemSetup(wx.Panel):
                 border=12,
             )
 
-            progress_row, self.gauge_calib, self.btn_cancel_calib = (
+            progress_row, self.gauge_calib, self.btn_cancel_calib, self.btn_pause_calib = (
                 self._build_progress_row(self.pnl_calib_status, gauge_hidden=True)
             )
             sizer.Add(progress_row, flag=wx.EXPAND)
@@ -334,12 +335,14 @@ class PnlTabFastemSetup(wx.Panel):
         self,
         parent: wx.Window,
         gauge_hidden: bool,
-    ) -> Tuple[wx.Sizer, wx.Gauge, ImageTextButton]:
+        pause_hidden: bool = True,
+    ) -> Tuple[wx.Sizer, wx.Gauge, ImageTextButton, Optional[ImageTextButton]]:
         """Build a progress gauge and cancel button row.
 
         :param parent: Parent window.
         :param gauge_hidden: Whether the gauge starts hidden.
-        :returns: Row sizer, gauge, and cancel button.
+        :param pause_hidden: Whether the pause button starts hidden.
+        :returns: Row sizer, gauge, cancel button, and pause button (if not hidden).
         """
         with hbox() as sizer:
             gauge = wx.Gauge(parent, size=(-1, 10), range=100, style=wx.GA_SMOOTH)
@@ -361,8 +364,19 @@ class PnlTabFastemSetup(wx.Panel):
             )
             cancel_button.Hide()
             sizer.Add(cancel_button, flag=wx.ALL, border=self._theme.spacing_standard)
+            pause_button = None
+            if not pause_hidden:
+                pause_button = create_text_button(
+                    parent,
+                    LABEL_PAUSE,
+                    height=24,
+                    text_colour=self._theme.button_text,
+                    contrast_text_colour=self._theme.button_text_contrast,
+                )
+                pause_button.Hide()
+                sizer.Add(pause_button, flag=wx.ALL, border=self._theme.spacing_standard)
 
-        return sizer, gauge, cancel_button
+        return sizer, gauge, cancel_button, pause_button
 
 
 if __name__ == "__main__":
