@@ -24,7 +24,7 @@ This file is part of Odemis.
 
 import logging
 import math
-from typing import Dict
+from typing import Dict, Optional, Tuple
 
 import cairo
 import odemis.gui as gui
@@ -193,8 +193,8 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
 
     def on_left_down(self, evt):
         """
-        Handle mouse left click down: Create/Move feature if feature tool is toggled,
-        otherwise let the canvas handle the event (for proper dragging)
+        Handle mouse left click down: create or move a feature in edit mode,
+        select a feature in show mode, or pass empty space to canvas panning.
         """
         if self.active:
             v_pos = evt.Position
@@ -214,7 +214,11 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
             else:
                 if feature:
                     self.tab_data.main.currentFeature.value = feature
-                evt.Skip()
+                else:
+                    # Only empty space belongs to canvas panning. Passing a
+                    # feature click through would show its drag cursor while
+                    # the selected feature is being switched.
+                    evt.Skip()
         else:
             super().on_left_down(evt)
 
@@ -328,6 +332,10 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
             if in_radius(fvsp[0], fvsp[1], FEATURE_DIAMETER, v_pos[0], v_pos[1]):
                 return feature
 
+    def get_feature_at(self, v_pos: Tuple[float, float]) -> Optional[CryoFeature]:
+        """Return the feature marker at a viewport position, if any."""
+        return self._detect_point_inside_feature(v_pos)
+
     def on_motion(self, evt):
         """ Process drag motion if enabled, otherwise change cursor based on feature detection/mode """
         if self.active:
@@ -340,6 +348,11 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
                 else:
                     self._selected_feature.set_posture_position(self.pm.current_posture.value, stage_position)
                 self.cnvs.update_drawing()
+                return
+            if self.cnvs.left_dragging:
+                # The canvas owns the cursor while the reference image is
+                # being panned. Do not replace its drag cursor on motion.
+                evt.Skip()
                 return
             feature = self._detect_point_inside_feature(v_pos)
             if feature:

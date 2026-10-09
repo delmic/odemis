@@ -3,9 +3,9 @@
 """
 Created on 22 Apr 2026
 
-@author: Tim Moerkerken
+@author: Tim Moerkerken, Alexéy Ilyushkin
 
-Copyright © 2026 Tim Moerkerken, Delmic
+Copyright © 2026 Tim Moerkerken, Alexéy Ilyushkin, Delmic
 
 This file is part of Odemis.
 
@@ -30,7 +30,12 @@ from unittest.mock import MagicMock
 
 import odemis.acq.test as acq_test
 from odemis.model import MD_FAV_POS_ACTIVE
-from odemis.acq.feature import CryoFeature, FIBFMCorrelationData, feature_decoder
+from odemis.acq.feature import (
+    CryoFeature,
+    DEFAULT_MILLING_ALIGNMENT_AREA,
+    FIBFMCorrelationData,
+    feature_decoder,
+)
 from odemis.acq.move import Posture
 from odemis.gui.cont.cryo_project import (
     load_project,
@@ -96,6 +101,11 @@ class TestCryoProject(unittest.TestCase):
         save_project(main_data)
         # Check if correctly converted to new project, and if that project file is openable
         reloaded_project_data = read_project_file(project_dir / PROJECT_NAME)
+        for feature_data in reloaded_project_data["features"]:
+            self.assertEqual(
+                feature_data.pop("milling_alignment_area"),
+                list(DEFAULT_MILLING_ALIGNMENT_AREA),
+            )
         self.assertEqual(reloaded_project_data["features"], project_data["features"])
         self.assertEqual(reloaded_project_data["overviews"], project_data["overviews"])
         for feature, legacy_feature in zip(main_data.features.value, legacy_features):
@@ -173,6 +183,20 @@ class TestCryoProject(unittest.TestCase):
         # Older project: no posture stored
         del feature_data["correlation_data"]["fm_posture"]
         self.assertEqual(feature_decoder(feature_data).correlation_data.fm_posture, Posture.FM_IMAGING)
+
+    def test_milling_alignment_area_roundtrip(self):
+        feature = CryoFeature("Feature-1", {"x": 0, "y": 0, "z": 0}, {"z": 0})
+        feature.millingAlignmentArea.value = (0.1, 0.2, 0.3, 0.3)
+        main_data = MagicMock()
+        main_data.tab.value.conf.pj_last_path = self.test_dir
+        main_data.features.value = [feature]
+        main_data.overviews.value = []
+
+        save_project(main_data)
+        feature_data = load_project(self.test_dir)["features"][0]
+
+        self.assertEqual(feature_decoder(feature_data).millingAlignmentArea.value,
+                         feature.millingAlignmentArea.value)
 
     def test_image_operations(self):
         """Tests that the image operations work properly."""

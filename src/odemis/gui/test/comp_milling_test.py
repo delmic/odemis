@@ -14,27 +14,42 @@ See the LICENSE.txt file for details.
 import logging
 import unittest
 from types import SimpleNamespace
-from unittest.mock import Mock, patch
+from typing import Tuple
+from unittest.mock import Mock, call, patch
 
 import wx
 
+import odemis.gui as gui
+import odemis.gui.comp.miccanvas as miccanvas
 import odemis.gui.test as test
 from odemis import model
+from odemis.acq.feature import MIN_MILLING_ALIGNMENT_AREA_PIXELS
 from odemis.acq.milling import DEFAULT_MILLING_TASKS_PATH
+from odemis.acq.milling.patterns import RectanglePatternParameters
 from odemis.acq.milling.tasks import load_milling_tasks
 from odemis.gui.comp.overlay._constants import (
+    MILLING_ALIGNMENT_AREA_COLOUR,
     MILLING_OVERLAY_ACTIVE_OPACITY,
     MILLING_OVERLAY_INACTIVE_OPACITY,
     MILLING_OVERLAY_LINE_WIDTH,
 )
-from odemis.gui.comp.overlay.milling import MillingPatternOverlay
+from odemis.gui.comp.overlay.base import SEL_MODE_EDIT, SEL_MODE_NONE, Vec
+from odemis.gui.comp.overlay.cryo_feature import CryoFeatureOverlay, MODE_SHOW_FEATURES
+from odemis.gui.comp.overlay.milling import (
+    MillingAlignmentAreaOverlay,
+    MillingAlignmentRectangleOverlay,
+    MillingPatternOverlay,
+)
 from odemis.gui.comp.overlay.rectangle import MillingRectangleOverlay, RectangleOverlay
 from odemis.gui.comp.text import IntegerTextCtrl, UnitFloatCtrl
 from odemis.gui.cont.milling import (
     MILLING_THEME_COLORS,
+    MOVE_DELTA_X_LONG,
+    PATTERN_DRAG_HINT_THRESHOLD,
     PATTERN_MOVE_WARNING_TIMEOUT,
     MillingTaskController,
     _get_milling_colour,
+    _get_pattern_stack_center,
 )
 
 
@@ -58,7 +73,7 @@ class MillingTaskPanelTestCase(test.GuiTestCase):
         )
         self.controller.milling_tasks = self.tasks
         self.controller.draw_milling_tasks = Mock()
-        self.controller._update_spot_size_validation_message = Mock()
+        self.controller._update_milling_validation_message = Mock()
         self.controller._update_mill_btn = Mock()
         self.controller._update_pattern_panels()
         test.gui_loop()
@@ -69,6 +84,20 @@ class MillingTaskPanelTestCase(test.GuiTestCase):
         self.scroll.Destroy()
         test.gui_loop()
         super().tearDown()
+
+    def test_resetting_current_feature_clears_milling_overlays(self) -> None:
+        """Redraw empty overlays when a new project removes its current feature."""
+        self.controller.set_milling_tasks = Mock()
+        self.controller._update_pattern_panels = Mock()
+        self.controller._update_pattern_movement_controls = Mock()
+        self.controller.draw_alignment_area = Mock()
+        self.controller.draw_milling_tasks.reset_mock()
+
+        self.controller._on_current_feature_changes(None)
+
+        self.controller.set_milling_tasks.assert_called_once_with({})
+        self.controller.draw_milling_tasks.assert_called_once_with()
+        self.controller.draw_alignment_area.assert_not_called()
 
     def test_pattern_specific_controls(self) -> None:
         """Show controls specific to the ruler pattern."""
@@ -157,11 +186,36 @@ class MillingTaskPanelTestCase(test.GuiTestCase):
             self.assertEqual(getattr(ruler, param).value, value)
         self.assertEqual(len(ruler.generate()), 32)
         self.assertEqual(self.controller.draw_milling_tasks.call_count, 3)
-        self.controller._update_spot_size_validation_message.assert_called()
+        self.controller._update_milling_validation_message.assert_called()
         self.controller._update_mill_btn.assert_called()
         ruler.num_graduations.value = 11
         test.gui_loop()
         self.assertEqual(controls["num_graduations"].GetValue(), 11)
+
+    def test_pattern_parameter_text_field_accepts_typed_value(self) -> None:
+        """Keep native text editing available while activating a pattern."""
+        panel = self.controller.controls["Microexpansion"]["panel"]
+        spacing = panel.ctrl_dict["spacing"]
+        pattern = self.tasks["Microexpansion"].patterns[0]
+        self.controller.draw_milling_tasks.reset_mock()
+
+        mouse_event = wx.MouseEvent(wx.wxEVT_LEFT_DOWN)
+        mouse_event.SetEventObject(spacing)
+        spacing.GetEventHandler().ProcessEvent(mouse_event)
+        self.controller.draw_milling_tasks.assert_not_called()
+
+        focus_event = wx.FocusEvent(wx.wxEVT_SET_FOCUS, spacing.Id)
+        focus_event.SetEventObject(spacing)
+        spacing.GetEventHandler().ProcessEvent(focus_event)
+        test.gui_loop()
+        spacing.SetSelection(0, -1)
+        spacing.WriteText("12 µm")
+        enter_event = wx.CommandEvent(wx.wxEVT_TEXT_ENTER, spacing.Id)
+        enter_event.SetEventObject(spacing)
+        spacing.GetEventHandler().ProcessEvent(enter_event)
+        test.gui_loop()
+
+        self.assertAlmostEqual(pattern.spacing.value, 12e-6)
 
     def test_pattern_movement_selection_and_recenter(self) -> None:
         """Move patterns and recenter only displayed patterns on the feature."""
@@ -194,9 +248,12 @@ class MillingTaskPanelTestCase(test.GuiTestCase):
         self.controller._tab_data = SimpleNamespace(main=Mock())
         with patch("odemis.gui.cont.milling.save_project"):
             self.controller._move_patterns(
-                visible_patterns, target, microexpansion)
-        self.assertEqual(microexpansion.center.value, target)
-        self.assertEqual(other_pattern.center.value, (1e-6, 14e-6))
+                visible_patterns, target, microexpansion.center.value)
+        for actual_center, expected_center in (
+                (microexpansion.center.value, target),
+                (other_pattern.center.value, (1e-6, 14e-6))):
+            for actual_value, expected_value in zip(actual_center, expected_center):
+                self.assertAlmostEqual(actual_value, expected_value)
         self.assertEqual(hidden_pattern.center.value, (11e-6, 13e-6))
 
         notch_pattern = self.tasks["Notch"].patterns[0]
@@ -237,12 +294,27 @@ class MillingTaskPanelTestCase(test.GuiTestCase):
             )
         self.assertEqual(hidden_pattern.center.value, hidden_center)
 
+    def test_pattern_stack_center_uses_generated_geometry_bounds(self) -> None:
+        """Center movement on the bounds of all displayed pattern geometry."""
+        patterns = [
+            RectanglePatternParameters(
+                width=2e-6, height=2e-6, depth=1e-6, center=(0, 0)),
+            RectanglePatternParameters(
+                width=4e-6, height=2e-6, depth=1e-6, center=(5e-6, 3e-6)),
+        ]
+
+        center = _get_pattern_stack_center(patterns)
+
+        self.assertAlmostEqual(center[0], 3e-6)
+        self.assertAlmostEqual(center[1], 1.5e-6)
+
     def test_ctrl_click_selected_list_row_deselects_pattern(self) -> None:
         """Clear a highlighted pattern only by Ctrl-clicking its selected row."""
         selected_index = list(self.tasks).index("Microexpansion")
         task_list = Mock()
         task_list.HitTest.return_value = selected_index
-        task_list.GetSelection.return_value = selected_index
+        task_list.GetSelections.side_effect = ([selected_index], [])
+        task_list.GetString.return_value = "Microexpansion"
         self.controller._panel.milling_task_chk_list = task_list
         self.controller._active_spot_size_pattern = (
             self.tasks["Microexpansion"].patterns[0]
@@ -253,7 +325,7 @@ class MillingTaskPanelTestCase(test.GuiTestCase):
 
         self.controller._on_milling_task_mouse_down(list_mouse_event)
 
-        task_list.SetSelection.assert_called_once_with(wx.NOT_FOUND)
+        task_list.Deselect.assert_called_once_with(selected_index)
         self.assertIsNone(self.controller._active_spot_size_pattern)
         self.controller.draw_milling_tasks.assert_called_once_with()
         list_mouse_event.Skip.assert_not_called()
@@ -264,7 +336,7 @@ class MillingTaskPanelTestCase(test.GuiTestCase):
         other_index = list(self.tasks).index("Rough Milling 01")
         task_list = Mock()
         task_list.HitTest.return_value = other_index
-        task_list.GetSelection.return_value = selected_index
+        task_list.GetSelections.return_value = [selected_index]
         self.controller._panel.milling_task_chk_list = task_list
         active_pattern = self.tasks["Microexpansion"].patterns[0]
         self.controller._active_spot_size_pattern = active_pattern
@@ -274,10 +346,106 @@ class MillingTaskPanelTestCase(test.GuiTestCase):
 
         self.controller._on_milling_task_mouse_down(list_mouse_event)
 
-        task_list.SetSelection.assert_not_called()
+        task_list.Deselect.assert_not_called()
         self.assertIs(self.controller._active_spot_size_pattern, active_pattern)
         self.controller.draw_milling_tasks.assert_not_called()
         list_mouse_event.Skip.assert_called_once_with()
+
+    def test_ctrl_click_active_row_preserves_other_selected_row(self) -> None:
+        """Deselect the active row and activate another selected row."""
+        active_index = list(self.tasks).index("Microexpansion")
+        remaining_index = list(self.tasks).index("Rough Milling 01")
+        task_list = Mock()
+        task_list.HitTest.return_value = active_index
+        task_list.GetSelections.side_effect = (
+            [active_index, remaining_index], [remaining_index])
+        task_list.GetString.side_effect = lambda index: list(self.tasks)[index]
+        self.controller._panel.milling_task_chk_list = task_list
+        self.controller._active_spot_size_pattern = (
+            self.tasks["Microexpansion"].patterns[0])
+        self.controller.draw_milling_tasks.reset_mock()
+        list_mouse_event = Mock()
+        list_mouse_event.ControlDown.return_value = True
+
+        self.controller._on_milling_task_mouse_down(list_mouse_event)
+
+        task_list.Deselect.assert_called_once_with(active_index)
+        self.assertIs(
+            self.controller._active_spot_size_pattern,
+            self.tasks["Rough Milling 01"].patterns[0],
+        )
+        self.controller.draw_milling_tasks.assert_called_once_with()
+        list_mouse_event.Skip.assert_not_called()
+
+    def test_ctrl_click_non_active_selected_row_redraws_patterns(self) -> None:
+        """Remove stale labels after deselecting another selected row."""
+        active_index = list(self.tasks).index("Microexpansion")
+        clicked_index = list(self.tasks).index("Rough Milling 01")
+        task_list = Mock()
+        task_list.HitTest.return_value = clicked_index
+        task_list.GetSelections.return_value = [active_index, clicked_index]
+        task_list.GetString.side_effect = lambda index: list(self.tasks)[index]
+        self.controller._panel.milling_task_chk_list = task_list
+        active_pattern = self.tasks["Microexpansion"].patterns[0]
+        self.controller._active_spot_size_pattern = active_pattern
+        self.controller.draw_milling_tasks.reset_mock()
+        list_mouse_event = Mock()
+        list_mouse_event.ControlDown.return_value = True
+
+        self.controller._on_milling_task_mouse_down(list_mouse_event)
+
+        task_list.Deselect.assert_called_once_with(clicked_index)
+        self.assertIs(self.controller._active_spot_size_pattern, active_pattern)
+        self.controller.draw_milling_tasks.assert_called_once_with()
+        list_mouse_event.Skip.assert_not_called()
+
+    def test_space_checks_or_unchecks_selected_rows(self) -> None:
+        """Apply Space to every selected milling-task row."""
+        task_list = Mock()
+        task_list.GetSelections.return_value = [1, 3]
+        self.controller._panel.milling_task_chk_list = task_list
+        key_event = Mock()
+        key_event.GetKeyCode.return_value = wx.WXK_SPACE
+
+        with patch.object(self.controller, "_update_selected_tasks") as update:
+            task_list.IsChecked.side_effect = [True, False]
+            self.controller._on_milling_task_key_down(key_event)
+
+            self.assertEqual(
+                task_list.Check.call_args_list,
+                [call(1, True), call(3, True)],
+            )
+            update.assert_called_once_with()
+
+            task_list.Check.reset_mock()
+            update.reset_mock()
+            task_list.IsChecked.side_effect = [True, True]
+            self.controller._on_milling_task_key_down(key_event)
+
+        self.assertEqual(
+            task_list.Check.call_args_list,
+            [call(1, False), call(3, False)],
+        )
+        update.assert_called_once_with()
+        key_event.Skip.assert_not_called()
+
+    def test_selecting_alignment_area_deselects_pattern_without_unchecking(self) -> None:
+        """Clear the pattern highlight when the alignment area is selected."""
+        task_list = wx.CheckListBox(self.panel, choices=list(self.tasks))
+        selected_index = task_list.FindString("Microexpansion")
+        task_list.Check(selected_index, True)
+        task_list.SetSelection(selected_index)
+        self.controller._panel.milling_task_chk_list = task_list
+        self.controller._active_spot_size_pattern = self.tasks["Microexpansion"].patterns[0]
+        self.controller.draw_milling_tasks.reset_mock()
+
+        self.controller._deselect_milling_task_for_alignment_area()
+
+        self.assertEqual(task_list.GetSelection(), wx.NOT_FOUND)
+        self.assertTrue(task_list.IsChecked(selected_index))
+        self.assertIsNone(self.controller._active_spot_size_pattern)
+        self.controller.draw_milling_tasks.assert_called_once_with(
+            redraw_alignment_area=False)
 
     def test_ctrl_click_canvas_preserves_pattern_selection(self) -> None:
         """Do not clear the highlighted pattern when Ctrl-clicking the canvas."""
@@ -303,6 +471,590 @@ class MillingTaskPanelTestCase(test.GuiTestCase):
         self.controller.draw_milling_tasks.assert_not_called()
         canvas_event.Skip.assert_called_once_with()
 
+    def test_click_canvas_deselects_pattern_without_rebuilding_alignment_area(self) -> None:
+        """Clear the pattern highlight while preserving the alignment overlay."""
+        task_list = wx.CheckListBox(self.panel, choices=list(self.tasks))
+        selected_index = task_list.FindString("Microexpansion")
+        task_list.Check(selected_index, True)
+        task_list.SetSelection(selected_index)
+        self.controller._panel.milling_task_chk_list = task_list
+        self.controller._active_spot_size_pattern = self.tasks["Microexpansion"].patterns[0]
+        self.controller._tab_data = SimpleNamespace(
+            main=SimpleNamespace(currentFeature=SimpleNamespace(value=None)))
+        self.controller.draw_milling_tasks.reset_mock()
+        canvas_event = Mock()
+        canvas_event.ControlDown.return_value = False
+        canvas_event.ShiftDown.return_value = False
+
+        self.controller.on_mouse_down(canvas_event)
+
+        self.assertEqual(task_list.GetSelection(), wx.NOT_FOUND)
+        self.assertTrue(task_list.IsChecked(selected_index))
+        self.assertIsNone(self.controller._active_spot_size_pattern)
+        self.controller.draw_milling_tasks.assert_called_once_with(
+            redraw_alignment_area=False)
+        canvas_event.Skip.assert_called_once_with()
+
+    def test_click_pattern_selects_list_row_without_changing_checks(self) -> None:
+        """Highlight a clicked overlay pattern without changing milling tasks."""
+        task_list = wx.CheckListBox(self.panel, choices=list(self.tasks))
+        for index, task in enumerate(self.tasks.values()):
+            task_list.Check(index, task.selected)
+        checked_tasks = task_list.GetCheckedStrings()
+        clicked_pattern = self.tasks["Rough Milling 01"].patterns[0]
+        self.controller._panel.milling_task_chk_list = task_list
+        self.controller._tab_data = SimpleNamespace(
+            main=SimpleNamespace(
+                currentFeature=SimpleNamespace(
+                    value=SimpleNamespace(reference_image=Mock()),
+                ),
+            ),
+        )
+        self.controller.canvas = Mock(cryofeature_overlay=None)
+        self.controller.alignment_area_overlay = Mock()
+        self.controller.alignment_area_overlay.is_corner_handle_at.return_value = False
+        self.controller.rectangles_overlay = Mock()
+        self.controller.rectangles_overlay.get_pattern_at.return_value = (
+            "Rough Milling 01", clicked_pattern)
+        self.controller.draw_milling_tasks.reset_mock()
+        canvas_event = Mock()
+        canvas_event.ControlDown.return_value = False
+        canvas_event.ShiftDown.return_value = False
+        canvas_event.AltDown.return_value = False
+        canvas_event.GetPosition.return_value = wx.Point(10, 20)
+
+        self.controller.on_mouse_down(canvas_event)
+
+        expected_index = task_list.FindString("Rough Milling 01")
+        self.assertEqual(task_list.GetSelection(), expected_index)
+        self.assertEqual(task_list.GetCheckedStrings(), checked_tasks)
+        self.assertIs(self.controller._active_spot_size_pattern, clicked_pattern)
+        self.controller.alignment_area_overlay.deselect.assert_called_once_with()
+        self.controller.canvas.SetFocus.assert_called_once_with()
+        self.controller.draw_milling_tasks.assert_called_once_with(
+            redraw_alignment_area=False)
+        canvas_event.Skip.assert_called_once_with(False)
+
+    def test_dragging_pattern_shows_movement_hint_once(self) -> None:
+        """Explain the move gesture only after a clicked pattern is dragged."""
+        task_list = wx.CheckListBox(self.panel, choices=list(self.tasks))
+        clicked_pattern = self.tasks["Rough Milling 01"].patterns[0]
+        self.controller._panel.milling_task_chk_list = task_list
+        self.controller._tab = SimpleNamespace(main_frame=Mock())
+        self.controller._tab_data = SimpleNamespace(
+            main=SimpleNamespace(
+                currentFeature=SimpleNamespace(
+                    value=SimpleNamespace(reference_image=Mock()),
+                ),
+            ),
+        )
+        self.controller.canvas = SimpleNamespace(cryofeature_overlay=None)
+        self.controller.alignment_area_overlay = Mock()
+        self.controller.alignment_area_overlay.is_corner_handle_at.return_value = False
+        self.controller.rectangles_overlay = Mock()
+        self.controller.rectangles_overlay.get_pattern_at.return_value = (
+            "Rough Milling 01", clicked_pattern)
+
+        down_event = Mock()
+        down_event.ControlDown.return_value = False
+        down_event.ShiftDown.return_value = False
+        down_event.AltDown.return_value = False
+        down_event.GetPosition.return_value = wx.Point(10, 20)
+        self.controller.on_mouse_down(down_event)
+
+        motion_event = Mock()
+        motion_event.LeftIsDown.return_value = True
+        motion_event.GetPosition.return_value = wx.Point(
+            10 + PATTERN_DRAG_HINT_THRESHOLD - 1, 20)
+        with patch("odemis.gui.cont.milling.show_message") as show_message:
+            self.controller.on_mouse_motion(motion_event)
+            show_message.assert_not_called()
+
+            motion_event.GetPosition.return_value = wx.Point(
+                10 + PATTERN_DRAG_HINT_THRESHOLD, 20)
+            self.controller.on_mouse_motion(motion_event)
+            self.controller.on_mouse_motion(motion_event)
+
+        show_message.assert_called_once_with(
+            self.controller._tab.main_frame,
+            title="Pattern movement",
+            message="To move milling patterns, use Shift+Ctrl+click.",
+            timeout=PATTERN_MOVE_WARNING_TIMEOUT,
+            level=logging.WARNING,
+        )
+        self.assertIsNone(self.controller._pattern_drag_start)
+        motion_event.Skip.assert_any_call(False)
+
+    def test_feature_click_is_not_passed_to_canvas_dragging(self) -> None:
+        """Consume feature selection so the canvas does not show a drag cursor."""
+        feature = Mock()
+        feature_overlay = CryoFeatureOverlay.__new__(CryoFeatureOverlay)
+        feature_overlay.active = model.BooleanVA(True)
+        feature_overlay._mode = MODE_SHOW_FEATURES
+        feature_overlay._detect_point_inside_feature = Mock(return_value=feature)
+        feature_overlay.tab_data = SimpleNamespace(
+            main=SimpleNamespace(currentFeature=model.VigilantAttribute(None)))
+        event = Mock()
+        event.Position = wx.Point(20, 30)
+
+        feature_overlay.on_left_down(event)
+
+        self.assertIs(feature_overlay.tab_data.main.currentFeature.value, feature)
+        event.Skip.assert_not_called()
+
+        feature_overlay._detect_point_inside_feature.return_value = None
+        empty_space_event = Mock()
+        empty_space_event.Position = wx.Point(40, 50)
+        feature_overlay.on_left_down(empty_space_event)
+
+        empty_space_event.Skip.assert_called_once_with()
+
+    def test_click_feature_marker_takes_priority_over_pattern(self) -> None:
+        """Pass marker clicks through without selecting an overlapping pattern."""
+        task_list = wx.CheckListBox(self.panel, choices=list(self.tasks))
+        selected_index = task_list.FindString("Microexpansion")
+        task_list.Check(selected_index, True)
+        task_list.SetSelection(selected_index)
+        self.controller._panel.milling_task_chk_list = task_list
+        self.controller._active_spot_size_pattern = (
+            self.tasks["Microexpansion"].patterns[0])
+        self.controller._tab_data = SimpleNamespace(
+            main=SimpleNamespace(
+                currentFeature=SimpleNamespace(
+                    value=SimpleNamespace(reference_image=Mock()),
+                ),
+            ),
+        )
+        feature_overlay = SimpleNamespace(
+            show=True,
+            active=SimpleNamespace(value=True),
+            get_feature_at=Mock(return_value=Mock()),
+        )
+        self.controller.canvas = SimpleNamespace(
+            cryofeature_overlay=feature_overlay)
+        self.controller.alignment_area_overlay = Mock()
+        self.controller.rectangles_overlay = Mock()
+        self.controller.draw_milling_tasks.reset_mock()
+        canvas_event = Mock()
+        canvas_event.ControlDown.return_value = False
+        canvas_event.ShiftDown.return_value = False
+        canvas_event.AltDown.return_value = False
+        canvas_event.GetPosition.return_value = wx.Point(10, 20)
+
+        self.controller.on_mouse_down(canvas_event)
+
+        self.assertEqual(task_list.GetSelection(), wx.NOT_FOUND)
+        self.assertTrue(task_list.IsChecked(selected_index))
+        self.controller.rectangles_overlay.get_pattern_at.assert_not_called()
+        self.controller.alignment_area_overlay.is_corner_handle_at.assert_not_called()
+        self.controller.draw_milling_tasks.assert_called_once_with(
+            redraw_alignment_area=False)
+        canvas_event.Skip.assert_called_once_with()
+
+    def test_click_alignment_corner_takes_priority_over_pattern(self) -> None:
+        """Let a selected alignment-area corner handle receive the click."""
+        task_list = wx.CheckListBox(self.panel, choices=list(self.tasks))
+        selected_index = task_list.FindString("Microexpansion")
+        task_list.Check(selected_index, True)
+        task_list.SetSelection(selected_index)
+        self.controller._panel.milling_task_chk_list = task_list
+        self.controller._active_spot_size_pattern = (
+            self.tasks["Microexpansion"].patterns[0])
+        self.controller._tab_data = SimpleNamespace(
+            main=SimpleNamespace(
+                currentFeature=SimpleNamespace(
+                    value=SimpleNamespace(reference_image=Mock()),
+                ),
+            ),
+        )
+        self.controller.canvas = SimpleNamespace(cryofeature_overlay=None)
+        self.controller.alignment_area_overlay = Mock()
+        self.controller.alignment_area_overlay.is_corner_handle_at.return_value = True
+        self.controller.rectangles_overlay = Mock()
+        self.controller.draw_milling_tasks.reset_mock()
+        canvas_event = Mock()
+        canvas_event.ControlDown.return_value = False
+        canvas_event.ShiftDown.return_value = False
+        canvas_event.AltDown.return_value = False
+        canvas_event.GetPosition.return_value = wx.Point(10, 20)
+
+        self.controller.on_mouse_down(canvas_event)
+
+        self.assertEqual(task_list.GetSelection(), wx.NOT_FOUND)
+        self.assertTrue(task_list.IsChecked(selected_index))
+        self.controller.rectangles_overlay.get_pattern_at.assert_not_called()
+        self.controller.draw_milling_tasks.assert_called_once_with(
+            redraw_alignment_area=False)
+        canvas_event.Skip.assert_called_once_with()
+
+    def test_alignment_corner_is_not_blocked_by_overlapping_pattern(self) -> None:
+        """Let a selected alignment corner resize over a milling pattern."""
+        position = wx.Point(10, 20)
+        self.controller.canvas = SimpleNamespace(cryofeature_overlay=None)
+        self.controller.alignment_area_overlay = Mock()
+        self.controller.alignment_area_overlay.is_corner_handle_at.return_value = True
+        self.controller.rectangles_overlay = Mock()
+        self.controller.rectangles_overlay.get_pattern_at.return_value = Mock()
+
+        self.assertFalse(
+            self.controller._blocks_alignment_area_interaction(position))
+        self.controller.rectangles_overlay.get_pattern_at.assert_not_called()
+
+    def test_select_first_checked_milling_task(self) -> None:
+        """Highlight whichever checked task occurs first in the list."""
+        task_list = wx.CheckListBox(self.panel, choices=list(self.tasks))
+        for index, task in enumerate(self.tasks.values()):
+            task_list.Check(index, task.selected)
+        self.controller._panel.milling_task_chk_list = task_list
+        self.controller.draw_milling_tasks.reset_mock()
+
+        self.controller._select_first_checked_milling_task()
+
+        expected_index = task_list.FindString("Ruler")
+        self.assertEqual(task_list.GetSelection(), expected_index)
+        self.assertIs(
+            self.controller._active_spot_size_pattern,
+            self.tasks["Ruler"].patterns[0],
+        )
+        self.controller.draw_milling_tasks.assert_called_once_with()
+
+    def test_manual_move_selects_first_checked_task_when_none_selected(self) -> None:
+        """Use the first checked task only as the individual-movement fallback."""
+        task_list = wx.CheckListBox(self.panel, choices=list(self.tasks))
+        for index, task in enumerate(self.tasks.values()):
+            task_list.Check(index, task.selected)
+        move_all = wx.CheckBox(self.panel)
+        move_all.SetValue(False)
+        self.controller._panel.milling_task_chk_list = task_list
+        self.controller._panel.chk_move_all_patterns = move_all
+        self.controller.draw_milling_tasks.reset_mock()
+
+        patterns = self.controller._get_patterns_for_manual_move()
+
+        expected_task = self.tasks["Ruler"]
+        self.assertEqual(patterns, expected_task.patterns)
+        self.assertEqual(task_list.GetSelection(), task_list.FindString("Ruler"))
+        self.assertIs(self.controller._active_spot_size_pattern, expected_task.patterns[0])
+        self.controller.draw_milling_tasks.assert_called_once_with()
+
+    def test_select_first_checked_milling_task_keeps_current_selection(self) -> None:
+        """Keep the highlighted task even when another checked task is above it."""
+        task_list = wx.CheckListBox(self.panel, choices=list(self.tasks))
+        for index, task in enumerate(self.tasks.values()):
+            task_list.Check(index, task.selected)
+        selected_index = task_list.FindString("Polishing 01")
+        task_list.SetSelection(selected_index)
+        active_pattern = self.tasks["Polishing 01"].patterns[0]
+        self.controller._panel.milling_task_chk_list = task_list
+        self.controller._active_spot_size_pattern = active_pattern
+        self.controller.draw_milling_tasks.reset_mock()
+
+        self.controller._select_first_checked_milling_task()
+
+        self.assertEqual(task_list.GetSelection(), selected_index)
+        self.assertIs(self.controller._active_spot_size_pattern, active_pattern)
+        self.controller.draw_milling_tasks.assert_not_called()
+
+    def test_select_first_checked_milling_task_keeps_unchecked_selection(self) -> None:
+        """Do not replace an existing unchecked selection with another task."""
+        task_list = wx.CheckListBox(self.panel, choices=list(self.tasks))
+        for index, task in enumerate(self.tasks.values()):
+            task_list.Check(index, task.selected)
+        task_list.SetSelection(task_list.FindString("Notch"))
+        self.controller._panel.milling_task_chk_list = task_list
+        self.controller._active_spot_size_pattern = self.tasks["Notch"].patterns[0]
+        self.controller.draw_milling_tasks.reset_mock()
+
+        self.controller._select_first_checked_milling_task()
+
+        expected_index = task_list.FindString("Notch")
+        self.assertEqual(task_list.GetSelection(), expected_index)
+        self.assertIs(
+            self.controller._active_spot_size_pattern,
+            self.tasks["Notch"].patterns[0],
+        )
+        self.controller.draw_milling_tasks.assert_not_called()
+
+    def test_select_first_checked_milling_task_does_nothing_when_none_checked(self) -> None:
+        """Keep the movement warning path available when no task is checked."""
+        task_list = wx.CheckListBox(self.panel, choices=list(self.tasks))
+        task_list.SetSelection(task_list.FindString("Notch"))
+        self.controller._panel.milling_task_chk_list = task_list
+        self.controller._active_spot_size_pattern = self.tasks["Notch"].patterns[0]
+        self.controller.draw_milling_tasks.reset_mock()
+
+        self.controller._select_first_checked_milling_task()
+
+        self.assertEqual(task_list.GetSelection(), task_list.FindString("Notch"))
+        self.assertIs(
+            self.controller._active_spot_size_pattern,
+            self.tasks["Notch"].patterns[0],
+        )
+        self.controller.draw_milling_tasks.assert_not_called()
+
+    def test_move_command_does_not_replace_unchecked_selection(self) -> None:
+        """Warn instead of replacing an existing unchecked selection."""
+        task_list = wx.CheckListBox(self.panel, choices=list(self.tasks))
+        for index, task in enumerate(self.tasks.values()):
+            task_list.Check(index, task.selected)
+        task_list.SetSelection(task_list.FindString("Notch"))
+        move_all = wx.CheckBox(self.panel)
+        move_all.SetValue(False)
+        self.controller._panel.milling_task_chk_list = task_list
+        self.controller._panel.chk_move_all_patterns = move_all
+        self.controller._active_spot_size_pattern = self.tasks["Notch"].patterns[0]
+        self.controller.allow_milling_pattern_move = True
+        self.controller._tab_data = SimpleNamespace(
+            main=SimpleNamespace(
+                currentFeature=SimpleNamespace(
+                    value=SimpleNamespace(reference_image=Mock()),
+                ),
+            ),
+        )
+        self.controller._move_patterns = Mock()
+        self.controller._show_pattern_selection_warning = Mock()
+        canvas = Mock()
+        canvas.get_half_buffer_size.return_value = (0, 0)
+        canvas.view_to_phys.return_value = (1.0, 2.0)
+        canvas_event = Mock()
+        canvas_event.GetEventObject.return_value = canvas
+        canvas_event.GetPosition.return_value = wx.Point(10, 20)
+        canvas_event.ControlDown.return_value = True
+        canvas_event.AltDown.return_value = False
+        canvas_event.ShiftDown.return_value = True
+
+        with patch(
+            "odemis.gui.cont.milling.pos_to_relative",
+            return_value=(3.0, 4.0),
+        ):
+            self.controller.on_mouse_down(canvas_event)
+
+        expected_index = task_list.FindString("Notch")
+        self.assertEqual(task_list.GetSelection(), expected_index)
+        self.assertIs(
+            self.controller._active_spot_size_pattern,
+            self.tasks["Notch"].patterns[0],
+        )
+        self.controller._move_patterns.assert_not_called()
+        self.controller._show_pattern_selection_warning.assert_called_once_with(
+            "Select a milling pattern before moving it.")
+
+    def test_move_command_moves_multiple_selected_tasks(self) -> None:
+        """Translate the checked multi-selection as one group."""
+        task_list = wx.CheckListBox(
+            self.panel, choices=list(self.tasks), style=wx.LB_EXTENDED)
+        for index, task in enumerate(self.tasks.values()):
+            task_list.Check(index, task.selected)
+        selected_names = ("Microexpansion", "Rough Milling 01")
+        for task_name in selected_names:
+            task_list.SetSelection(task_list.FindString(task_name), True)
+        move_all = wx.CheckBox(self.panel)
+        move_all.SetValue(False)
+        self.controller._panel.milling_task_chk_list = task_list
+        self.controller._panel.chk_move_all_patterns = move_all
+        active_pattern = self.tasks["Rough Milling 01"].patterns[0]
+        self.controller._active_spot_size_pattern = active_pattern
+        self.controller.allow_milling_pattern_move = True
+        self.controller._tab_data = SimpleNamespace(
+            main=SimpleNamespace(
+                currentFeature=SimpleNamespace(
+                    value=SimpleNamespace(reference_image=Mock()),
+                ),
+            ),
+        )
+        self.controller._move_patterns = Mock()
+        self.controller._show_pattern_selection_warning = Mock()
+        canvas = Mock()
+        canvas.get_half_buffer_size.return_value = (0, 0)
+        canvas.view_to_phys.return_value = (1.0, 2.0)
+        canvas_event = Mock()
+        canvas_event.GetEventObject.return_value = canvas
+        canvas_event.GetPosition.return_value = wx.Point(10, 20)
+        canvas_event.ControlDown.return_value = True
+        canvas_event.AltDown.return_value = False
+        canvas_event.ShiftDown.return_value = True
+
+        with patch("odemis.gui.cont.milling.pos_to_relative", return_value=(3.0, 4.0)):
+            with patch("odemis.gui.cont.milling._get_pattern_stack_center", return_value=(1.0, 2.0)):
+                self.controller.on_mouse_down(canvas_event)
+
+        expected_patterns = [
+            pattern
+            for task_name in selected_names
+            for pattern in self.tasks[task_name].patterns
+        ]
+        self.controller._move_patterns.assert_called_once_with(
+            expected_patterns, (3.0, 4.0), (1.0, 2.0))
+        self.controller._show_pattern_selection_warning.assert_not_called()
+        self.assertEqual(
+            list(task_list.GetSelections()),
+            [task_list.FindString(task_name) for task_name in selected_names],
+        )
+        self.assertIs(self.controller._active_spot_size_pattern, active_pattern)
+
+    def test_move_all_command_ignores_and_clears_pattern_selection(self) -> None:
+        """Move every checked pattern and hide labels in move-all mode."""
+        task_list = wx.CheckListBox(
+            self.panel, choices=list(self.tasks), style=wx.LB_EXTENDED)
+        for index, task in enumerate(self.tasks.values()):
+            task_list.Check(index, task.selected)
+        selected_index = task_list.FindString("Microexpansion")
+        task_list.SetSelection(selected_index)
+        move_all = wx.CheckBox(self.panel)
+        move_all.SetValue(True)
+        self.controller._panel.milling_task_chk_list = task_list
+        self.controller._panel.chk_move_all_patterns = move_all
+        self.controller._active_spot_size_pattern = self.tasks["Microexpansion"].patterns[0]
+        self.controller.allow_milling_pattern_move = True
+        self.controller._tab_data = SimpleNamespace(
+            main=SimpleNamespace(
+                currentFeature=SimpleNamespace(
+                    value=SimpleNamespace(reference_image=Mock()),
+                ),
+            ),
+        )
+        self.controller._move_patterns = Mock()
+        self.controller._show_pattern_selection_warning = Mock()
+        canvas = Mock()
+        canvas.get_half_buffer_size.return_value = (0, 0)
+        canvas.view_to_phys.return_value = (1.0, 2.0)
+        canvas_event = Mock()
+        canvas_event.GetEventObject.return_value = canvas
+        canvas_event.GetPosition.return_value = wx.Point(10, 20)
+        canvas_event.ControlDown.return_value = True
+        canvas_event.AltDown.return_value = False
+        canvas_event.ShiftDown.return_value = True
+
+        with patch("odemis.gui.cont.milling.pos_to_relative", return_value=(3.0, 4.0)):
+            with patch("odemis.gui.cont.milling._get_pattern_stack_center", return_value=(1.0, 2.0)):
+                self.controller.on_mouse_down(canvas_event)
+
+        expected_patterns = [
+            pattern for task in self.tasks.values() if task.selected
+            for pattern in task.patterns
+        ]
+        self.controller._move_patterns.assert_called_once_with(
+            expected_patterns, (3.0, 4.0), (1.0, 2.0))
+        self.controller._show_pattern_selection_warning.assert_not_called()
+        self.assertEqual(list(task_list.GetSelections()), [])
+        self.assertIsNone(self.controller._active_spot_size_pattern)
+
+    def test_ctrl_alt_click_does_not_select_milling_task(self) -> None:
+        """Leave Ctrl+Alt+click available to the normal canvas handlers."""
+        task_list = wx.CheckListBox(self.panel, choices=list(self.tasks))
+        for index, task in enumerate(self.tasks.values()):
+            task_list.Check(index, task.selected)
+        self.controller._panel.milling_task_chk_list = task_list
+        self.controller._tab_data = SimpleNamespace(
+            main=SimpleNamespace(
+                currentFeature=SimpleNamespace(
+                    value=SimpleNamespace(reference_image=Mock()),
+                ),
+            ),
+        )
+        self.controller._active_spot_size_pattern = None
+        self.controller.draw_milling_tasks.reset_mock()
+        self.panel.Bind(wx.EVT_LEFT_DOWN, self.controller.on_mouse_down)
+        canvas_event = wx.MouseEvent(wx.wxEVT_LEFT_DOWN)
+        canvas_event.SetEventObject(self.panel)
+        canvas_event.SetPosition(wx.Point(10, 10))
+        canvas_event.SetControlDown(True)
+        canvas_event.SetAltDown(True)
+
+        self.panel.GetEventHandler().ProcessEvent(canvas_event)
+
+        self.assertEqual(task_list.GetSelection(), wx.NOT_FOUND)
+        self.assertIsNone(self.controller._active_spot_size_pattern)
+        self.controller.draw_milling_tasks.assert_not_called()
+        self.assertTrue(canvas_event.GetSkipped())
+
+    def test_ctrl_arrow_moves_all_checked_patterns_and_clears_selection(self) -> None:
+        """Apply keyboard movement to the displayed stack in move-all mode."""
+        task_names = ("Microexpansion", "Rough Milling 01")
+        self.controller.milling_tasks = {
+            task_name: self.tasks[task_name] for task_name in task_names}
+        task_list = wx.CheckListBox(
+            self.panel, choices=list(self.controller.milling_tasks), style=wx.LB_EXTENDED)
+        for index in range(task_list.GetCount()):
+            task_list.Check(index, True)
+        task_list.SetSelection(0)
+        move_all = wx.CheckBox(self.panel)
+        move_all.SetValue(True)
+        self.controller._panel.milling_task_chk_list = task_list
+        self.controller._panel.chk_move_all_patterns = move_all
+        self.controller._active_spot_size_pattern = self.tasks[task_names[0]].patterns[0]
+        self.controller.allow_milling_pattern_move = True
+        reference_image = SimpleNamespace(metadata={model.MD_POS: (0, 0)})
+        self.controller._tab_data = SimpleNamespace(
+            main=SimpleNamespace(
+                currentFeature=SimpleNamespace(
+                    value=SimpleNamespace(reference_image=reference_image))))
+        canvas = Mock()
+        canvas.get_half_buffer_size.return_value = (0, 0)
+        canvas.phys_to_view.side_effect = lambda pos, _: pos
+        canvas.view_to_phys.side_effect = lambda pos, _: pos
+        key_event = Mock()
+        key_event.GetKeyCode.return_value = wx.WXK_RIGHT
+        key_event.ControlDown.return_value = True
+        key_event.ShiftDown.return_value = False
+        key_event.GetEventObject.return_value = canvas
+        original_centers = {
+            pattern: pattern.center.value
+            for task in self.controller.milling_tasks.values()
+            for pattern in task.patterns
+        }
+        self.controller.draw_milling_tasks.reset_mock()
+        self.controller._update_milling_validation_message.reset_mock()
+        self.controller._update_mill_btn.reset_mock()
+
+        with patch("odemis.gui.cont.milling.save_project"):
+            self.controller.on_char(key_event)
+
+        for pattern, original_center in original_centers.items():
+            self.assertEqual(
+                pattern.center.value,
+                (original_center[0] + MOVE_DELTA_X_LONG, original_center[1]),
+            )
+        self.assertEqual(list(task_list.GetSelections()), [])
+        self.assertIsNone(self.controller._active_spot_size_pattern)
+        self.controller.draw_milling_tasks.assert_called_once_with()
+        self.controller._update_milling_validation_message.assert_called_once_with()
+        self.controller._update_mill_btn.assert_called_once_with()
+
+    def test_ctrl_arrow_without_checked_patterns_preserves_selection(self) -> None:
+        """Warn without clearing rows when no displayed patterns can move."""
+        for task in self.tasks.values():
+            task.selected = False
+        task_list = wx.CheckListBox(self.panel, choices=list(self.tasks))
+        selected_index = task_list.FindString("Notch")
+        task_list.SetSelection(selected_index)
+        move_all = wx.CheckBox(self.panel)
+        move_all.SetValue(True)
+        self.controller._panel.milling_task_chk_list = task_list
+        self.controller._panel.chk_move_all_patterns = move_all
+        active_pattern = self.tasks["Notch"].patterns[0]
+        self.controller._active_spot_size_pattern = active_pattern
+        self.controller.allow_milling_pattern_move = True
+        self.controller._tab_data = SimpleNamespace(
+            main=SimpleNamespace(
+                currentFeature=SimpleNamespace(
+                    value=SimpleNamespace(reference_image=Mock()))))
+        self.controller._show_pattern_selection_warning = Mock()
+        self.controller.draw_milling_tasks.reset_mock()
+        key_event = Mock()
+        key_event.GetKeyCode.return_value = wx.WXK_RIGHT
+        key_event.ControlDown.return_value = True
+        key_event.ShiftDown.return_value = False
+        key_event.GetEventObject.return_value = Mock()
+
+        self.controller.on_char(key_event)
+
+        self.controller._show_pattern_selection_warning.assert_called_once_with(
+            "Select a milling pattern before moving it.")
+        self.assertEqual(task_list.GetSelection(), selected_index)
+        self.assertIs(self.controller._active_spot_size_pattern, active_pattern)
+        self.controller.draw_milling_tasks.assert_not_called()
+
     def test_pattern_overlay_styles(self) -> None:
         """Give each default task a unique bright color and a thin overlay."""
         canvas = Mock()
@@ -315,7 +1067,9 @@ class MillingTaskPanelTestCase(test.GuiTestCase):
             for index, task in enumerate(self.tasks.values())
         ]
         self.assertEqual(len(colors), len(set(colors)))
+
         self.assertEqual(colors, [task.color for task in self.tasks.values()])
+        self.assertNotIn(MILLING_ALIGNMENT_AREA_COLOUR, colors)
         for color in colors:
             red, green, blue = (
                 int(color[index:index + 2], 16) for index in (1, 3, 5)
@@ -367,6 +1121,173 @@ class MillingTaskPanelTestCase(test.GuiTestCase):
         self.assertAlmostEqual(
             inactive_rectangle.colour[3], MILLING_OVERLAY_INACTIVE_OPACITY)
 
+    def test_pattern_overlay_checks_all_shapes_for_clicked_pattern(self) -> None:
+        """Find patterns behind dense rectangles from Ruler or Notch."""
+        canvas = Mock()
+        canvas.get_half_buffer_size.return_value = (0, 0)
+        canvas.view_to_phys.return_value = (0, 0)
+        overlay = MillingPatternOverlay(canvas)
+
+        scenarios = (
+            ("Ruler", "Correlation (NΠ+⅂Ʇ)"),
+            ("Ruler", "Waffle Trench"),
+            ("Notch", "Correlation (NΠ+⅂Ʇ)"),
+            ("Notch", "Waffle Trench"),
+        )
+        for interfering_task, target_task in scenarios:
+            with self.subTest(interfering_task=interfering_task, target_task=target_task):
+                decoys = []
+                for index in range(5):
+                    decoy = Mock(cnvs=canvas)
+                    decoy.check_point_proximity.return_value = False
+                    decoy.points.value = [
+                        (index + 1, 0), (index + 2, 0),
+                        (index + 2, 1), (index + 1, 1),
+                    ]
+                    overlay.add_pattern_shape(
+                        decoy, interfering_task, self.tasks[interfering_task].patterns[0])
+                    decoys.append(decoy)
+
+                target = Mock(cnvs=canvas)
+                target.check_point_proximity.return_value = True
+                target.points.value = [(-2, -2), (2, -2), (2, 2), (-2, 2)]
+                pattern = self.tasks[target_task].patterns[0]
+                overlay.add_pattern_shape(target, target_task, pattern)
+
+                self.assertEqual(
+                    overlay.get_pattern_at((10, 20)), (target_task, pattern))
+                for decoy in decoys:
+                    decoy.check_point_proximity.assert_called_once_with((10, 20))
+                target.check_point_proximity.assert_called_once_with((10, 20))
+
+                overlay.clear()
+                self.assertIsNone(overlay.get_pattern_at((10, 20)))
+
+    def test_alignment_overlay_uses_milling_style_without_hover_focus(self) -> None:
+        """Use the milling rectangle style without activating the viewport on hover."""
+        canvas = Mock()
+        canvas.get_half_buffer_size.return_value = (0, 0)
+        canvas.left_dragging = False
+        area_selected = Mock()
+        overlay = MillingAlignmentAreaOverlay(
+            cnvs=canvas, on_area_changed=Mock(), on_area_selected=area_selected)
+
+        self.assertIs(overlay.shape_cls, MillingAlignmentRectangleOverlay)
+        self.assertTrue(issubclass(overlay.shape_cls, MillingRectangleOverlay))
+        self.assertFalse(overlay.shape_creation_allowed)
+
+        alignment_rectangle = MillingAlignmentRectangleOverlay(Mock(), can_rotate=False)
+        points = (Vec(0, 0), Vec(100, 0), Vec(100, 100), Vec(0, 100))
+        (
+            alignment_rectangle.v_point1,
+            alignment_rectangle.v_point2,
+            alignment_rectangle.v_point3,
+            alignment_rectangle.v_point4,
+        ) = points
+        alignment_rectangle._calc_edges()
+        self.assertNotIn(gui.HOVER_LINE, alignment_rectangle.v_edges)
+        self.assertEqual(len(alignment_rectangle.v_edges[gui.HOVER_EDGE]), 4)
+        context = Mock()
+        alignment_rectangle.selected.value = False
+        alignment_rectangle.draw_edges(context, *points)
+        context.arc.assert_not_called()
+        with patch.object(MillingRectangleOverlay, "draw_name_label") as draw_name_label:
+            alignment_rectangle.draw_name_label(context)
+            draw_name_label.assert_not_called()
+
+            alignment_rectangle.selected.value = True
+            alignment_rectangle.draw_name_label(context)
+            draw_name_label.assert_called_once_with(context)
+        alignment_rectangle.draw_edges(context, *points)
+        self.assertEqual(context.arc.call_count, 4)
+
+        overlay.active.value = True
+        event = Mock()
+        overlay.on_enter(event)
+
+        canvas.SetFocus.assert_not_called()
+        canvas.set_default_cursor.assert_not_called()
+        event.Skip.assert_called_once_with(False)
+
+        shape = Mock()
+        shape.cnvs = canvas
+        shape.selected = model.BooleanVA(False)
+        shape.is_created = model.BooleanVA(True)
+        shape.get_hover.return_value = (gui.HOVER_EDGE, 1)
+        overlay._shapes.value.append(shape)
+
+        left_down_event = Mock()
+        left_down_event.ControlDown.return_value = False
+        left_down_event.Position = Vec(10, 10)
+        with patch.object(overlay, "_get_shape", return_value=shape):
+            overlay.on_left_down(left_down_event)
+        self.assertIs(overlay._selected_shape, shape)
+        area_selected.assert_called_once_with()
+        canvas.on_mouse_down.assert_called_once_with()
+        canvas.cancel_drag.assert_called_once_with()
+        left_down_event.Skip.assert_called_with(False)
+
+        motion_event = Mock()
+        canvas.set_dynamic_cursor.reset_mock()
+        overlay.on_motion(motion_event)
+        canvas.set_dynamic_cursor.assert_called_once_with(wx.CURSOR_HAND)
+
+        shape.selection_mode = SEL_MODE_NONE
+        overlay.on_motion(motion_event)
+        canvas.set_dynamic_cursor.assert_called_with(wx.CURSOR_SIZING)
+        shape.get_hover.return_value = (gui.HOVER_EDGE, 2)
+        overlay.on_motion(motion_event)
+        canvas.set_dynamic_cursor.assert_called_with(wx.CURSOR_SIZING)
+
+        shape.get_hover.return_value = (gui.HOVER_SELECTION, None)
+        overlay.on_motion(motion_event)
+        canvas.set_dynamic_cursor.assert_called_with(wx.CURSOR_HAND)
+
+        shape.selection_mode = SEL_MODE_EDIT
+        left_up_event = Mock()
+        overlay.on_left_up(left_up_event)
+        canvas.on_mouse_up.assert_called_once_with()
+        left_up_event.Skip.assert_called_with(False)
+
+        overlay._blocks_area_interaction = Mock(return_value=True)
+        canvas.reset_dynamic_cursor.reset_mock()
+        overlay.on_motion(motion_event)
+        overlay._blocks_area_interaction.assert_called_once_with(
+            motion_event.Position)
+        canvas.reset_dynamic_cursor.assert_called_once_with()
+
+        blocked_left_down_event = Mock()
+        blocked_left_down_event.ControlDown.return_value = False
+        blocked_left_down_event.Position = Vec(20, 20)
+        area_selected.reset_mock()
+        with patch.object(overlay, "_get_shape") as get_shape:
+            overlay.on_left_down(blocked_left_down_event)
+        get_shape.assert_not_called()
+        area_selected.assert_not_called()
+        self.assertIsNone(overlay._selected_shape)
+        self.assertFalse(shape.selected.value)
+        blocked_left_down_event.Skip.assert_called_once_with()
+
+    def test_unselected_alignment_corner_does_not_show_resize_cursor(self) -> None:
+        """Keep the default cursor over an unselected alignment-area corner."""
+        canvas = Mock()
+        canvas.left_dragging = False
+        canvas.get_half_buffer_size.return_value = (0, 0)
+        overlay = MillingAlignmentAreaOverlay(cnvs=canvas, on_area_changed=Mock())
+        overlay.active.value = True
+        shape = Mock()
+        shape.cnvs = canvas
+        shape.selected = model.BooleanVA(False)
+        shape.is_created = model.BooleanVA(True)
+        shape.get_hover.return_value = (gui.HOVER_EDGE, 1)
+        overlay._shapes.value.append(shape)
+
+        overlay.on_motion(Mock())
+
+        shape.get_hover.assert_not_called()
+        canvas.set_dynamic_cursor.assert_not_called()
+        canvas.reset_dynamic_cursor.assert_called_once_with()
+
     def test_pattern_labels_only_for_highlighted_task(self) -> None:
         """Show names and dimensions only for the highlighted pattern row."""
         rough = self.tasks["Rough Milling 01"]
@@ -378,7 +1299,7 @@ class MillingTaskPanelTestCase(test.GuiTestCase):
             "Notch": notch,
         }
         task_list = wx.CheckListBox(
-            self.panel, choices=list(self.controller.milling_tasks))
+            self.panel, choices=list(self.controller.milling_tasks), style=wx.LB_EXTENDED)
         self.controller._panel.milling_task_chk_list = task_list
         self.controller.selected_tasks = SimpleNamespace(
             value=list(self.controller.milling_tasks))
@@ -438,6 +1359,7 @@ class MillingTaskPanelTestCase(test.GuiTestCase):
         for actual, expected in zip(rough_label.args[1], expected_position):
             self.assertAlmostEqual(actual, expected)
 
+        task_list.SetSelection(wx.NOT_FOUND)
         task_list.SetSelection(task_list.FindString("Notch"))
         self.controller.rectangles_overlay.reset_mock()
         with patch(
@@ -482,8 +1404,51 @@ class MillingTaskPanelTestCase(test.GuiTestCase):
         ]
         self.assertTrue(any(label.startswith("Notch · ") for label in labels))
 
+        task_list.SetSelection(wx.NOT_FOUND)
+        task_list.SetSelection(task_list.FindString("Rough Milling 01"), True)
+        task_list.SetSelection(task_list.FindString("Notch"), True)
+        self.controller.rectangles_overlay.reset_mock()
+        with patch(
+            "odemis.gui.cont.milling.rectangle_pattern_to_shape",
+            return_value=Mock(),
+        ) as to_shape:
+            MillingTaskController.draw_milling_tasks.__wrapped__(self.controller)
+
+        self.assertTrue(all(
+            item.kwargs["opacity"] == MILLING_OVERLAY_ACTIVE_OPACITY
+            for item in to_shape.call_args_list
+        ))
+        labels = [
+            item.args[0]
+            for item in self.controller.rectangles_overlay.add_pattern_label.call_args_list
+        ]
+        self.assertIn("Rough Milling 01", labels)
+        self.assertTrue(any(label.startswith("Notch · ") for label in labels))
+
+        # Simulate Shift+arrow moving the list selection from a checked task to
+        # an unchecked task while the cached active pattern still points to the
+        # previously selected task.
+        notch.selected = False
+        self.controller._active_spot_size_pattern = rough.patterns[0]
+        task_list.SetSelection(wx.NOT_FOUND)
+        task_list.SetSelection(task_list.FindString("Notch"))
+        self.controller.rectangles_overlay.reset_mock()
+        with patch(
+            "odemis.gui.cont.milling.rectangle_pattern_to_shape",
+            return_value=Mock(),
+        ) as to_shape:
+            MillingTaskController.draw_milling_tasks.__wrapped__(self.controller)
+
+        self.assertIs(self.controller._get_highlighted_task(), notch)
+        self.assertTrue(to_shape.call_args_list)
+        self.assertTrue(all(
+            item.kwargs["opacity"] == MILLING_OVERLAY_INACTIVE_OPACITY
+            for item in to_shape.call_args_list
+        ))
+        self.controller.rectangles_overlay.add_pattern_label.assert_not_called()
+
     def test_pattern_selection_warning(self) -> None:
-        """Show a transient popup when pattern movement has no anchor."""
+        """Show a transient popup when no displayed pattern can move."""
         message = "Select a milling pattern before moving it."
         self.controller._tab = SimpleNamespace(main_frame=Mock())
         with patch("odemis.gui.cont.milling.show_message") as show_message:
@@ -497,17 +1462,361 @@ class MillingTaskPanelTestCase(test.GuiTestCase):
         )
 
 
-class MillingSpotSizeValidationTestCase(unittest.TestCase):
-    """Check corrections against generated ruler graduations without a microscope."""
+class MillingAlignmentAreaTestCase(test.GuiTestCase):
+    """Exercise alignment-area interactions through a real microscope canvas."""
+
+    frame_class = test.test_gui.CanvasTestFrame
 
     def setUp(self) -> None:
-        """Create a selected ruler task and a checked feature."""
+        """Create a canvas with one editable alignment rectangle."""
+        super().setUp()
+        self.canvas = miccanvas.DblMicroscopeCanvas(self.panel)
+        self.add_control(self.canvas, flags=wx.EXPAND, proportion=1, clear=True)
+        test.gui_loop()
+
+        self.area_changed = Mock()
+        self.overlay = MillingAlignmentAreaOverlay(
+            cnvs=self.canvas, on_area_changed=self.area_changed)
+        self.canvas.add_world_overlay(self.overlay)
+        self.overlay.active.value = True
+
+        self.shape = MillingAlignmentRectangleOverlay(self.canvas, can_rotate=False)
+        offset = self.canvas.get_half_buffer_size()
+        physical_points = [
+            self.canvas.view_to_phys(point, offset)
+            for point in (
+                Vec(100, 100),
+                Vec(250, 100),
+                Vec(250, 250),
+                Vec(100, 250),
+            )
+        ]
+        self.shape.set_physical_sel(physical_points)
+        self.shape._points = self.shape.get_physical_sel()
+        self.shape.points.value = self.shape._points
+        self.shape.is_created.value = True
+        self.shape.selected.value = False
+        self.overlay.add_shape(self.shape)
+        test.gui_loop()
+
+        self.assertIsNone(self.overlay._selected_shape)
+        self.assertFalse(self.shape.selected.value)
+
+    def tearDown(self) -> None:
+        """Destroy the canvas created for a test."""
+        test.gui_loop()
+        self.remove_all()
+        test.gui_loop()
+        super().tearDown()
+
+    def _send_mouse_event(
+            self, event_type: int, position: Vec, left_is_down: bool = False) -> wx.MouseEvent:
+        """Dispatch a mouse event through the canvas event-handler chain.
+
+        :param event_type: wx mouse event type.
+        :param position: Event position in viewport pixels.
+        :return: The dispatched event.
+        """
+        event = wx.MouseEvent(event_type)
+        event.x, event.y = position
+        event.SetLeftDown(left_is_down)
+        event.SetEventObject(self.canvas)
+        self.canvas.GetEventHandler().ProcessEvent(event)
+        return event
+
+    def test_selection_changes_alignment_area_opacity(self) -> None:
+        """Use the milling-pattern opacity convention for the alignment area."""
+        context = Mock()
+        with patch("odemis.gui.comp.overlay.milling.MillingRectangleOverlay.draw") as draw:
+            self.shape.draw(context)
+            self.assertAlmostEqual(
+                self.shape.colour[3], MILLING_OVERLAY_INACTIVE_OPACITY)
+            self.shape.selected.value = True
+            self.shape.draw(context)
+
+        self.assertAlmostEqual(
+            self.shape.colour[3], MILLING_OVERLAY_ACTIVE_OPACITY)
+        self.assertEqual(
+            draw.call_args_list,
+            [call(context, (0, 0), 1.0), call(context, (0, 0), 1.0)],
+        )
+
+    def test_pattern_click_and_drag_win_over_alignment_area_interior(self) -> None:
+        """Select an overlapping pattern and explain its special move gesture."""
+        tasks = load_milling_tasks(DEFAULT_MILLING_TASKS_PATH)
+        tasks["Ruler"].selected = True
+        task_list = wx.CheckListBox(self.panel, choices=list(tasks))
+        for index, task in enumerate(tasks.values()):
+            task_list.Check(index, task.selected)
+
+        pattern_overlay = MillingPatternOverlay(self.canvas)
+        self.canvas.add_world_overlay(pattern_overlay)
+        pattern_shape = RectangleOverlay(
+            self.canvas, show_selection_points=False, can_rotate=False)
+        offset = self.canvas.get_half_buffer_size()
+        pattern_shape.set_physical_sel([
+            self.canvas.view_to_phys(point, offset)
+            for point in (
+                Vec(140, 140),
+                Vec(210, 140),
+                Vec(210, 210),
+                Vec(140, 210),
+            )
+        ])
+        pattern_shape._points = pattern_shape.get_physical_sel()
+        pattern_shape.points.value = pattern_shape._points
+        pattern_shape.is_created.value = True
+        ruler_pattern = tasks["Ruler"].patterns[0]
+        pattern_overlay.add_pattern_shape(
+            pattern_shape, "Ruler", ruler_pattern)
+
+        self.shape.selected.value = True
+        self.overlay._selected_shape = self.shape
+        controller = MillingTaskController.__new__(MillingTaskController)
+        controller._panel = SimpleNamespace(milling_task_chk_list=task_list)
+        controller._tab = SimpleNamespace(main_frame=Mock())
+        controller._tab_data = SimpleNamespace(
+            main=SimpleNamespace(
+                currentFeature=SimpleNamespace(
+                    value=SimpleNamespace(reference_image=Mock()),
+                ),
+            ),
+        )
+        controller.milling_tasks = tasks
+        controller.canvas = self.canvas
+        controller.rectangles_overlay = pattern_overlay
+        controller.alignment_area_overlay = self.overlay
+        controller._active_spot_size_pattern = None
+        controller.draw_milling_tasks = Mock()
+        self.canvas.Bind(wx.EVT_LEFT_DOWN, controller.on_mouse_down)
+        self.canvas.Bind(wx.EVT_MOTION, controller.on_mouse_motion)
+
+        with patch("odemis.gui.cont.milling.show_message") as show_message:
+            event = self._send_mouse_event(wx.wxEVT_LEFT_DOWN, Vec(175, 175))
+            self._send_mouse_event(
+                wx.wxEVT_MOTION,
+                Vec(175 + PATTERN_DRAG_HINT_THRESHOLD, 175),
+                left_is_down=True,
+            )
+            self._send_mouse_event(wx.wxEVT_LEFT_UP, Vec(180, 175))
+
+        expected_index = task_list.FindString("Ruler")
+        self.assertEqual(task_list.GetSelection(), expected_index)
+        self.assertTrue(task_list.IsChecked(expected_index))
+        self.assertIs(controller._active_spot_size_pattern, ruler_pattern)
+        self.assertFalse(self.shape.selected.value)
+        self.assertFalse(self.canvas.left_dragging)
+        self.assertFalse(event.GetSkipped())
+        show_message.assert_called_once_with(
+            controller._tab.main_frame,
+            title="Pattern movement",
+            message="To move milling patterns, use Shift+Ctrl+click.",
+            timeout=PATTERN_MOVE_WARNING_TIMEOUT,
+            level=logging.WARNING,
+        )
+        controller.draw_milling_tasks.assert_called_once_with(
+            redraw_alignment_area=False)
+
+    def test_dragging_area_does_not_pan_canvas(self) -> None:
+        """Move the area while leaving the reference-image canvas stationary."""
+        self._send_mouse_event(wx.wxEVT_LEFT_DOWN, Vec(175, 175))
+        self.assertFalse(self.canvas.left_dragging)
+
+        self._send_mouse_event(wx.wxEVT_MOTION, Vec(195, 185))
+        self._send_mouse_event(wx.wxEVT_LEFT_UP, Vec(195, 185))
+
+        self.assertEqual(self.canvas.drag_shift, (0, 0))
+        self.assertEqual(self.shape.v_point1, Vec(120, 110))
+        self.assertEqual(self.shape.v_point3, Vec(270, 260))
+        self.assertTrue(self.shape.selected.value)
+        self.assertGreaterEqual(self.area_changed.call_count, 2)
+        self.assertTrue(self.area_changed.call_args.kwargs["commit"])
+
+    def test_reference_image_drag_keeps_canvas_cursor_until_release(self) -> None:
+        """Leave cursor ownership with the canvas throughout an image drag."""
+        self._send_mouse_event(wx.wxEVT_LEFT_DOWN, Vec(300, 300))
+        drag_cursor = self.canvas.dynamic_cursor
+
+        self.assertTrue(self.canvas.left_dragging)
+        self.assertIsNotNone(drag_cursor)
+
+        self._send_mouse_event(wx.wxEVT_MOTION, Vec(320, 310))
+
+        self.assertTrue(self.canvas.left_dragging)
+        self.assertIs(self.canvas.dynamic_cursor, drag_cursor)
+
+        # This lightweight canvas has no microscope view to recenter on release.
+        with patch.object(self.canvas, "recenter_buffer"), patch.object(
+                self.canvas, "update_drawing"):
+            self._send_mouse_event(wx.wxEVT_LEFT_UP, Vec(320, 310))
+
+        self.assertFalse(self.canvas.left_dragging)
+        self.assertIsNone(self.canvas.dynamic_cursor)
+
+    def test_feature_overlay_does_not_reset_reference_image_drag_cursor(self) -> None:
+        """Keep the canvas drag cursor when the feature overlay sees motion."""
+        feature_overlay = CryoFeatureOverlay.__new__(CryoFeatureOverlay)
+        feature_overlay.active = model.BooleanVA(True)
+        feature_overlay._left_dragging = False
+        feature_overlay._right_dragging = False
+        feature_overlay.cnvs = Mock(left_dragging=True)
+        event = Mock()
+        event.Position = wx.Point(200, 200)
+
+        feature_overlay.on_motion(event)
+
+        feature_overlay.cnvs.reset_dynamic_cursor.assert_not_called()
+        feature_overlay.cnvs.set_default_cursor.assert_not_called()
+        event.Skip.assert_called_once_with()
+
+    def test_resizing_area_does_not_pan_canvas(self) -> None:
+        """Move on the first corner gesture, then resize while staying selected."""
+        self._send_mouse_event(wx.wxEVT_LEFT_DOWN, Vec(100, 100))
+        self.assertFalse(self.canvas.left_dragging)
+
+        self._send_mouse_event(wx.wxEVT_MOTION, Vec(80, 80))
+        self._send_mouse_event(wx.wxEVT_LEFT_UP, Vec(80, 80))
+
+        self.assertTrue(self.shape.selected.value)
+        self.assertEqual(self.shape.v_point1, Vec(80, 80))
+        self.assertEqual(self.shape.v_point3, Vec(230, 230))
+        self.assertGreaterEqual(self.area_changed.call_count, 2)
+        self.area_changed.reset_mock()
+
+        self._send_mouse_event(wx.wxEVT_LEFT_DOWN, Vec(80, 80))
+        self._send_mouse_event(wx.wxEVT_MOTION, Vec(60, 60))
+        self._send_mouse_event(wx.wxEVT_LEFT_UP, Vec(20, 20))
+
+        self.assertEqual(self.canvas.drag_shift, (0, 0))
+        self.assertEqual(self.shape.v_point1, Vec(60, 60))
+        self.assertEqual(self.shape.v_point2, Vec(230, 60))
+        self.assertEqual(self.shape.v_point4, Vec(60, 230))
+        self.assertTrue(self.shape.selected.value)
+        self.assertGreaterEqual(self.area_changed.call_count, 2)
+        self.assertTrue(self.area_changed.call_args.kwargs["commit"])
+
+
+class MillingAlignmentConstraintTestCase(unittest.TestCase):
+    """Check alignment resizing constraints without microscope hardware."""
+
+    def _create_controller(
+            self, area: Tuple[float, float, float, float]) -> Tuple[MillingTaskController, SimpleNamespace]:
+        """Create a controller whose stream uses physical pixels as coordinates."""
+        reference_image = SimpleNamespace(shape=(1000, 1000))
+        feature = SimpleNamespace(
+            reference_image=reference_image,
+            millingAlignmentArea=model.TupleVA(area),
+        )
+        stream = SimpleNamespace(raw=[reference_image])
+        stream.getPixelCoordinates = Mock(
+            side_effect=lambda point, check_bbox=False: point)
+        stream.getPhysicalCoordinates = Mock(side_effect=lambda point: point)
+
+        controller = MillingTaskController.__new__(MillingTaskController)
+        controller._tab_data = SimpleNamespace(
+            main=SimpleNamespace(
+                currentFeature=SimpleNamespace(value=feature)))
+        controller._get_reference_stream = Mock(return_value=stream)
+        controller.canvas = Mock()
+        controller._update_milling_validation_message = Mock()
+        controller._update_mill_btn = Mock()
+        return controller, feature
+
+    def _create_resize_shape(self, corner_index: int, dragged_point: Vec) -> Mock:
+        """Create a shape mock with one corner at the requested pixel position."""
+        corners = [
+            Vec(300, 300),
+            Vec(500, 300),
+            Vec(500, 500),
+            Vec(300, 500),
+        ]
+        corners[corner_index - 1] = dragged_point
+        shape = Mock()
+        shape.interaction_mode = SEL_MODE_EDIT
+        shape.edit_v_point_idx = corner_index
+        shape.get_physical_sel.return_value = corners
+        shape.points = SimpleNamespace(value=None)
+        return shape
+
+    def test_resizing_keeps_opposite_corner_fixed(self) -> None:
+        """Anchor the diagonal corner for every resize direction."""
+        cases = (
+            (1, Vec(200, 250), (0.2, 0.25, 0.5, 0.45)),
+            (2, Vec(800, 250), (0.3, 0.25, 0.5, 0.45)),
+            (3, Vec(750, 800), (0.3, 0.3, 0.45, 0.5)),
+            (4, Vec(200, 800), (0.2, 0.3, 0.5, 0.5)),
+        )
+        for corner_index, dragged_point, expected in cases:
+            with self.subTest(corner_index=corner_index):
+                controller, feature = self._create_controller((0.3, 0.3, 0.4, 0.4))
+                shape = self._create_resize_shape(corner_index, dragged_point)
+
+                controller._update_alignment_area_from_shape(shape, commit=False)
+
+                for actual_value, expected_value in zip(
+                        feature.millingAlignmentArea.value, expected):
+                    self.assertAlmostEqual(actual_value, expected_value)
+
+    def test_resizing_stays_steady_at_minimum_size(self) -> None:
+        """Keep the fixed corner still when the pointer requests a smaller area."""
+        controller, feature = self._create_controller((0.1, 0.1, 0.4, 0.4))
+        shape = self._create_resize_shape(3, Vec(200, 200))
+
+        controller._update_alignment_area_from_shape(shape, commit=False)
+        first_area = feature.millingAlignmentArea.value
+        shape.get_physical_sel.return_value[2] = Vec(250, 250)
+        controller._update_alignment_area_from_shape(shape, commit=False)
+
+        for actual_value, expected_value in zip(
+                feature.millingAlignmentArea.value, first_area):
+            self.assertAlmostEqual(actual_value, expected_value)
+        minimum_side = MIN_MILLING_ALIGNMENT_AREA_PIXELS ** 0.5 / 1000
+        for actual_value, expected_value in zip(
+                first_area, (0.1, 0.1, minimum_side, minimum_side)):
+            self.assertAlmostEqual(actual_value, expected_value)
+
+    def test_small_legacy_reference_does_not_draw_alignment_area(self) -> None:
+        """Leave an invalid legacy reference visible without drawing its area."""
+        reference_image = SimpleNamespace(shape=(200, 300))
+        feature = SimpleNamespace(
+            reference_image=reference_image,
+            millingAlignmentArea=model.TupleVA((0.1, 0.1, 0.5, 0.5)),
+        )
+        stream = SimpleNamespace(raw=[reference_image])
+        controller = MillingTaskController.__new__(MillingTaskController)
+        controller._tab_data = SimpleNamespace(
+            main=SimpleNamespace(currentFeature=SimpleNamespace(value=feature)))
+        controller._get_reference_stream = Mock(return_value=stream)
+        controller.alignment_area_overlay = Mock()
+        controller.canvas = Mock()
+
+        MillingTaskController.draw_alignment_area.__wrapped__(controller)
+
+        controller.alignment_area_overlay.clear.assert_called_once_with()
+        controller.alignment_area_overlay.add_shape.assert_not_called()
+        controller.canvas.request_drawing_update.assert_called_once_with()
+
+
+class MillingValidationTestCase(unittest.TestCase):
+    """Check milling constraints without a microscope."""
+
+    def setUp(self) -> None:
+        """Create milling tasks and one checked feature."""
         self.tasks = load_milling_tasks(DEFAULT_MILLING_TASKS_PATH)
         self.task = self.tasks["Ruler"]
         self.task.selected = True
         self.ruler = self.task.patterns[0]
+        reference_image = SimpleNamespace(
+            shape=(1000, 1000),
+            metadata={model.MD_PIXEL_SIZE: (1e-6, 1e-6)},
+        )
         feature = SimpleNamespace(
-            name=model.StringVA("Feature 1"), milling_tasks=self.tasks)
+            name=model.StringVA("Feature 1"),
+            milling_tasks=self.tasks,
+            millingAlignmentArea=model.TupleVA((0.45, 0.45, 0.1, 0.1)),
+            reference_image=reference_image,
+        )
+        self.feature = feature
         self.controller = MillingTaskController.__new__(MillingTaskController)
         self.controller._tab_data = SimpleNamespace(
             main=SimpleNamespace(features=model.ListVA([feature])))
@@ -515,7 +1824,97 @@ class MillingSpotSizeValidationTestCase(unittest.TestCase):
         self.feature_list.GetCount.return_value = 1
         self.feature_list.IsChecked.return_value = True
         self.controller._panel = SimpleNamespace(
-            workflow_features_chk_list=self.feature_list)
+            workflow_features_chk_list=self.feature_list,
+            txt_automated_milling_status=Mock(),
+        )
+
+    def test_alignment_area_overlap_disables_milling_and_shows_warning(self) -> None:
+        """Reject milling when a selected pattern intersects the alignment area."""
+        for task in self.tasks.values():
+            task.selected = False
+        task = self.tasks["Rough Milling 01"]
+        task.selected = True
+        task.patterns[0].center.value = (0, 0)
+
+        self.assertEqual(
+            self.controller._get_alignment_area_overlap(),
+            ("Feature 1", "Rough Milling 01"),
+        )
+        self.controller._update_milling_validation_message()
+        self.controller._panel.txt_automated_milling_status.SetLabel.assert_called_once_with(
+            "Alignment area overlaps a pattern for Feature 1.")
+
+        self.controller.selected_tasks = SimpleNamespace(value=["Rough Milling 01"])
+        self.controller.valid_patterns = SimpleNamespace(value=True)
+        self.controller._tab_data.main.is_acquiring = SimpleNamespace(value=False)
+        self.controller._panel.btn_run_milling = Mock()
+        self.controller._panel.btn_run_automated_milling = Mock()
+        self.controller._panel.txt_milling_est_time = Mock()
+        self.controller._panel.txt_automated_milling_est_time = Mock()
+        self.controller._update_milling_time = Mock()
+        MillingTaskController._update_mill_btn.__wrapped__(self.controller)
+
+        self.controller._panel.btn_run_milling.Enable.assert_called_once_with(False)
+        self.controller._panel.btn_run_automated_milling.Enable.assert_called_once_with(False)
+
+    def test_moving_pattern_into_alignment_area_refreshes_validation(self) -> None:
+        """Refresh the warning and mill button after manual pattern movement."""
+        for task in self.tasks.values():
+            task.selected = False
+        task = self.tasks["Rough Milling 01"]
+        task.selected = True
+        pattern = task.patterns[0]
+        pattern.center.value = (200e-6, 200e-6)
+        self.controller.draw_milling_tasks = Mock()
+        self.controller._update_mill_btn = Mock()
+        self.controller._panel.txt_automated_milling_status.reset_mock()
+
+        with patch("odemis.gui.cont.milling.save_project"):
+            self.controller._move_patterns([pattern], (0, 0))
+
+        self.assertEqual(pattern.center.value, (0, 0))
+        self.controller.draw_milling_tasks.assert_called_once_with()
+        self.controller._panel.txt_automated_milling_status.SetLabel.assert_called_once_with(
+            "Alignment area overlaps a pattern for Feature 1.")
+        self.controller._update_mill_btn.assert_called_once_with()
+
+    def test_alignment_area_without_pattern_overlap_is_valid(self) -> None:
+        """Accept a separated alignment area and milling pattern."""
+        for task in self.tasks.values():
+            task.selected = False
+        task = self.tasks["Rough Milling 01"]
+        task.selected = True
+        task.patterns[0].center.value = (0, 0)
+        self.feature.millingAlignmentArea.value = (0.8, 0.8, 0.1, 0.1)
+
+        self.assertIsNone(self.controller._get_alignment_area_overlap())
+        self.controller._update_milling_validation_message()
+        self.controller._panel.txt_automated_milling_status.SetLabel.assert_called_once_with("")
+
+    def test_small_legacy_reference_disables_milling_and_shows_warning(self) -> None:
+        """Require reacquisition without preventing the project from loading."""
+        self.feature.reference_image.shape = (200, 300)
+
+        self.assertEqual(
+            self.controller._get_invalid_alignment_reference(),
+            "Feature 1",
+        )
+        self.controller._update_milling_validation_message()
+        self.controller._panel.txt_automated_milling_status.SetLabel.assert_called_once_with(
+            "Acquire a higher-resolution reference image for Feature 1.")
+
+        self.controller.selected_tasks = SimpleNamespace(value=["Ruler"])
+        self.controller.valid_patterns = SimpleNamespace(value=True)
+        self.controller._tab_data.main.is_acquiring = SimpleNamespace(value=False)
+        self.controller._panel.btn_run_milling = Mock()
+        self.controller._panel.btn_run_automated_milling = Mock()
+        self.controller._panel.txt_milling_est_time = Mock()
+        self.controller._panel.txt_automated_milling_est_time = Mock()
+        self.controller._update_milling_time = Mock()
+        MillingTaskController._update_mill_btn.__wrapped__(self.controller)
+
+        self.controller._panel.btn_run_milling.Enable.assert_called_once_with(False)
+        self.controller._panel.btn_run_automated_milling.Enable.assert_called_once_with(False)
 
     def test_valid_correction_is_accepted(self) -> None:
         """Accept a correction smaller than every graduation dimension."""
@@ -588,6 +1987,60 @@ class MillingSpotSizeValidationTestCase(unittest.TestCase):
         )
         self.feature_list.IsChecked.return_value = False
         self.assertIsNone(self.controller._get_invalid_spot_size_correction())
+
+
+class MillingReferenceStreamTestCase(unittest.TestCase):
+    """Resolve the saved-image stream even during controller initialization."""
+
+    def setUp(self) -> None:
+        """Create a milling controller with mocked acquired-image state."""
+        self.reference_image = object()
+        self.feature = SimpleNamespace(reference_image=self.reference_image)
+        self.controller = MillingTaskController.__new__(MillingTaskController)
+        self.controller.acq_cont = SimpleNamespace(stream=None)
+
+    def test_uses_displayed_stream_before_acquired_controller_is_ready(self) -> None:
+        """Find the reference image directly in the viewport during startup."""
+        displayed_stream = SimpleNamespace(raw=[self.reference_image])
+        self.controller.viewport = SimpleNamespace(
+            view=SimpleNamespace(getStreams=Mock(return_value=[displayed_stream])))
+
+        self.assertIs(
+            self.controller._get_reference_stream(self.feature),
+            displayed_stream,
+        )
+
+    def test_ignores_stale_acquired_stream(self) -> None:
+        """Prefer the displayed stream belonging to the newly selected feature."""
+        stale_stream = SimpleNamespace(raw=[object()])
+        displayed_stream = SimpleNamespace(raw=[self.reference_image])
+        self.controller.acq_cont.stream = stale_stream
+        self.controller.viewport = SimpleNamespace(
+            view=SimpleNamespace(
+                getStreams=Mock(return_value=[stale_stream, displayed_stream])))
+
+        self.assertIs(
+            self.controller._get_reference_stream(self.feature),
+            displayed_stream,
+        )
+
+    def test_ignores_single_stale_displayed_stream(self) -> None:
+        """Do not project alignment geometry through the previous feature's image."""
+        stale_stream = SimpleNamespace(raw=[object()])
+        self.controller.acq_cont.stream = stale_stream
+        self.controller.viewport = SimpleNamespace(
+            view=SimpleNamespace(getStreams=Mock(return_value=[stale_stream])))
+
+        self.assertIsNone(
+            self.controller._get_reference_stream(self.feature))
+
+    def test_stream_change_redraws_alignment_area(self) -> None:
+        """Rebuild alignment geometry when the matching stream is displayed."""
+        self.controller.draw_alignment_area = Mock()
+
+        self.controller._redraw_alignment_area([Mock()])
+
+        self.controller.draw_alignment_area.assert_called_once_with()
 
 
 if __name__ == "__main__":

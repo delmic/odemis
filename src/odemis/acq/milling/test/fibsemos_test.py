@@ -244,7 +244,8 @@ class TestConvertTaskToMillingStage(unittest.TestCase):
             patterns=[pattern_param],
         )
 
-        stage = convert_task_to_milling_stage(dummy_task)
+        alignment_area = (0.1, 0.2, 0.3, 0.25)
+        stage = convert_task_to_milling_stage(dummy_task, alignment_area=alignment_area)
         # Check that stage has been constructed correctly.
         self.assertEqual(stage.name, dummy_task.name)
         # Check milling settings conversion
@@ -259,6 +260,11 @@ class TestConvertTaskToMillingStage(unittest.TestCase):
         # Check alignment conversion; alignment.enabled should reflect dummy_milling.align.value.
         self.assertIsInstance(stage.alignment, MillingAlignment)
         self.assertEqual(stage.alignment.enabled, dummy_milling.align.value)
+        self.assertEqual(stage.alignment.rect.left, alignment_area[0])
+        self.assertEqual(stage.alignment.rect.top, alignment_area[1])
+        self.assertEqual(stage.alignment.rect.width, alignment_area[2])
+        self.assertEqual(stage.alignment.rect.height, alignment_area[3])
+
 
 class TestConvertMillingTasksToMillingStages(unittest.TestCase):
     @classmethod
@@ -301,7 +307,8 @@ class TestConvertMillingTasksToMillingStages(unittest.TestCase):
             patterns=[pattern_param2],
         )
         tasks = [task1, task2]
-        stages = convert_milling_tasks_to_milling_stages(tasks)
+        alignment_area = (0.2, 0.15, 0.4, 0.3)
+        stages = convert_milling_tasks_to_milling_stages(tasks, alignment_area=alignment_area)
         self.assertEqual(len(stages), 2)
         # Check names and basic settings of each stage
         self.assertEqual(stages[0].name, task1.name)
@@ -309,6 +316,11 @@ class TestConvertMillingTasksToMillingStages(unittest.TestCase):
         # Check that each stage has a valid pattern conversion
         self.assertIsInstance(stages[0].pattern, BasePattern)
         self.assertIsInstance(stages[1].pattern, BasePattern)
+        for stage in stages:
+            self.assertEqual(stage.alignment.rect.left, alignment_area[0])
+            self.assertEqual(stage.alignment.rect.top, alignment_area[1])
+            self.assertEqual(stage.alignment.rect.width, alignment_area[2])
+            self.assertEqual(stage.alignment.rect.height, alignment_area[3])
 
     def assert_composite_pattern_uses_one_stage(
             self, pattern: CompositeRectanglePatternParameters) -> 'FibsemMillingStage':
@@ -473,6 +485,7 @@ class TestResolveFeatureReferenceImage(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             _get_reference_image(feature)
+
 
 if __name__ == "__main__":
     unittest.main()

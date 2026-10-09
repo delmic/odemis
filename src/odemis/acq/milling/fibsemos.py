@@ -27,9 +27,15 @@ import threading
 import time
 from concurrent import futures
 from concurrent.futures._base import CANCELLED, FINISHED, RUNNING, CancelledError
-from typing import List, Optional, Union
+from typing import List, Optional, Tuple, Union
 
 from odemis import model
+from odemis.acq.feature import (
+    CryoFeature,
+    DEFAULT_MILLING_ALIGNMENT_AREA,
+    REFERENCE_IMAGE_FILENAME,
+    constrain_milling_alignment_area,
+)
 from odemis.acq.milling.patterns import (
     CompositeRectanglePatternParameters,
     CorrelationPatternParameters,
@@ -42,7 +48,6 @@ from odemis.acq.milling.tasks import (
     MillingSettings,
     MillingTaskSettings,
 )
-from odemis.acq.feature import CryoFeature, REFERENCE_IMAGE_FILENAME
 from odemis.util import executeAsyncTask
 
 # Check if fibsemOS is available
@@ -333,6 +338,7 @@ def _format_preset(voltage: float, current: float) -> str:
     current_str = f"{current_val:g} {unit}"
     return f"{voltage_str}; {current_str}"
 
+
 def convert_milling_settings(s: MillingSettings) -> 'FibsemMillingSettings':
     """Convert Odemis milling settings to fibsemOS milling settings.
 
@@ -350,12 +356,24 @@ def convert_milling_settings(s: MillingSettings) -> 'FibsemMillingSettings':
         preset=_format_preset(s.voltage.value, s.current.value)
     )
 
+
 # task converter
-def convert_task_to_milling_stage(task: MillingTaskSettings) -> 'FibsemMillingStage':
+def convert_task_to_milling_stage(
+        task: MillingTaskSettings,
+        alignment_area: Tuple[float, float, float, float] = DEFAULT_MILLING_ALIGNMENT_AREA) -> 'FibsemMillingStage':
     """Convert a single Odemis milling task to a fibsemOS milling stage."""
     s = convert_milling_settings(task.milling)
     p = convert_pattern_to_fibsemos(task.patterns[0])
-    a = MillingAlignment(enabled=task.milling.align.value)
+    left, top, width, height = alignment_area
+    a = MillingAlignment(
+        enabled=task.milling.align.value,
+        rect=FibsemRectangle(
+            left=left,
+            top=top,
+            width=width,
+            height=height,
+        ),
+    )
 
     milling_stage = FibsemMillingStage(
         name=task.name,
@@ -366,14 +384,14 @@ def convert_task_to_milling_stage(task: MillingTaskSettings) -> 'FibsemMillingSt
     return milling_stage
 
 def _convert_composite_pattern_to_milling_stage(
-        task: MillingTaskSettings,
-        pattern: CompositeRectanglePatternParameters,
-        name: str) -> 'FibsemMillingStage':
+        task: MillingTaskSettings, pattern: CompositeRectanglePatternParameters, name: str,
+        alignment_area: Tuple[float, float, float, float]) -> 'FibsemMillingStage':
     """Convert a composite rectangle pattern into one fibsemOS milling stage.
 
     :param task: Task supplying the shared milling and alignment settings.
     :param pattern: Composite pattern whose generated rectangles belong to the stage.
     :param name: Milling stage name.
+    :param alignment_area: Normalized reference-image area used for alignment.
     :return: One stage that draws and mills every generated rectangle together.
     """
     rectangles = [_convert_rectangle_pattern(rectangle)
@@ -394,15 +412,22 @@ def _convert_composite_pattern_to_milling_stage(
             )
         if minimum_fov >= milling.hfw:
             milling.hfw = maximum_fov
+    left, top, width, height = alignment_area
+    alignment = MillingAlignment(
+        enabled=task.milling.align.value,
+        rect=FibsemRectangle(left=left, top=top, width=width, height=height),
+    )
     return FibsemMillingStage(
         name=name,
         milling=milling,
         pattern=_RectanglePatternGroup(rectangles),
         patterns=rectangles,
-        alignment=MillingAlignment(enabled=task.milling.align.value),
+        alignment=alignment,
     )
 
-def convert_milling_tasks_to_milling_stages(milling_tasks: List[MillingTaskSettings]) -> List['FibsemMillingStage']:
+def convert_milling_tasks_to_milling_stages(
+        milling_tasks: List[MillingTaskSettings],
+        alignment_area: Tuple[float, float, float, float] = DEFAULT_MILLING_ALIGNMENT_AREA) -> List['FibsemMillingStage']:
     """Convert tasks to fibsemOS milling stages.
 
     Each composite rectangle pattern shares one stage and milling run.
@@ -416,13 +441,16 @@ def convert_milling_tasks_to_milling_stages(milling_tasks: List[MillingTaskSetti
             name = task.name if len(task.patterns) == 1 else f"{task.name}: {pattern.name.value}"
             if isinstance(pattern, CompositeRectanglePatternParameters):
                 milling_stages.append(
-                    _convert_composite_pattern_to_milling_stage(task, pattern, name))
+                    _convert_composite_pattern_to_milling_stage(
+                        task, pattern, name, alignment_area))
             else:
                 stage_task = MillingTaskSettings(
                     milling=task.milling, patterns=[pattern], name=name)
-                milling_stages.append(convert_task_to_milling_stage(stage_task))
+                milling_stages.append(convert_task_to_milling_stage(
+                    stage_task, alignment_area=alignment_area))
 
     return milling_stages
+
 
 class FibsemOSMillingTaskManager:
     """Manage running milling tasks via fibsemOS using a persistent microscope connection."""
@@ -501,7 +529,10 @@ class FibsemOSMillingTaskManager:
         if path is None:
             path = os.getcwd()
 
-        milling_stages = convert_milling_tasks_to_milling_stages(tasks)
+        reference_image = _get_reference_image(feature)
+        alignment_area = constrain_milling_alignment_area(feature.millingAlignmentArea.value, reference_image.shape)
+        feature.millingAlignmentArea.value = alignment_area
+        milling_stages = convert_milling_tasks_to_milling_stages(tasks, alignment_area=alignment_area)
         estimated_dur = estimate_total_milling_time(milling_stages) + 30
 
         with self._lock:

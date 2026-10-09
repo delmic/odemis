@@ -177,6 +177,7 @@ def serialize_project_data(main_data: "CryoMainGUIData") -> Dict:
             'fm_focus_position': feature.fm_focus_position.value,
             'posture_positions': feature.posture_positions,
             "milling_tasks": {k: v.to_dict() for k, v in feature.milling_tasks.items()},
+            'milling_alignment_area': feature.millingAlignmentArea.value,
             'correlation_data': feature.correlation_data.to_dict() if feature.correlation_data  else {},
             'superz_stream_name': feature.superz_stream_name,
             'superz_focused': feature.superz_focused,

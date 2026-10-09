@@ -40,10 +40,12 @@ from odemis.acq.feature import (
     FEATURE_ROUGH_MILLED,
     CryoFeature,
     collect_feature_data,
-    get_feature_position_at_posture,
     FIBFMCorrelationData,
+    MillingAlignmentAreaTooSmallError,
     Target,
-    TargetType
+    TargetType,
+    constrain_milling_alignment_area,
+    get_feature_position_at_posture,
 )
 from odemis.acq.move import Posture, FM_POSTURES
 from odemis.gui import model as guimod
@@ -56,6 +58,10 @@ from odemis.gui.util.widgets import VigilantAttributeConnector
 
 SUPPORTED_POSTURES = [Posture.SEM_IMAGING, Posture.FM_IMAGING, Posture.MILLING, Posture.FIB_IMAGING,
                       Posture.FIB_VIEW_FM, Posture.TRENCHING]
+MILLING_REFERENCE_TOO_SMALL_MESSAGE = (
+    "The reference image resolution is too low for milling alignment. "
+    "Try acquiring a higher-resolution reference image."
+)
 
 
 # Maximum distance (in metres) within which another feature is considered "nearby"
@@ -242,7 +248,15 @@ class CryoFeatureController(object):
         # -> disable if no selected tasks
         # -> disable if invalid tasks
 
-        stream = self._tab.fib_stream # the fib stream
+        stream = self._tab.fib_stream  # the fib stream
+
+        # Validate the resolution that the stream will use before starting a
+        # potentially slow FIB acquisition. ScannerStream applies these same
+        # ROI settings when the acquisition starts.
+        resolution, _ = stream._computeROISettings(stream.roi.value)
+        image_shape = (resolution[1], resolution[0])
+        if not self._validate_milling_reference_shape(feature, image_shape):
+            return
 
         # Preserve the physical feature position before the milling posture is
         # updated to the current stage position (the center of the reference
@@ -281,12 +295,8 @@ class CryoFeatureController(object):
             logging.warning(f"No FIB image available to save for {feature.name.value}")
             return
 
-        # save the milling data (tasks, reference image)
-        feature.save_milling_task_data(
-                                stage_position=self.pm.stage.position.value,
-                                # milling_tasks=milling_tasks,
-                                path=os.path.join(self._tab.conf.pj_last_path, feature.name.value),
-                                reference_image=stream.raw[0])
+        if not self._save_milling_reference(feature, stream.raw[0]):
+            return
 
         # Store the feature within the newly acquired image. Position the
         # milling patterns around it only when its offset is initialized. The
@@ -316,6 +326,42 @@ class CryoFeatureController(object):
         # refresh current feature to update reference image and milling tasks
         self._tab_data_model.main.currentFeature.value = None
         self._tab_data_model.main.currentFeature.value = feature
+
+    def _save_milling_reference(self, feature: CryoFeature, reference_image: model.DataArray) -> bool:
+        """Save a reference image or show its alignment-area validation warning."""
+        try:
+            feature.save_milling_task_data(
+                stage_position=self.pm.stage.position.value,
+                path=os.path.join(self._tab.conf.pj_last_path, feature.name.value),
+                reference_image=reference_image,
+            )
+        except MillingAlignmentAreaTooSmallError as exc:
+            self._show_milling_reference_warning(feature, exc)
+            return False
+        return True
+
+    def _validate_milling_reference_shape(self, feature: CryoFeature, image_shape: tuple) -> bool:
+        """Check that an image can contain a valid milling alignment area."""
+        try:
+            constrain_milling_alignment_area(feature.millingAlignmentArea.value, image_shape)
+        except MillingAlignmentAreaTooSmallError as exc:
+            self._show_milling_reference_warning(feature, exc)
+            return False
+        return True
+
+    def _show_milling_reference_warning(
+            self, feature: CryoFeature, error: MillingAlignmentAreaTooSmallError) -> None:
+        """Log and display an alignment-area validation warning."""
+        message = str(error)
+        logging.warning("Cannot save FIB reference image for %s: %s", feature.name.value, message)
+        box = wx.MessageDialog(
+            self._tab.main_frame,
+            message=MILLING_REFERENCE_TOO_SMALL_MESSAGE,
+            caption="Unable to Save Reference Image",
+            style=wx.OK | wx.ICON_WARNING | wx.CENTER,
+        )
+        box.SetOKLabel("OK")
+        box.ShowModal()
 
     def _display_go_to_feature_warning(self) -> bool:
         box = wx.MessageDialog(self._tab.main_frame,
