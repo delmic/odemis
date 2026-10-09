@@ -80,13 +80,18 @@ try:
 except ImportError as e:
     logging.warning(f"fibsemOS is not installed or not available: {e}")
     FIBSEMOS_INSTALLED = False
+    # Hack to let _RectanglePatternGroup load without fibsemOS.
+    RectanglePattern = object
 
 _persistent_millmng: Optional["FibsemOSMillingTaskManager"] = None
 _MILLING_FOV_MARGIN = 0.01
 
 
 class _RectanglePatternGroup(RectanglePattern):
-    """Expose several fibsemOS rectangles as one executable pattern."""
+    """Expose several fibsemOS rectangles as one executable pattern.
+
+    Instantiation requires fibsemOS; the object fallback only allows module loading.
+    """
 
     def __init__(self, rectangles: List['RectanglePattern']) -> None:
         """Initialize the group from ordinary rectangle patterns.
