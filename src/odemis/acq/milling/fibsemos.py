@@ -80,6 +80,7 @@ try:
 except ImportError as e:
     logging.warning(f"fibsemOS is not installed or not available: {e}")
     FIBSEMOS_INSTALLED = False
+    RectanglePattern = object
 
 _persistent_millmng: Optional["FibsemOSMillingTaskManager"] = None
 _MILLING_FOV_MARGIN = 0.01
