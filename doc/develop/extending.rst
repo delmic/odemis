@@ -637,7 +637,8 @@ make sure the images are optimised, with the following script::
 
     ./util/groom-img.py
 
-If you modify the application main icons in ``image/icon_gui*.png``, you need to call::
+To modify the main application icons, update the source images in ``image/icon_gui*.png``,
+then generate all required icon sizes and formats by running the icon generation script::
 
     ./util/generate_icons.sh
 
