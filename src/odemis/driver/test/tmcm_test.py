@@ -265,6 +265,42 @@ class TestActuator(unittest.TestCase):
         time.sleep(0.1) # wait for the move to finish
         self.assertAlmostEqual(move["x"], self.dev.position.value["x"])
 
+    def test_move_rel_outside_range(self):
+        """
+        When the axis is already outside of the range, moves going closer to the
+        range must be accepted, while moves going further away must be refused.
+        """
+        axis = self.dev.axes["y"]
+        orig_rng = axis.range
+        orig_ref = self.dev.referenced.value
+        cur = self.dev.position.value["y"]
+        try:
+            # Temporarily restrict the range to a tiny segment, just below the
+            # current position, and pretend the axis is referenced (so the
+            # range is enforced as-is).
+            axis.range = (cur - 150e-6, cur - 50e-6)
+            self.dev.referenced._set_value({"y": True}, force_write=True)
+
+            # Going further away is refused
+            with self.assertRaises(ValueError):
+                self.dev.moveRel({"y": 20e-6}).result()
+
+            # Going closer to the range (while still outside) is accepted
+            self.dev.moveRel({"y": -20e-6}).result()
+            self.assertAlmostEqual(cur - 20e-6, self.dev.position.value["y"], places=6)
+            self.assertGreater(self.dev.position.value["y"], axis.range[1])
+
+            # And back inside the range
+            self.dev.moveRel({"y": -40e-6}).result()
+            self.assertLessEqual(self.dev.position.value["y"], axis.range[1])
+
+            # Once inside, going outside is refused
+            with self.assertRaises(ValueError):
+                self.dev.moveRel({"y": 100e-6}).result()
+        finally:
+            axis.range = orig_rng
+            self.dev.referenced._set_value(orig_ref, force_write=True)
+
     def test_sync(self):
         # For moves big enough, sync should always take more time than async
         delta = 0.0001 # s
