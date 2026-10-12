@@ -47,7 +47,7 @@ KWARGS = dict(name="spectrometer", role="spectrometer",
 # For testing the Shamrock with direct connection to the PC
 CLASS_SHRK = andorshrk.Shamrock
 KWARGS_SHRK = dict(name="sr193", role="spectrograph", device=0)
-KWARGS_SHRK_SIM = dict(name="sr193", role="spectrograph", device="fake",
+KWARGS_SHRK_SIM = dict(name="sr193", role="spectrograph", device="fake328",
                        slits={1: ["slit-in", "force_max"], 3: "slit-monochromator"},
                        iris={0: "iris-in"},
                        bands={1: (230e-9, 500e-9), 3: (600e-9, 1253e-9), 5: "pass-through"},

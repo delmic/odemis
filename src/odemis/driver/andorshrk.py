@@ -342,7 +342,7 @@ class Shamrock(model.Actuator):
                  **kwargs):
         """
         :param device (0<=int or str): if int, device number, if str serial number or
-        "fake" to use the simulator
+        "fake" to use the simulator of a KY193, or "fake328" to use the simulator of a KY328
         :param camera (None or AndorCam2): Needed if the connection is done via the
         I²C connector of the camera.
         :param accessory: if "slitleds", then a TTL signal will be set to
@@ -390,8 +390,9 @@ class Shamrock(model.Actuator):
         self._is_dll_shared = (_dll is not None)
         if _dll is not None:
             self._dll = _dll
-        elif device == "fake":
-            self._dll = FakeShamrockDLL(camera)
+        elif device in ("fake", "fake328"):
+            model_name = MODEL_KY328 if device == "fake328" else MODEL_KY193
+            self._dll = FakeShamrockDLL(camera, model=model_name)
             device = 0
         else:
             self._dll = ShamrockDLL()
@@ -2312,7 +2313,7 @@ class ShamrockBus(model.HwComponent):
         :param role: role of the component (typically not useful)
         :param children: abritrary role -> arguments for Shamrock. The arguments must contain a "device"
         argument with the serial number of the spectrograph (not just a number). "fake" is also possible,
-        in which case a simulator is used.
+        in which case a simulator of a KY193 is used. "fake328" simulates a KY328.
         """
         super().__init__(name, role, daemon=daemon, **kwargs)
 
@@ -2329,13 +2330,14 @@ class ShamrockBus(model.HwComponent):
             if not isinstance(device, str):
                 raise ValueError(f"The 'device' argument should be a string, but got \"{device}\"")
 
-            if device == "fake":
+            if device in ("fake", "fake328"):
+                ckwargs["device"] = device
                 simulated.append(ckwargs)
             else:
                 shamrocks[device] = ckwargs
 
         for ckwargs in simulated:
-            dev = Shamrock(device="fake", daemon=daemon, **ckwargs)
+            dev = Shamrock(daemon=daemon, **ckwargs)
             self.children.value.add(dev)
 
         self._dll = None
@@ -2450,16 +2452,28 @@ class FakeShamrockDLL(object):
     Fake ShamrockDLL. It basically simulates a spectrograph connected.
     """
 
-    def __init__(self, ccd=None):
+    def __init__(self, ccd: Optional[andorcam2.AndorCam2] = None, model: str = MODEL_KY193) -> None:
+        """
+        :param ccd: if a camera is given, used to simulate a connection via the camera (I²C connection).
+        In such case the spectrograph can't be accessed while the camera is acquiring.
+        :param model: MODEL_KY193 (2 gratings, 1 input port, no iris), or MODEL_KY328 (4 gratings,
+        2 input ports, and 2 irises)
+        """
+        if model not in (MODEL_KY193, MODEL_KY328):
+            raise ValueError(f"Unsupported simulated model {model}")
+        self._model = model
         # gratings: l/mm, blaze, home, offset, min wl, max wl
         self._gratings = [(299.9, b"300.0", 1000, -200, 0.0, 5003.6),
-                          # (601.02, "500.0", 10000, 26, 0.0, 1578.95),
                           (0.0, b"Mirror", 10000, 26, 0.0, 0.0),
-                          (1200.1, b"500.0", 30000, -65, 0.0, 808.65)]
+                          ]
+        if model == MODEL_KY328:
+            self._gratings += [(1200.1, b"500.0", 30000, -65, 0.0, 808.65),
+                               (601.02, b"500.0", 10000, 26, 0.0, 1578.95),
+                               ]
 
         self._ct = 1
         self._cw = 300.2 # current wavelength (nm)
-        self._cg = 1 # current grating (1->3)
+        self._cg = 1 # current grating (1->number of gratings)
         self._pw = 0 # pixel width
         self._np = 0 # number of pixels
 
@@ -2467,7 +2481,7 @@ class FakeShamrockDLL(object):
         self._focus_pos = 25  # steps
         self._focus_max = 500  # steps
         # Focus is stored for each grating + an offset for each port
-        self._gr2focus = [25, 25, 25]
+        self._gr2focus = [25] * len(self._gratings)
         self._outflip_foff = [0, 0]
 
         # filter wheel
@@ -2486,13 +2500,19 @@ class FakeShamrockDLL(object):
                        3: 1000,
                       }
         # flippers: int (id) -> int (port number, 0 or 1)
-        self._flippers = {INPUT_FLIPPER: DIRECT_PORT, OUTPUT_FLIPPER: DIRECT_PORT}
+        # The KY193 has only one input port, so no input flipper.
+        self._flippers = {OUTPUT_FLIPPER: DIRECT_PORT}
+        if model == MODEL_KY328:
+            self._flippers[INPUT_FLIPPER] = DIRECT_PORT
 
         # accessory: 2 lines -> int (0 or 1)
         self._accessory = [0, 0]
 
-        # iris: 2 iris (DIRECT_PORT, SIDE_PORT) -> int (0->100)
-        self._iris = {DIRECT_PORT: 10, SIDE_PORT: 50}
+        # iris: DIRECT_PORT/SIDE_PORT -> int (0->100). Only on the KY328.
+        if model == MODEL_KY328:
+            self._iris = {DIRECT_PORT: 10, SIDE_PORT: 50}
+        else:
+            self._iris = {}
 
         # just for simulating the limitation of the iDus
         self._ccd = ccd
@@ -2536,19 +2556,26 @@ class FakeShamrockDLL(object):
         nodevices.value = 1
 
     def ShamrockGetSerialNumber(self, device, serial):
-        serial.value = b"SR193fake"
+        if self._model == MODEL_KY328:
+            serial.value = b"KY328fake"
+        else:
+            serial.value = b"SR193fake"
 
     def ATSpectrographGetFirmwareVersion(self, device, version):
         version.value = b"V1.23.4"
 
     def ATSpectrographGetSystemModel(self, device, modl):
-        modl.value = b"FAKE-193"
+        if self._model == MODEL_KY328:
+            modl.value = b"FAKE-328"
+        else:
+            modl.value = b"FAKE-193"
 
     def ShamrockEepromGetOpticalParams(self, device, p_fl, p_ad, p_ft):
         fl = _deref(p_fl, c_float)
         ad = _deref(p_ad, c_float)
         ft = _deref(p_ft, c_float)
-        fl.value = 0.194  # m
+        # Note: the Shamrock driver detects the model from the focal length
+        fl.value = 0.328 if self._model == MODEL_KY328 else 0.194  # m
         ad.value = 2.3 # °
         ft.value = -2.1695098876953125  # °
 
@@ -2758,6 +2785,8 @@ class FakeShamrockDLL(object):
     def ShamrockSetFlipperMirror(self, device, flipper, port):
         p = _val(port)
         f = _val(flipper)
+        if f not in self._flippers:
+            raise ShamrockError(20267, ShamrockDLL.err_code[20267])
         if PORTMIN <= p <= PORTMAX:
             oldport = self._flippers[f]
             time.sleep(abs(oldport - p))
@@ -2768,7 +2797,10 @@ class FakeShamrockDLL(object):
 
     def ShamrockGetFlipperMirror(self, device, flipper, p_port):
         port = _deref(p_port, c_int)
-        port.value = self._flippers[_val(flipper)]
+        f = _val(flipper)
+        if f not in self._flippers:
+            raise ShamrockError(20267, ShamrockDLL.err_code[20267])
+        port.value = self._flippers[f]
 
     def ShamrockAccessoryIsPresent(self, device, p_present):
         present = _deref(p_present, c_int)
@@ -2788,11 +2820,7 @@ class FakeShamrockDLL(object):
         if i not in (0, 1):
             raise ShamrockError(20268, ShamrockDLL.err_code[20267])
 
-        # Simulate the presence of the iris only on the direct port
-        if i == 0:
-            present.value = 1  # yes!
-        else:
-            present.value = 0  # no
+        present.value = 1 if i in self._iris else 0
 
     def ATSpectrographSetIris(self, device, iris, value):
         i = _val(iris)
@@ -2801,6 +2829,8 @@ class FakeShamrockDLL(object):
             raise ShamrockError(20268, ShamrockDLL.err_code[20267])
         if not 0 <= v <= 100:
             raise ShamrockError(20268, ShamrockDLL.err_code[20268])
+        if i not in self._iris:
+            raise ShamrockError(20268, ShamrockDLL.err_code[20267])
 
         self._iris[i] = v
 
@@ -2808,6 +2838,9 @@ class FakeShamrockDLL(object):
         i = _val(iris)
         value = _deref(p_value, c_int)
         if i not in (0, 1):
+            raise ShamrockError(20268, ShamrockDLL.err_code[20267])
+
+        if i not in self._iris:
             raise ShamrockError(20268, ShamrockDLL.err_code[20267])
 
         value.value = self._iris[i]

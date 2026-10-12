@@ -393,7 +393,7 @@
     class: andorshrk.Shamrock,
     role: spectrograph-dedicated,
     init: {
-        device: "fake",
+        device: "fake328",
         slits: {1: "slit-in", # INPUT_SIDE
         },
         # No filter wheel
