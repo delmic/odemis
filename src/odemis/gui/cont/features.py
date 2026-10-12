@@ -602,7 +602,7 @@ class CryoFeatureController(object):
         :param features: List of features for which to collect data
         """
         overview_streams = self._tab_data_model.overviewStreams.value
-        project_dir = self._tab_data_model.conf.pj_last_path
+        project_dir = self._tab.conf.pj_last_path
 
         def _run():
             for feature in features:
