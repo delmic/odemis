@@ -2436,7 +2436,9 @@ class CryoFIBAcquiredStreamsController(CryoStreamsController):
         self._ov_view = ov_view
         self.stream: Optional[StaticStream] = None  # The stream currently displayed, related the selected Feature
 
-        tab_data.main.currentFeature.subscribe(self._on_current_feature_changes)
+        # Initialize the saved-image stream before controllers that draw
+        # feature overlays attempt to resolve its physical coordinates.
+        tab_data.main.currentFeature.subscribe(self._on_current_feature_changes, init=True)
         stream_bar = getattr(self, "_stream_bar", None)
 
         if stream_bar is not None:

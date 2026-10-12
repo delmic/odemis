@@ -994,11 +994,13 @@ class PnlTabFibsem(wx.Panel):
         controls_panel.SetForegroundColour(self._theme.button_text)
         controls_panel.SetBackgroundColour(self._theme.section_header)
         with vbox() as controls_sizer:
-            self.milling_task_chk_list = wx.CheckListBox(controls_panel)
+            self.milling_task_chk_list = wx.CheckListBox(controls_panel, style=wx.LB_EXTENDED)
             set_font(
                 self.milling_task_chk_list,
                 self._theme.font_size_checklist,
             )
+            selection_tip = "Ctrl+click to select multiple patterns. Press Space to check or uncheck them."
+            self.milling_task_chk_list.SetToolTip(selection_tip)
             controls_sizer.Add(
                 self.milling_task_chk_list,
                 proportion=1,
@@ -1012,10 +1014,11 @@ class PnlTabFibsem(wx.Panel):
                     controls_panel,
                     label="Move all patterns",
                 )
+                self.chk_move_all_patterns.SetValue(True)
                 self.chk_move_all_patterns.SetForegroundColour(self._theme.text_primary)
                 self.chk_move_all_patterns.SetBackgroundColour(self._theme.section_header)
                 self.chk_move_all_patterns.SetToolTip(
-                    "Apply Ctrl+Shift+click and Ctrl+arrow movement to every pattern."
+                    "Apply Ctrl+Shift+click and Ctrl+arrow movement to every checked pattern."
                 )
                 movement_sizer.Add(
                     self.chk_move_all_patterns,

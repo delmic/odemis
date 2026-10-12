@@ -156,6 +156,10 @@ class PnlTabFibsemTest(unittest.TestCase):
             self.panel.chk_move_all_patterns.GetForegroundColour(),
             wx.Colour(layout.theme.text_primary),
         )
+        self.assertTrue(self.panel.chk_move_all_patterns.GetValue())
+        self.assertTrue(self.panel.milling_task_chk_list.GetWindowStyleFlag() & wx.LB_EXTENDED)
+        selection_tip = self.panel.milling_task_chk_list.GetToolTipText()
+        self.assertIn("Ctrl+click to select multiple patterns", selection_tip)
         self.assertEqual(
             self.panel.btn_snap_patterns_to_feature.GetLabel(),
             "Recenter on Feature",
