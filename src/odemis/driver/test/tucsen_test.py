@@ -26,6 +26,7 @@ import time
 import unittest
 
 from cam_test_abs import VirtualTestCam, VirtualStaticTestCam
+from odemis import model
 from odemis.driver import tucsen
 
 logging.basicConfig(level=logging.DEBUG,
@@ -93,6 +94,44 @@ class TestTUCam(VirtualTestCam, unittest.TestCase):
         # horizontal res (== second dim as it's transposed) is rounded to multiple of 8
         # vertical res (== first dim as it's transposed) is rounded to multiple of 2
         self.assertEqual(self.camera.resolution.value, (198, 96))
+
+
+class TestTUCamMaxRes(unittest.TestCase):
+    """
+    Test the max_res argument of TUCam.
+    """
+    def test_max_res(self):
+        kwargs = KWARGS.copy()
+        kwargs["max_res"] = [1000, 800]
+        cam = tucsen.TUCam(**kwargs)
+        try:
+            self.assertEqual(cam.resolution.value, (1000, 800))
+            self.assertEqual(cam.resolution.range[1], (1000, 800))
+            cam.resolution.value = (1000, 800)
+            self.assertEqual(cam.resolution.value, (1000, 800))
+
+            # The sensor size is unchanged
+            self.assertGreater(cam.getMetadata()[model.MD_SENSOR_SIZE][0], 1000)
+
+            # At binning 2, the max is halved
+            cam.binning.value = (2, 2)
+            cam.resolution.value = (1000, 800)
+            self.assertEqual(cam.resolution.value, (500, 400))
+        finally:
+            cam.terminate()
+
+    def test_max_res_granularity(self):
+        kwargs = KWARGS.copy()
+        kwargs["max_res"] = [1001, 803]
+        with self.assertRaises(ValueError):
+            tucsen.TUCam(**kwargs)
+
+    def test_max_res_invalid(self):
+        kwargs = KWARGS.copy()
+        kwargs["max_res"] = [100000, 100000]
+        with self.assertRaises(ValueError):
+            tucsen.TUCam(**kwargs)
+
 
 if __name__ == '__main__':
     unittest.main()
