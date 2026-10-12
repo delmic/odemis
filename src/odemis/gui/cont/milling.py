@@ -82,7 +82,8 @@ from odemis.gui.util.widgets import (
     ProgressiveFutureConnector,
     VigilantAttributeConnector,
 )
-from odemis.util import is_point_in_rect, units
+from odemis.util import img, is_point_in_rect, units
+from odemis.util.transform import AffineTransform, alt_transformation_matrix_from_implicit
 
 MILLING_THEME_COLORS = (
     theme.categorical_red,
@@ -131,19 +132,40 @@ def pos_to_absolute(pos: Tuple[float, float], ref_img: model.DataArray) -> Tuple
 
 
 def _get_alignment_area_polygon(feature: CryoFeature) -> Optional[Polygon]:
-    """Return a feature's alignment area in image-relative physical coordinates."""
+    """Return the displayed alignment area relative to the saved image position.
+
+    Apply the reference image's corrected pixel size, rotation, shear, and
+    position using the same transformation as Stream.getPhysicalCoordinates.
+
+    :param feature: Feature supplying the reference image and normalized area.
+    :return: Polygon in meters relative to the image's original MD_POS, or
+        None when the feature has no reference image.
+    """
     reference_image = feature.reference_image
     if reference_image is None:
         return None
 
     image_height, image_width = reference_image.shape[-2:]
-    pixel_size_x, pixel_size_y = reference_image.metadata.get(model.MD_PIXEL_SIZE, (1e-6, 1e-6))[:2]
+    metadata = dict(reference_image.metadata)
+    img.mergeMetadata(metadata)
+    pixel_size = metadata.get(model.MD_PIXEL_SIZE)
+    if pixel_size is None:
+        sensor_pixel_size = metadata.get(model.MD_SENSOR_PIXEL_SIZE, (100e-9, 100e-9))
+        binning = metadata.get(model.MD_BINNING, (1, 1))
+        pixel_size = (sensor_pixel_size[0] / binning[0], sensor_pixel_size[1] / binning[1])
+    matrix = alt_transformation_matrix_from_implicit(
+        pixel_size[:2], metadata.get(model.MD_ROTATION, 0), -metadata.get(model.MD_SHEAR, 0), "RSL")
+    origin = reference_image.metadata.get(model.MD_POS, (0, 0))
+    position = metadata.get(model.MD_POS, (0, 0))
+    transform = AffineTransform(matrix, (position[0] - origin[0], position[1] - origin[1]))
     left, top, right, bottom = feature.milling_alignment_area.value
-    x_min = (left - 0.5) * image_width * pixel_size_x
-    x_max = (right - 0.5) * image_width * pixel_size_x
-    y_max = (0.5 - top) * image_height * pixel_size_y
-    y_min = (0.5 - bottom) * image_height * pixel_size_y
-    return box(x_min, y_min, x_max, y_max)
+    pixel_corners = (
+        ((left - 0.5) * image_width, (0.5 - top) * image_height),
+        ((right - 0.5) * image_width, (0.5 - top) * image_height),
+        ((right - 0.5) * image_width, (0.5 - bottom) * image_height),
+        ((left - 0.5) * image_width, (0.5 - bottom) * image_height),
+    )
+    return Polygon(transform.apply(pixel_corners))
 
 
 def _get_milling_rectangle_polygon(rectangle: RectanglePatternParameters) -> Polygon:
@@ -158,8 +180,9 @@ def _get_milling_rectangle_polygon(rectangle: RectanglePatternParameters) -> Pol
         center_y + half_height,
     )
     if rectangle.rotation.value:
+        # Overlay angles increase clockwise because viewport Y points down.
         geometry = affinity.rotate(
-            geometry, rectangle.rotation.value, origin=(center_x, center_y), use_radians=True)
+            geometry, -rectangle.rotation.value, origin=(center_x, center_y), use_radians=True)
     return geometry
 
 
@@ -576,9 +599,11 @@ class MillingTaskController:
                     for rectangle in pattern.generate():
                         if not isinstance(rectangle, RectanglePatternParameters):
                             continue
-                        intersection = alignment_area.intersection(
-                            _get_milling_rectangle_polygon(rectangle))
-                        if intersection.area > 0:
+                        pattern_area = _get_milling_rectangle_polygon(rectangle)
+                        intersection = alignment_area.intersection(pattern_area)
+                        # Ignore floating-point slivers when edges only touch.
+                        tolerance = 1e-12 * min(alignment_area.area, pattern_area.area)
+                        if intersection.area > tolerance:
                             return feature.name.value, task_name
         return None
 

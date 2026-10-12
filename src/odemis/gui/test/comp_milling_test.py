@@ -12,12 +12,16 @@ See the LICENSE.txt file for details.
 """
 
 import logging
+import math
 import unittest
 from types import SimpleNamespace
 from typing import Tuple
 from unittest.mock import Mock, call, patch
 
+import cairo
+import numpy
 import wx
+from shapely.geometry import Polygon
 
 import odemis.gui.comp.miccanvas as miccanvas
 import odemis.gui.test as test
@@ -26,18 +30,20 @@ from odemis.acq.feature import MIN_MILLING_ALIGNMENT_AREA_PIXELS
 from odemis.acq.milling import DEFAULT_MILLING_TASKS_PATH
 from odemis.acq.milling.patterns import RectanglePatternParameters
 from odemis.acq.milling.tasks import load_milling_tasks
+from odemis.acq.stream import StaticSEMStream
 from odemis.gui.comp.overlay._constants import (
     MILLING_ALIGNMENT_AREA_COLOR,
     MILLING_OVERLAY_ACTIVE_OPACITY,
     MILLING_OVERLAY_INACTIVE_OPACITY,
     MILLING_OVERLAY_LINE_WIDTH,
 )
-from odemis.gui.comp.overlay.base import SEL_MODE_EDIT, SEL_MODE_NONE, Vec
+from odemis.gui.comp.overlay.base import SEL_MODE_DRAG, SEL_MODE_EDIT, Vec
 from odemis.gui.comp.overlay.cryo_feature import CryoFeatureOverlay, MODE_SHOW_FEATURES
 from odemis.gui.comp.overlay.milling import (
     MillingAlignmentAreaOverlay,
     MillingAlignmentRectangleOverlay,
     MillingPatternOverlay,
+    update_milling_alignment_area_shape,
 )
 from odemis.gui.comp.overlay.rectangle import MillingRectangleOverlay, RectangleOverlay
 from odemis.gui.comp.text import IntegerTextCtrl, UnitFloatCtrl
@@ -47,8 +53,11 @@ from odemis.gui.cont.milling import (
     PATTERN_DRAG_HINT_THRESHOLD,
     PATTERN_MOVE_WARNING_TIMEOUT,
     MillingTaskController,
+    _get_alignment_area_polygon,
     _get_milling_colour,
+    _get_milling_rectangle_polygon,
     _get_pattern_stack_center,
+    rectangle_pattern_to_shape,
 )
 
 
@@ -72,6 +81,7 @@ class MillingTaskPanelTestCase(test.GuiTestCase):
         )
         self.controller.milling_tasks = self.tasks
         self.controller.draw_milling_tasks = Mock()
+        self.controller.draw_alignment_area = Mock()
         self.controller._update_milling_validation_message = Mock()
         self.controller._update_mill_btn = Mock()
         self.controller._update_pattern_panels()
@@ -83,6 +93,23 @@ class MillingTaskPanelTestCase(test.GuiTestCase):
         self.scroll.Destroy()
         test.gui_loop()
         super().tearDown()
+
+    def test_pattern_polygon_matches_displayed_rotation(self) -> None:
+        """Use the same rotation direction for validation and the drawn rectangle."""
+        canvas = Mock()
+        canvas.get_half_buffer_size.return_value = (0, 0)
+        canvas.phys_to_view.side_effect = lambda point, offset: (point[0] / 1e-6, -point[1] / 1e-6)
+        canvas.view_to_phys.side_effect = lambda point, offset: (point[0] * 1e-6, -point[1] * 1e-6)
+        image = SimpleNamespace(metadata={model.MD_POS: (0, 0)})
+        for rotation in (0, math.pi / 6, math.pi / 4, 3 * math.pi / 4):
+            with self.subTest(rotation=rotation):
+                pattern = RectanglePatternParameters(width=80e-6, height=10e-6, depth=1e-6,
+                                                     center=(20e-6, -30e-6), rotation=rotation)
+                shape = rectangle_pattern_to_shape(canvas, image, pattern)
+                expected = Polygon(shape.get_physical_sel())
+                actual = _get_milling_rectangle_polygon(pattern)
+                self.assertLess(actual.symmetric_difference(expected).area / expected.area, 1e-10)
+
 
     def test_resetting_current_feature_clears_milling_overlays(self) -> None:
         """Redraw empty overlays when a new project removes its current feature."""
@@ -863,8 +890,8 @@ class MillingTaskPanelTestCase(test.GuiTestCase):
         self.assertTrue(any(label.startswith("Notch · ") for label in labels))
 
         task_list.SetSelection(wx.NOT_FOUND)
-        task_list.SetSelection(task_list.FindString("Rough Milling 01"), True)
-        task_list.SetSelection(task_list.FindString("Notch"), True)
+        task_list.SetSelection(task_list.FindString("Rough Milling 01"))
+        task_list.SetSelection(task_list.FindString("Notch"))
         self.controller.rectangles_overlay.reset_mock()
         with patch(
             "odemis.gui.cont.milling.rectangle_pattern_to_shape",
@@ -1417,93 +1444,173 @@ class MillingValidationTestCase(unittest.TestCase):
             txt_automated_milling_status=Mock(),
         )
 
-    def test_alignment_area_overlap_disables_milling_and_shows_warning(self) -> None:
-        """Reject milling when a selected pattern intersects the alignment area."""
+    def _prepare_overlap_validation(self, metadata: dict) -> StaticSEMStream:
+        """Use real stream coordinates and button validation for interactive edits."""
+        reference_image = model.DataArray(numpy.zeros((1000, 1000), dtype=numpy.uint8), metadata=metadata)
+        self.feature.reference_image = reference_image
+        stream = StaticSEMStream("Reference", reference_image)
         for task in self.tasks.values():
             task.selected = False
-        task = self.tasks["Rough Milling 01"]
-        task.selected = True
-        task.patterns[0].center.value = (0, 0)
-
-        self.assertEqual(
-            self.controller._get_alignment_area_overlap(),
-            ("Feature 1", "Rough Milling 01"),
-        )
-        self.controller._update_milling_validation_message()
-        self.controller._panel.txt_automated_milling_status.SetLabel.assert_called_once_with(
-            "Alignment area overlaps a pattern for Feature 1.")
-
-        self.controller.selected_tasks = SimpleNamespace(value=["Rough Milling 01"])
-        self.controller.valid_patterns = SimpleNamespace(value=True)
-        self.controller._tab_data.main.is_acquiring = SimpleNamespace(value=False)
-        self.controller._panel.btn_run_milling = Mock()
-        self.controller._panel.btn_run_automated_milling = Mock()
-        self.controller._panel.txt_milling_est_time = Mock()
-        self.controller._panel.txt_automated_milling_est_time = Mock()
-        self.controller._update_milling_time = Mock()
-        MillingTaskController._update_mill_btn.__wrapped__(self.controller)
-
-        self.controller._panel.btn_run_milling.Enable.assert_called_once_with(False)
-        self.controller._panel.btn_run_automated_milling.Enable.assert_called_once_with(False)
-
-    def test_moving_pattern_into_alignment_area_refreshes_validation(self) -> None:
-        """Refresh the warning and mill button after manual pattern movement."""
-        for task in self.tasks.values():
-            task.selected = False
-        task = self.tasks["Rough Milling 01"]
-        task.selected = True
-        pattern = task.patterns[0]
-        pattern.center.value = (200e-6, 200e-6)
+        self.tasks["Rough Milling 01"].selected = True
+        self.controller.milling_tasks = self.tasks
+        self.controller.selected_tasks = model.ListVA(["Rough Milling 01"])
+        self.controller.valid_patterns = model.BooleanVA(True)
+        self.controller._tab_data.main.currentFeature = SimpleNamespace(value=self.feature)
+        self.controller._tab_data.main.is_acquiring = model.BooleanVA(False)
+        self.controller._get_reference_stream = Mock(return_value=stream)
         self.controller.draw_milling_tasks = Mock()
-        self.controller._update_mill_btn = Mock()
-        self.controller._panel.txt_automated_milling_status.reset_mock()
+        self.controller._update_milling_time = Mock()
+        self.controller.canvas = Mock()
+        for name in ("btn_run_milling", "btn_run_automated_milling",
+                     "txt_milling_est_time", "txt_automated_milling_est_time"):
+            setattr(self.controller._panel, name, Mock())
+        self.controller._update_mill_btn = lambda: MillingTaskController._update_mill_btn.__wrapped__(self.controller)
+        return stream
 
-        with patch("odemis.gui.cont.milling.save_project"):
-            self.controller._move_patterns([pattern], (0, 0))
+    def _assert_overlap_state(self, overlaps: bool) -> None:
+        """Check the displayed warning and both milling buttons."""
+        message = "Alignment area overlaps a pattern for Feature 1." if overlaps else ""
+        self.controller._panel.txt_automated_milling_status.SetLabel.assert_called_with(message)
+        self.controller._panel.btn_run_milling.Enable.assert_called_with(not overlaps)
+        self.controller._panel.btn_run_automated_milling.Enable.assert_called_with(not overlaps)
 
-        self.assertEqual(pattern.center.value, (0, 0))
-        self.controller.draw_milling_tasks.assert_called_once_with()
-        self.controller._panel.txt_automated_milling_status.SetLabel.assert_called_once_with(
-            "Alignment area overlaps a pattern for Feature 1.")
-        self.controller._update_mill_btn.assert_called_once_with()
+    def test_alignment_polygon_matches_displayed_reference_coordinates(self) -> None:
+        """Validate the drawn area with rotation, shear, and metadata corrections."""
+        cases = (
+            {},
+            {model.MD_ROTATION: math.pi / 2},
+            {model.MD_ROTATION: math.pi},
+            {model.MD_SHEAR: 0.3},
+            {model.MD_PIXEL_SIZE_COR: (0.5, 1.5), model.MD_POS_COR: (40e-6, -25e-6)},
+            {model.MD_ROTATION: 0.7, model.MD_ROTATION_COR: 0.2,
+             model.MD_SHEAR: 0.3, model.MD_SHEAR_COR: 0.1},
+        )
+        self.feature.milling_alignment_area.value = (0.1, 0.35, 0.4, 0.7)
+        for corrections in cases:
+            with self.subTest(metadata=corrections):
+                metadata = {model.MD_POS: (200e-6, -100e-6), model.MD_PIXEL_SIZE: (1e-6, 2e-6)}
+                metadata.update(corrections)
+                original_metadata = dict(metadata)
+                reference_image = model.DataArray(numpy.zeros((1000, 1000), dtype=numpy.uint8), metadata=metadata)
+                self.feature.reference_image = reference_image
+                stream = StaticSEMStream("Reference", reference_image)
+                shape = Mock(points=SimpleNamespace(value=None))
+                update_milling_alignment_area_shape(shape, self.feature.milling_alignment_area.value, stream)
+                corners = shape.set_physical_sel.call_args.args[0]
+                origin_x, origin_y = metadata[model.MD_POS]
+                expected = Polygon([(x - origin_x, y - origin_y) for x, y in corners])
+                actual = _get_alignment_area_polygon(self.feature)
+                self.assertLess(actual.symmetric_difference(expected).area / expected.area, 1e-10)
+                self.assertEqual(reference_image.metadata, original_metadata)
 
-    def test_alignment_area_without_pattern_overlap_is_valid(self) -> None:
-        """Accept a separated alignment area and milling pattern."""
-        for task in self.tasks.values():
-            task.selected = False
-        task = self.tasks["Rough Milling 01"]
-        task.selected = True
-        task.patterns[0].center.value = (0, 0)
-        self.feature.milling_alignment_area.value = (0.8, 0.8, 0.9, 0.9)
-
+    def test_rotated_reference_does_not_report_overlap_on_opposite_side(self) -> None:
+        """Keep the screenshot's separated area valid on a 180-degree reference image."""
+        self._prepare_overlap_validation(
+            {model.MD_POS: (-0.002340024, -0.026692104877927),
+             model.MD_PIXEL_SIZE: (9.765625e-8, 9.765625e-8), model.MD_ROTATION: math.pi})
+        self.feature.reference_image = model.DataArray(
+            numpy.zeros((1024, 1024), dtype=numpy.uint8), metadata=self.feature.reference_image.metadata)
+        self.feature.milling_alignment_area.value = (
+            0.5922123563641044, 0.3736441486539639, 0.8474624782933127, 0.7409309467617526)
+        for name in ("Microexpansion", "Rough Milling 01", "Rough Milling 02", "Polishing 01", "Polishing 02"):
+            self.tasks[name].selected = True
+            self.tasks[name].patterns[0].center.value = (3.85135135135147e-5, 3.3783783783755683e-6)
         self.assertIsNone(self.controller._get_alignment_area_overlap())
         self.controller._update_milling_validation_message()
-        self.controller._panel.txt_automated_milling_status.SetLabel.assert_called_once_with("")
+        self.controller._update_mill_btn()
+        self._assert_overlap_state(False)
+
+    def test_touching_alignment_boundary_is_not_overlap(self) -> None:
+        """Allow a pattern to touch the area without entering its interior."""
+        for rotation, center in ((0, (5e-6, 0)), (math.pi, (-5e-6, 0))):
+            with self.subTest(rotation=rotation):
+                self._prepare_overlap_validation(
+                    {model.MD_POS: (0, 0), model.MD_PIXEL_SIZE: (1e-6, 1e-6), model.MD_ROTATION: rotation})
+                self.feature.milling_alignment_area.value = (0.2, 0.3, 0.5, 0.7)
+                self.tasks["Rough Milling 01"].patterns[0].center.value = center
+                self.assertIsNone(self.controller._get_alignment_area_overlap())
+                direction = -1 if rotation == 0 else 1
+                self.tasks["Rough Milling 01"].patterns[0].center.value = (center[0] + direction * 1e-9, center[1])
+                self.assertEqual(self.controller._get_alignment_area_overlap(), ("Feature 1", "Rough Milling 01"))
+
+    def test_moving_pattern_updates_overlap_with_reference_at_default_position(self) -> None:
+        """Move without an anchor and refresh overlap when the reference has no saved position."""
+        self._prepare_overlap_validation({model.MD_PIXEL_SIZE: (1e-6, 1e-6)})
+        pattern = self.tasks["Rough Milling 01"].patterns[0]
+        for center, overlaps in (((0, 0), True), ((200e-6, 200e-6), False)):
+            with self.subTest(center=center), patch("odemis.gui.cont.milling.save_project"):
+                self.controller.draw_milling_tasks.reset_mock()
+                self.controller._move_patterns([pattern], center)
+                self.assertEqual(pattern.center.value, center)
+                self.controller.draw_milling_tasks.assert_called_once_with()
+                expected = ("Feature 1", "Rough Milling 01") if overlaps else None
+                self.assertEqual(self.controller._get_alignment_area_overlap(), expected)
+                self._assert_overlap_state(overlaps)
+
+    def test_ctrl_shift_click_updates_overlap_in_both_directions(self) -> None:
+        """Moving selected or all patterns into and out of the area updates both buttons."""
+        stream = self._prepare_overlap_validation(
+            {model.MD_POS: (200e-6, -100e-6), model.MD_PIXEL_SIZE: (1e-6, 1e-6),
+             model.MD_ROTATION: math.pi / 2})
+        self.feature.milling_alignment_area.value = (0.1, 0.35, 0.4, 0.7)
+        self.controller.allow_milling_pattern_move = True
+        self.controller._clear_milling_task_selection = Mock()
+        self.controller._panel.chk_move_all_patterns = Mock()
+        task_list = self.controller._panel.milling_task_chk_list = Mock()
+        task_list.GetSelections.return_value = [0]
+        task_list.GetString.return_value = "Rough Milling 01"
+        self.controller.canvas.get_half_buffer_size.return_value = (0, 0)
+        event = Mock()
+        event.GetEventObject.return_value = self.controller.canvas
+        event.ShiftDown.return_value = True
+        event.ControlDown.return_value = True
+        pattern = self.tasks["Rough Milling 01"].patterns[0]
+        for move_all in (False, True):
+            with self.subTest(move_all=move_all), patch("odemis.gui.cont.milling.save_project"):
+                self.controller._panel.chk_move_all_patterns.GetValue.return_value = move_all
+                for pixel_center, overlaps in (((250, 525), True), ((750, 250), False)):
+                    self.controller.canvas.view_to_phys.return_value = stream.getPhysicalCoordinates(pixel_center)
+                    self.controller.on_mouse_down(event)
+                    self._assert_overlap_state(overlaps)
+                    self.assertEqual(self.controller._get_alignment_area_overlap() is not None, overlaps)
+                self.assertNotEqual(pattern.center.value, (0, 0))
+
+    def test_alignment_edits_update_overlap_in_both_directions(self) -> None:
+        """Dragging or resizing the area into and away from patterns refreshes validation."""
+        stream = self._prepare_overlap_validation(
+            {model.MD_POS: (200e-6, -100e-6), model.MD_PIXEL_SIZE: (1e-6, 1e-6),
+             model.MD_ROTATION: math.pi / 2})
+        self.tasks["Rough Milling 01"].patterns[0].center.value = (-250e-6, 25e-6)
+        initial = (0.1, 0.35, 0.4, 0.7)
+        cases = ((SEL_MODE_DRAG, (0.375, 0.075, 0.675, 0.425)),
+                 (SEL_MODE_EDIT, (0.1, 0.1, 0.6, 0.7)))
+        for mode, overlapping in cases:
+            for commit in (False, True):
+                with self.subTest(mode=mode, commit=commit), patch("odemis.gui.cont.milling.save_project"):
+                    self.feature.milling_alignment_area.value = initial
+                    self.controller._update_milling_validation_message()
+                    self.controller._update_mill_btn()
+                    self._assert_overlap_state(False)
+                    shape = Mock(points=SimpleNamespace(value=None), interaction_mode=mode, edit_v_point_idx=2)
+                    for area, overlaps in ((overlapping, True), (initial, False)):
+                        left, top, right, bottom = area
+                        pixel_corners = ((left * 1000, top * 1000), (right * 1000, top * 1000),
+                                         (right * 1000, bottom * 1000), (left * 1000, bottom * 1000))
+                        shape.get_physical_sel.return_value = [stream.getPhysicalCoordinates(point) for point in pixel_corners]
+                        self.controller._update_alignment_area_from_shape(shape, commit=commit)
+                        self._assert_overlap_state(overlaps)
 
     def test_small_legacy_reference_disables_milling_and_shows_warning(self) -> None:
         """Require reacquisition without preventing the project from loading."""
-        self.feature.reference_image.shape = (200, 300)
-
-        self.assertEqual(
-            self.controller._get_invalid_alignment_reference(),
-            "Feature 1",
-        )
+        self._prepare_overlap_validation({model.MD_PIXEL_SIZE: (1e-6, 1e-6)})
+        self.feature.reference_image = model.DataArray(numpy.zeros((200, 300)), metadata={})
+        self.assertEqual(self.controller._get_invalid_alignment_reference(), "Feature 1")
         self.controller._update_milling_validation_message()
-        self.controller._panel.txt_automated_milling_status.SetLabel.assert_called_once_with(
+        self.controller._update_mill_btn()
+        self.controller._panel.txt_automated_milling_status.SetLabel.assert_called_with(
             "Acquire a higher-resolution reference image for Feature 1.")
-
-        self.controller.selected_tasks = SimpleNamespace(value=["Ruler"])
-        self.controller.valid_patterns = SimpleNamespace(value=True)
-        self.controller._tab_data.main.is_acquiring = SimpleNamespace(value=False)
-        self.controller._panel.btn_run_milling = Mock()
-        self.controller._panel.btn_run_automated_milling = Mock()
-        self.controller._panel.txt_milling_est_time = Mock()
-        self.controller._panel.txt_automated_milling_est_time = Mock()
-        self.controller._update_milling_time = Mock()
-        MillingTaskController._update_mill_btn.__wrapped__(self.controller)
-
-        self.controller._panel.btn_run_milling.Enable.assert_called_once_with(False)
-        self.controller._panel.btn_run_automated_milling.Enable.assert_called_once_with(False)
+        self.controller._panel.btn_run_milling.Enable.assert_called_with(False)
+        self.controller._panel.btn_run_automated_milling.Enable.assert_called_with(False)
 
     def test_valid_correction_is_accepted(self) -> None:
         """Accept a correction smaller than every graduation dimension."""
