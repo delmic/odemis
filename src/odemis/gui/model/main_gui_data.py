@@ -121,6 +121,13 @@ class MainGUIData(object):
         "ebeam-gun-exciter": "ebeam_gun_exciter",
         "overview-focus": "overview_focus",
         "mirror": "mirror",
+        "lens-arm-coincident": "lens_arm_coincident",  # All the "coincident" roles are for the SLM on MIMAS/METEOR
+        "align-coincident": "align_coincident",
+        "focus-coincident": "focus_coincident",
+        "lens-coincident": "lens_coincident",
+        "filter-coincident": "filter_coincident",
+        "ccd-coincident": "ccd_coincident",
+        "light-coincident": "light_coincident",
         "mirror-xy": "mirror_xy",
         "align": "aligner",
         "fiber-aligner": "fibaligner",
@@ -252,6 +259,13 @@ class MainGUIData(object):
         self.ion_sed = None  # detector for the ions of a composited detector component
         self.stage_global = None  # stage with coordinates converted into a global coordinate system
         self.light_protector = None
+        self.lens_coincident = None  # Optical lens for SLM in MIMAS
+        self.align_coincident = None  # SLM alignment stage with long, short and focus axes
+        self.focus_coincident = None  # SLM focus
+        self.lens_arm_coincident = None  # SLM stage box
+        self.filter_coincident = None  # SLM filter wheel
+        self.ccd_coincident = None  # SLM Camera
+        self.light_coincident = None  # SLM light source
 
         # Lists of detectors
         self.ccds = []  # All the cameras which could be used for AR (SPARC)

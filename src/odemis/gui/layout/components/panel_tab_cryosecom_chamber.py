@@ -288,6 +288,7 @@ class PnlTabCryosecomChamber(wx.Panel):
             ),
             ("btn_switch_fib_imaging", "FIB IMAGING", "ico_imaging", (2, 0)),
             ("btn_switch_trenching", LABEL_TRENCHING, "ico_trenching", (3, 0)),
+            ("btn_switch_slm_imaging", "SLM IMAGING", "ico_slm_imaging", (3, 1)),
             ("btn_switch_grid1", "GRID 1", "ico_meteorgrid", (4, 0)),
             ("btn_switch_grid2", "GRID 2", "ico_meteorgrid", (4, 1)),
         )

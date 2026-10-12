@@ -57,6 +57,7 @@ class PnlTabCryosecomChamberTest(unittest.TestCase):
             "btn_switch_milling",
             "btn_switch_fib_view_fm",
             "btn_switch_fib_imaging",
+            "btn_switch_slm_imaging",
             "btn_switch_grid1",
             "btn_switch_grid2",
             "gauge_move",
