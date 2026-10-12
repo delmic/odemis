@@ -966,7 +966,7 @@ def estimateTiledAcquisitionTime(stream, stage, region, dwell_time=None, overlap
     fov = (fov_value, fov_value * res[1] / res[0])
     acquisition_area = (0, 0, 0, 0)
     if isinstance(region, tuple):
-        acquisition_area = util.normalize_rect(region)  # make sure order is l, b, r, t
+        acquisition_area = util.sanitize_rect(region)  # make sure order is l, b, r, t
     elif isinstance(region, list):
         acquisition_area = util.get_polygon_bbox(region)
 

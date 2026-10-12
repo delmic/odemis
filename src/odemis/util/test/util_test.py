@@ -523,22 +523,22 @@ class IndexClosestTestCase(unittest.TestCase):
                                                                "the closest index to 5 in %s" % in_exp)
 
 
-class NormalizeRectTestCase(unittest.TestCase):
+class SanitizeRectTestCase(unittest.TestCase):
 
-    def test_already_normalized(self):
-        """Test normalizing a rectangle with already normalized values"""
+    def test_already_sanitized(self):
+        """Test sanitizing a rectangle with already sanitized values"""
         rect = (1, 2, 3, 4)
-        normalized_rect = util.normalize_rect(rect)
+        sanitized_rect = util.sanitize_rect(rect)
 
-        self.assertEqual(normalized_rect, rect, "Failed to normalize the rectangle")
+        self.assertEqual(sanitized_rect, rect, "Failed to sanitize the rectangle")
 
-    def test_non_normalized(self):
-        """Test normalizing a rectangle with not yet normalized values"""
+    def test_non_sanitized(self):
+        """Test sanitizing a rectangle with not yet sanitized values"""
         rect = (10, 7, 5, 3)
-        normalized_rect = util.normalize_rect(rect)
-        expected_normalized_rect = (5, 3, 10, 7)
+        sanitized_rect = util.sanitize_rect(rect)
+        expected_sanitized_rect = (5, 3, 10, 7)
 
-        self.assertEqual(normalized_rect, expected_normalized_rect, "Failed to normalize the rectangle")
+        self.assertEqual(sanitized_rect, expected_sanitized_rect, "Failed to sanitize the rectangle")
 
 
 class IsPointInRectTestCase(unittest.TestCase):
@@ -565,7 +565,7 @@ class ExpandRectTestCase(unittest.TestCase):
     def test_expand_rect(self):
         """Test expanding a rectangle"""
         rect = (5, 3, 10, 7)
-        expanded_rect = util.expand_rect(util.normalize_rect(rect), 5)
+        expanded_rect = util.expand_rect(util.sanitize_rect(rect), 5)
         expected_rect = (0, -2, 15, 12)
         self.assertEqual(expanded_rect, expected_rect, "Failed to get correct output for rectangle %s with "
                                                        "expanded rectangle %s" % (expanded_rect, expected_rect))

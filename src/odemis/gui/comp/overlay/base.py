@@ -731,10 +731,10 @@ class SelectionMixin(DragMixin):
 
         if end is not None:
             rect_or_start = (rect_or_start[0], rect_or_start[1], end[0], end[1])
-            rect = util.normalize_rect(rect_or_start)
+            rect = util.sanitize_rect(rect_or_start)
             return Vec(rect[:2]), Vec(rect[2:4])
         else:
-            return util.normalize_rect(rect_or_start)
+            return util.sanitize_rect(rect_or_start)
 
     # #### selection methods  #####
 
@@ -1556,7 +1556,7 @@ class RectangleEditingMixin(DragMixin):
         point3_a = point3.rotate(-self.rotation, center)
 
         # Normalize the rectangle in unrotated space
-        rect = util.normalize_rect((point1_a.x, point1_a.y, point3_a.x, point3_a.y))
+        rect = util.sanitize_rect((point1_a.x, point1_a.y, point3_a.x, point3_a.y))
         points = util.rotate_rect(rect, self.rotation, center)
         points = [Vec(p) for p in points]
         self.v_point1, self.v_point2, self.v_point3, self.v_point4 = points

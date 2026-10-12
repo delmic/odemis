@@ -186,7 +186,7 @@ def intersect(ra: Tuple[float, float, float, float],
     return ix, iy, iw, ih
 
 
-def normalize_rect(rect):
+def sanitize_rect(rect):
     """
     Ensure that the given rectangle actually is defined by xmin, ymin, xmax, ymax
     so that y1 < y2 and x1 < x2.
@@ -328,7 +328,7 @@ def separate_rect_rotation(corners: List[Tuple[float, float]],
         rect.append(x_new + cx)
         rect.append(y_new + cy)
 
-    rect = normalize_rect(tuple(rect))
+    rect = sanitize_rect(tuple(rect))
     return rect, angle
 
 

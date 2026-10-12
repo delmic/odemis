@@ -50,7 +50,7 @@ class BoxOverlay(WorldOverlay):
     def set_dimensions(self, roi):
         """ Set the dimensions of the rectangle """
         # Connect the provided VA to the overlay
-        self.roi = util.normalize_rect(roi)
+        self.roi = util.sanitize_rect(roi)
         wx.CallAfter(self.cnvs.request_drawing_update)
 
     def draw(self, ctx, shift=(0, 0), scale=1.0):
