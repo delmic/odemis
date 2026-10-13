@@ -61,8 +61,8 @@ class CryoFeatureControllerTestCase(unittest.TestCase):
         """Show a warning dialog and avoid an unhandled error log."""
         message = (
             "Reference image is too small for milling alignment. "
-            "The alignment area must contain at least 98304 pixels and have an aspect ratio "
-            "between 2:3 and 3:2."
+            "The alignment area must contain at least 98304 pixels "
+            "and be at least 256 pixels wide and high."
         )
         self.feature.save_milling_task_data.side_effect = MillingAlignmentAreaTooSmallError(message)
 
