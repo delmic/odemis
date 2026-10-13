@@ -748,6 +748,8 @@ class FibsemOSMillingTaskManager:
         reference_image = _get_reference_image(feature)
         alignment_area = constrain_milling_alignment_area(feature.milling_alignment_area.value, reference_image.shape)
         feature.milling_alignment_area.value = alignment_area
+        # Cryo stage and scan rotation are already compensated, so the reference
+        # image has MD_ROTATION - MD_ROTATION_COR = 0 and needs no pattern rotation.
         milling_stages = convert_milling_tasks_to_milling_stages(tasks, alignment_area=alignment_area)
         estimated_dur = estimate_total_milling_time(milling_stages) + 30
 
