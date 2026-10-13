@@ -49,6 +49,7 @@ from odemis.acq.milling.tasks import (
     MillingTaskSettings,
 )
 from odemis.util import executeAsyncTask
+from odemis.util import img
 
 # Check if fibsemOS is available
 try:
@@ -441,7 +442,8 @@ def _convert_composite_pattern_to_milling_stage(
 
 def convert_milling_tasks_to_milling_stages(
         milling_tasks: List[MillingTaskSettings],
-        alignment_area: Tuple[float, float, float, float] = DEFAULT_MILLING_ALIGNMENT_AREA) -> List['FibsemMillingStage']:
+        alignment_area: Tuple[float, float, float, float] = DEFAULT_MILLING_ALIGNMENT_AREA,
+        image_rotation: float = 0.0) -> List['FibsemMillingStage']:
     """Convert tasks to fibsemOS milling stages.
 
     Each pattern in a selected task produces one stage. All rectangles
@@ -452,6 +454,9 @@ def convert_milling_tasks_to_milling_stages(
     :param alignment_area: Normalized (left, top, right, bottom) coordinates
         in the saved FIB reference image, with values between 0 and 1.
         Defaults to DEFAULT_MILLING_ALIGNMENT_AREA and applies to every stage.
+    :param image_rotation: Counterclockwise reference-image rotation in radians,
+        after metadata corrections. Converts pattern coordinates from sample
+        axes to image axes. Defaults to zero, which applies no coordinate rotation.
     :return: Stages in task and pattern order, or an empty list when no
         selected tasks contain patterns.
     """
@@ -472,7 +477,41 @@ def convert_milling_tasks_to_milling_stages(
                 milling_stages.append(convert_task_to_milling_stage(
                     stage_task, alignment_area=alignment_area))
 
+    if image_rotation:
+        for stage in milling_stages:
+            _rotate_milling_stage_to_image_axes(stage, image_rotation)
+
     return milling_stages
+
+
+def _rotate_milling_stage_to_image_axes(stage: 'FibsemMillingStage', rotation: float) -> None:
+    """Express every generated rectangle in the reference image's axes.
+
+    Pattern centers use sample axes relative to the image center. fibsemOS
+    expects image axes in meters, with Y pointing up. Transform each generated
+    rectangle so trench spacing and composite offsets rotate with their centers.
+
+    :param stage: Converted stage to update without modifying the Odemis patterns.
+    :param rotation: Counterclockwise image rotation in radians.
+    """
+    cosine, sine = math.cos(rotation), math.sin(rotation)
+    rectangles = []
+    for shape in stage.define_patterns():
+        rectangles.append(RectanglePattern(
+            point=Point(x=cosine * shape.centre_x + sine * shape.centre_y,
+                        y=-sine * shape.centre_x + cosine * shape.centre_y),
+            width=shape.width,
+            height=shape.height,
+            depth=shape.depth,
+            # Pattern angles are clockwise, opposite to image metadata rotation.
+            rotation=math.degrees((shape.rotation + rotation) % (2 * math.pi)),
+            time=shape.time,
+            passes=shape.passes,
+            scan_direction=shape.scan_direction,
+            cross_section=shape.cross_section,
+        ))
+    stage.pattern = _RectanglePatternGroup(rectangles)
+    stage.patterns = rectangles
 
 
 class FibsemOSMillingTaskManager:
@@ -570,7 +609,11 @@ class FibsemOSMillingTaskManager:
         reference_image = _get_reference_image(feature)
         alignment_area = constrain_milling_alignment_area(feature.milling_alignment_area.value, reference_image.shape)
         feature.milling_alignment_area.value = alignment_area
-        milling_stages = convert_milling_tasks_to_milling_stages(tasks, alignment_area=alignment_area)
+        metadata = dict(reference_image.metadata)
+        img.mergeMetadata(metadata)
+        image_rotation = metadata.get(model.MD_ROTATION, 0.0)
+        milling_stages = convert_milling_tasks_to_milling_stages(
+            tasks, alignment_area=alignment_area, image_rotation=image_rotation)
         estimated_dur = estimate_total_milling_time(milling_stages) + 30
 
         with self._lock:

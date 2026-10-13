@@ -1361,6 +1361,8 @@ class MillingAlignmentConstraintTestCase(unittest.TestCase):
             (2, Vec(800, 250), (0.3, 0.25, 0.8, 0.7)),
             (3, Vec(750, 800), (0.3, 0.3, 0.75, 0.8)),
             (4, Vec(200, 800), (0.2, 0.3, 0.7, 0.8)),
+            (1, Vec(0, 300), (0.0, 0.3, 0.7, 0.7)),
+            (3, Vec(700, 1000), (0.3, 0.3, 0.7, 1.0)),
         )
         for corner_index, dragged_point, expected in cases:
             with self.subTest(corner_index=corner_index):
