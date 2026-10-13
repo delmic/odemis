@@ -55,13 +55,11 @@ try:
     from fibsem.microscopes.odemis_microscope import (
         OdemisThermoMicroscope,
         OdemisTescanMicroscope,
-        from_odemis_image
     )
     from fibsem.milling import (
         FibsemMillingStage,
         MillingAlignment,
         estimate_total_milling_time,
-        mill_stages,
     )
     from fibsem.milling.patterning.patterns2 import (
         BasePattern,
@@ -69,6 +67,7 @@ try:
         RectanglePattern,
         TrenchPattern,
     )
+    from fibsem.milling.tasks import FibsemMillingTask, FibsemMillingTaskConfig
     from fibsem.structures import (
         FibsemMillingSettings,
         Point,
@@ -530,13 +529,28 @@ class FibsemOSMillingTaskManager:
                         raise CancelledError()
 
                 logging.info(f"Running milling stage: {stage.name}")
-                ref_img = from_odemis_image(_get_reference_image(self.feature))
-                ref_img.metadata.image_settings.path = self.path
-                ref_img.metadata.image_settings.reduced_area = stage.alignment.rect
+                image = _get_reference_image(self.feature)
+                pixel_size = Point.from_list(image.metadata[model.MD_PIXEL_SIZE])
+                # Alignment needs image geometry, not the Thermo-specific extra settings.
+                image_settings = ImageSettings(
+                    resolution=image.shape[::-1],
+                    dwell_time=image.metadata.get(model.MD_DWELL_TIME, 1e-6),
+                    hfw=pixel_size.x * image.shape[1],
+                    beam_type=BeamType.ION,
+                    path=self.path,
+                    reduced_area=stage.alignment.rect,
+                )
+                data = image.getData() if isinstance(image, model.DataArrayShadow) else image
+                ref_img = FibsemImage(data=data, metadata=FibsemImageMetadata(
+                    image_settings=image_settings, pixel_size=pixel_size, microscope_state=None))
 
                 ref_img = _crop_to_reduced_area(ref_img, stage.alignment.rect)
 
-                mill_stages(self.microscope, [stage], ref_img)
+                config = FibsemMillingTaskConfig.from_stages([stage], name=stage.name)
+                config.acquisition.imaging.path = self.path
+                task = FibsemMillingTask(microscope=self.microscope, config=config)
+                task.reference_image = ref_img
+                task.run()
 
         finally:
             with self._lock:
