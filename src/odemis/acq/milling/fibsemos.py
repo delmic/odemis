@@ -27,6 +27,7 @@ import threading
 import time
 from concurrent import futures
 from concurrent.futures._base import CANCELLED, FINISHED, RUNNING, CancelledError
+from dataclasses import replace
 from typing import List, Optional, Tuple, Union
 
 from odemis import model
@@ -586,10 +587,18 @@ class FibsemOSMillingTaskManager:
                 ref_img = _crop_to_reduced_area(ref_img, stage.alignment.rect)
 
                 config = FibsemMillingTaskConfig.from_stages([stage], name=stage.name)
+                config.field_of_view = image_settings.hfw
                 config.acquisition.imaging.path = self.path
+                config.acquisition.acquire_final_image = False
                 task = FibsemMillingTask(microscope=self.microscope, config=config)
                 task.reference_image = ref_img
                 task.run()
+
+                # Refresh the full reference field after fibsemOS restores imaging conditions.
+                self.microscope.autocontrast(beam_type=BeamType.ION)
+                final_image = self.microscope.acquire_image(
+                    image_settings=replace(image_settings, reduced_area=None))
+                self.microscope.fib_acquisition_signal.emit(final_image)
 
         finally:
             with self._lock:
