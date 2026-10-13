@@ -17,10 +17,12 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
+import contextlib
 import os
 import logging
 import sys
-from typing import Dict, List, Tuple, Any
+import threading
+from typing import Any, Dict, Iterator, List, Optional, Sequence, Tuple
 
 import numpy
 import yaml
@@ -32,7 +34,7 @@ sys.path.append(f"{os.path.expanduser('~')}/development/3DCT")
 
 TDCT_INSTALLED = False
 try:
-    from tdct.correlation_v2 import run_correlation
+    from tdct.correlation_v2 import run_correlation, DEFAULT_OPTIMIZATION_PARAMETERS
     from tdct.util import multi_channel_get_z_guass
     TDCT_INSTALLED = True
 except ImportError:
@@ -91,19 +93,63 @@ def get_optimized_z_gauss(das: List[model.DataArray], x: int, y: int, z: int, sh
 
     return z
 
+class _RotationInit(numpy.ndarray):
+    """
+    Euler angles array which can be compared to a string without raising an error.
+    Workaround for 3DCT correlate(), which does "rotation_init != 'gl2'" before converting
+    rotation_init (which therefore has to be an array) to radians.
+    """
+
+    def __ne__(self, other: Any) -> Any:
+        if isinstance(other, str):
+            return True
+        return super().__ne__(other)
+
+
+_optimiser_params_lock = threading.Lock()
+
+
+@contextlib.contextmanager
+def _optimiser_params(params: Dict[str, Any]) -> Iterator[None]:
+    """
+    Temporarily override the default optimiser parameters used by 3DCT correlate().
+    run_correlation() doesn't allow to pass them, but correlate() uses this dict as default.
+    :param params: the parameters to override (eg, rotation_init, restrict_rotations)
+    """
+    with _optimiser_params_lock:
+        saved = dict(DEFAULT_OPTIMIZATION_PARAMETERS)
+        DEFAULT_OPTIMIZATION_PARAMETERS.update(params)
+        try:
+            yield
+        finally:
+            DEFAULT_OPTIMIZATION_PARAMETERS.clear()
+            DEFAULT_OPTIMIZATION_PARAMETERS.update(saved)
+
+
 def run_tdct_correlation(fib_coords: numpy.ndarray,
                            fm_coords: numpy.ndarray,
                            poi_coords: numpy.ndarray,
                            fib_image: model.DataArray,
                            fm_image: model.DataArray,
-                           path: str) -> Dict[str, Any]:
+                           path: str,
+                           rotation_init: Optional[Sequence[float]] = None,
+                           restrict_rotations: Optional[float] = None) -> Dict[str, Any]:
     """Run 3DCT Multi-point correlation between FIB and FM images.
+    The 2D projection cannot distinguish a plane from its mirror image (theta and -theta), so with
+    the default initialisation the solver may return either of the two. To select one, a rough
+    initial rotation can be provided: the optimiser then only searches around it.
     :param fib_coords: the FIB coordinates (n, (x, y)) (in pixels, origin at top left)
     :param fm_coords: the FM coordinates (n, (x, y, z)) (in pixels, origin at top left)
     :param poi_coords: the point of interest coordinates (1, (x, y, z)). Expects only one point of interest.
     :param fib_image: the FIB image (YX)
     :param fm_image: the FM image (CTZTX, CZYX or ZYX)
     :param path: the path to save the results
+    :param rotation_init: expected rotation as Euler angles (phi, theta, psi) in degrees, in the same
+        convention as output.transformation.rotation_eulers. If None, the 3DCT default is used,
+        which tries both mirror solutions.
+    :param restrict_rotations: size of the neighbourhood around rotation_init in which the
+        initial guesses are drawn (Cayley-Klein units, 0.1 ~ 15 deg, 0.2 ~ 30 deg). If None, the 3DCT default (0.1) is used.
+        Only used when rotation_init is set. It is not a hard bound on the final rotation.
     :return: the correlation results
         output:
             error:
@@ -159,17 +205,27 @@ def run_tdct_correlation(fib_coords: numpy.ndarray,
         f"Running 3DCT correlation with FIB image shape: {fib_image.shape}, FM image shape: {fm_image.shape}"
     )
 
-    # run correlation
-    correlation_results = run_correlation(
-        fib_coords=fib_coords,
-        fm_coords=fm_coords,
-        poi_coords=poi_coords,
-        image_props=image_props,
-        rotation_center=rotation_center,
-        path=path,
-    )
+    params = {}
+    if rotation_init is not None:
+        params["rotation_init"] = numpy.asarray(rotation_init, dtype=float).view(_RotationInit)
+    if restrict_rotations is not None:
+        params["restrict_rotations"] = restrict_rotations
 
-    return correlation_results
+    with _optimiser_params(params):
+        correlation_data = run_correlation(
+            fib_coords=fib_coords,
+            fm_coords=fm_coords,
+            poi_coords=poi_coords,
+            image_props=image_props,
+            rotation_center=rotation_center,
+            path=path,
+        )
+
+    logging.debug("3DCT correlation RMS error %.3f, rotation eulers %s",
+                  correlation_data["output"]["error"]["rms_error"],
+                  numpy.round(correlation_data["output"]["transformation"]["rotation_eulers"], 1))
+    return correlation_data
+
 
 def get_reprojected_poi_coordinate(correlation_results: dict) -> Tuple[float, float]:
     """Get the the point of interest coordinate from correlation data
