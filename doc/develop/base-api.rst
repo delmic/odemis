@@ -379,25 +379,26 @@ function specifically.
         available. 
         The callback is always called at least once, when the task is finished.
 
-        :param fn: The callback.
-            *elapsed* is the time that has elapsed since the task started. Once the task is
-                finished, the elapsed time is the total execution time.
-            *remaining* is the time remaining until the task is expected to complete.
-                If the task is finished (or cancelled) the remaining time is 0.
+        The callback receives `elapsed_time` and `remaining_time`, both in seconds.
+        `elapsed_time` is how long the task has been running, and `remaining_time` is
+        the estimated time left. When the task is finished or cancelled,
+        `remaining_time` is 0. The callback is always called at least once, when
+        the task finishes.
 
-        :type fn: callable: (Future, float elapsed, float remaining) → None
+        :param fn: The callback.
+        :type fn: callable: (Future, float elapsed_time, float remaining_time) → None
 
     .. py:method:: get_progress()
     
-	Read the last known progress information.
+        Read the last known progress information.
 
         :return (float elapsed, float remaining): time that has elapsed since the task started,
                 time remaining until the task is expected to complete
 
     .. py:method:: set_progress(elapsed, remaining)
     
-	Update the elapsed and remaining times of the task.
-	To be used by executors only, to provide the update information.
+        Update the elapsed and remaining times of the task.
+        To be used by executors only, to provide the update information.
 
         :param float elapsed: time that has elapsed since the task started
         :param float remaining: time remaining until the task is expected to complete
