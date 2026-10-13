@@ -378,7 +378,7 @@ class MicroscopeViewport(ViewPort):
         posture_manager = main_data.posture_manager
         if posture_manager:
             pos = posture_manager.stage.position.value
-            if  self.bottom_legend and "rx" in pos and "rz" in pos:
+            if self.bottom_legend and "rx" in pos and "rz" in pos:
                 self._current_posture = posture_manager.current_posture
                 self._current_posture.subscribe(self._on_current_posture, init=True)
 
