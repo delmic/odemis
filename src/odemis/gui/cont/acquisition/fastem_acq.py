@@ -532,7 +532,7 @@ class FastEMOverviewAcquiController(object):
         """
         if self.acq_future and self.acq_future.pause():
             self._is_paused = True
-            wx.CallAfter(self._on_actually_paused)
+            wx.CallAfter(self._on_paused)
         else:
             wx.CallAfter(self._on_pause_failed)
 
@@ -548,7 +548,7 @@ class FastEMOverviewAcquiController(object):
         self._set_status_message("Acquisition running.")
 
     @call_in_wx_main
-    def _on_actually_paused(self):
+    def _on_paused(self):
         """Re-enable the relevant buttons once the acquisition is truly paused.
         The progress bar and label are automatically frozen while the future
         reports itself as paused (see ProgressiveFutureConnector).
