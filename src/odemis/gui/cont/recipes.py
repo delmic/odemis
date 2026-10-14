@@ -174,7 +174,7 @@ class SparcRecipesController:
                         entry.pop("roi", None)
                 # Get the first file path (there should be only one in save mode)
                 file_path = files_page.file_paths[0]
-                with open(file_path, "w") as json_file:
+                with open(file_path, "w", encoding="utf-8") as json_file:
                     json.dump(streams_settings_entries, json_file, indent=2)
                 self._tab_data.recipes = {os.path.splitext(os.path.basename(file_path))[0]}
                 self._update_current_recipes_label()
@@ -205,7 +205,7 @@ class SparcRecipesController:
                 try:
                     for file_path in files_page.file_paths:
                         try:
-                            with open(file_path, "r") as json_file:
+                            with open(file_path, "r", encoding="utf-8") as json_file:
                                 config = json.load(json_file)
                             streams_page.set_streams_settings_entries(config)
                         except Exception as e:
