@@ -855,8 +855,22 @@ class MeteorPostureManager(MicroscopePostureManager):
         elif posture in _CAMERA_ROTATION_COR:
             camera = model.getComponent(role="ccd")
             camera.updateMetadata({model.MD_ROTATION_COR: _CAMERA_ROTATION_COR[posture]})
+        elif posture in (Posture.LOADING, Posture.GRID_1, Posture.GRID_2, Posture.UNKNOWN):
+            pass
         else:
             logging.warning(f"No implemented offset for scan rotation for posture: {posture}")
+
+    def _init_posture(self) -> None:
+        """
+        Update the current posture of the microscope at startup, and enforce the scan
+        rotation if starting in a known posture.
+        """
+        self._update_posture(self.stage.position.value)
+        if self.current_posture.value in _SCAN_ROTATION_OFFSET or self.current_posture.value in _CAMERA_ROTATION_COR:
+            try:
+                self._enforce_scan_rotation(self.current_posture.value)
+            except Exception as e:
+                logging.warning("Failed to enforce scan rotation at startup: %s", e)
 
     def from_sample_stage_to_stage_movement(self, pos: Dict[str, float]) -> Dict[str, float]:
         """
@@ -1303,8 +1317,8 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
         self.postures = [Posture.SEM_IMAGING, Posture.FM_IMAGING]
         self._initialise_transformation(axes=["y", "z"], rotation=self.pre_tilt)
         self.create_sample_stage()
-        # Update the posture based on the actual metadata
-        self._update_posture(self.stage.position.value)
+        # Update the posture and enforce scan rotation if in a known posture
+        self._init_posture()
 
     def get_target_position(self, target_posture: Posture) -> Dict[str, float]:
         """
@@ -1648,8 +1662,8 @@ class MeteorTFS3PostureManager(MeteorTFS1PostureManager):
             fixed_fm_sample = {"z": fixed_fm_sample["z"]}  # Drop x and y, to make clear only z is used
             self.stage.updateMetadata({model.MD_FM_POS_SAMPLE_ACTIVE: fixed_fm_sample})
 
-        # Update the posture based on the actual metadata
-        self._update_posture(self.stage.position.value)
+        # Update the posture and enforce scan rotation if in a known posture
+        self._init_posture()
 
     def _transform_from_sem_to_fm(self, pos: Dict[str, float], fix_fm_plane: bool = True) -> Dict[str, float]:
         """
@@ -1850,8 +1864,8 @@ class MeteorZeiss1PostureManager(MeteorPostureManager):
         # Automatic conversion to sample-stage axes
         self._initialise_transformation(axes=["y", "m"], rotation=self.pre_tilt)
         self.create_sample_stage()
-        # Update the posture based on the actual metadata
-        self._update_posture(self.stage.position.value)
+        # Update the posture and enforce scan rotation if in a known posture
+        self._init_posture()
 
     def from_sample_stage_to_stage_position(self, pos: Dict[str, float]) -> Dict[str, float]:
         new_pos = super().from_sample_stage_to_stage_position(pos)
@@ -2180,8 +2194,8 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
         self.milling_angle.subscribe(self._initialise_transformation, init=True)
         self.create_sample_stage()
 
-        # Update the posture based on the actual metadata
-        self._update_posture(self.stage.position.value)
+        # Update the posture and enforce scan rotation if in a known posture
+        self._init_posture()
 
     def _initialise_transformation(self, angle):
         """
@@ -2861,8 +2875,8 @@ class MeteorJeol1PostureManager(MeteorPostureManager):
         # Automatic conversion to sample-stage axes
         self._initialise_transformation(axes=["y", "z"])
         self.create_sample_stage()
-        # Update the posture based on the actual metadata
-        self._update_posture(self.stage.position.value)
+        # Update the posture and enforce scan rotation if in a known posture
+        self._init_posture()
 
     def _update_conversion(self,
                            rotation: float = 0,
