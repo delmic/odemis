@@ -329,20 +329,25 @@ class PnlTabSparc2Align(wx.Panel):
 
             with hbox() as combo_sizer:
                 combo_sizer.Add(
-                    self._label(panel, "Detectors"), flag=wx.LEFT, border=5
+                    self._label(panel, "Detectors"),
+                    flag=wx.LEFT | wx.RIGHT,
+                    border=5,
                 )
 
                 detectors = self._combo_box(panel)
                 setattr(self, f"cmb_focus_detectors{suffix}", detectors)
                 combo_sizer.Add(detectors, flag=wx.EXPAND)
 
+                # Push the grating label (and combobox) to the far right
+                combo_sizer.AddStretchSpacer()
+
                 gratings_label = wx.StaticText(panel, label="Gratings")
                 setattr(self, f"cmb_focus_gratings_label{suffix}", gratings_label)
-                combo_sizer.Add(gratings_label, flag=wx.LEFT, border=5)
+                combo_sizer.Add(gratings_label, flag=wx.LEFT | wx.RIGHT, border=5)
 
                 gratings = self._combo_box(panel)
                 setattr(self, f"cmb_focus_gratings{suffix}", gratings)
-                combo_sizer.Add(gratings, flag=wx.EXPAND)
+                combo_sizer.Add(gratings, flag=wx.EXPAND | wx.RIGHT, border=5)
 
             sizer.Add(combo_sizer, flag=wx.BOTTOM | wx.EXPAND, border=10)
 
