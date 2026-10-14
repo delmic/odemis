@@ -50,7 +50,7 @@ from .geometry import (  # noqa: F401
     intercept_of_line,
     intersect,
     is_point_in_rect,
-    normalize_rect,
+    sanitize_rect,
     perpendicular_distance,
     project_point_on_line,
     rect_intersect,

@@ -267,7 +267,7 @@ class TiledAcquisitionTask(object):
         """
         if isinstance(region, tuple) and len(region) == 4:
             # Normalize the bounding box to ensure the order is correct
-            xmin, ymin, xmax, ymax = util.normalize_rect(region)
+            xmin, ymin, xmax, ymax = util.sanitize_rect(region)
             if region[0] != xmin or region[1] != ymin:
                 logging.warning("Acquisition area %s rearranged into %s", region, (xmin, ymin, xmax, ymax))
             points = [(xmin, ymin), (xmax, ymin), (xmax, ymax), (xmin, ymax)]
