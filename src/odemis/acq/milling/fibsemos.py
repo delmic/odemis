@@ -27,6 +27,8 @@ import threading
 import time
 from concurrent import futures
 from concurrent.futures import CancelledError
+from copy import deepcopy
+from inspect import signature
 from typing import List, Optional, Tuple, Union
 
 from odemis import model
@@ -43,6 +45,12 @@ from odemis.acq.milling.patterns import (
     MillingPatternParameters,
     RectanglePatternParameters,
     TrenchPatternParameters,
+)
+from odemis.acq.milling.system_state import (
+    FIBSEMOS_COMPONENT_ROLES,
+    capture_system_state,
+    restore_system_state,
+    validate_system_state,
 )
 from odemis.acq.milling.tasks import (
     MillingSettings,
@@ -89,6 +97,64 @@ except ImportError as e:
 
 _persistent_millmng: Optional["FibsemOSMillingTaskManager"] = None
 _MILLING_FOV_MARGIN = 0.01
+
+
+def _convert_reference_image(image: model.DataArray, system_state: dict) -> 'FibsemImage':
+    """Prepare a reference image for fibsemOS.
+
+    Supply the recorded system state used to configure reference image
+    reacquisition. Share the image pixels, but copy the metadata and system
+    state before adapting them to the converter's expected format.
+
+    :param image: Odemis reference image with acquisition metadata.
+    :param system_state: Normalized acquisition settings indexed by component role.
+    :returns: Reference image with metadata prepared for fibsemOS.
+    """
+    image = model.DataArray(image, metadata=deepcopy(image.metadata))
+    conversion_state = deepcopy(system_state)
+    # New role-based converter API introduced in fibsemOS commit 78d7ef9e.
+    # Detect the argument so builds that backport this API are supported too.
+    if "system_state" in signature(from_odemis_image).parameters:
+        converted = from_odemis_image(image, system_state=conversion_state)
+    else:
+        # Legacy converter used by fibsemOS 0.4.1a1, 0.5.0a0, and 0.5.1.
+        # Keep this fallback until converters without system_state are no longer supported.
+        # These converters read the snapshot and beam name from the copied image metadata.
+        for role in ("e-beam", "ion-beam"):
+            # fibsemOS 0.4.1a1 accepts probeCurrent directly, but the 0.5.0a0
+            # and 0.5.1 converters require beamCurrent.
+            conversion_state[role]["beamCurrent"] = [conversion_state[role].get("probeCurrent", [None])[0]]
+            # The release converter wraps tuples in another list.
+            conversion_state[role]["resolution"][0] = list(conversion_state[role]["resolution"][0])
+            for field in ("shift", "stigmator"):
+                if conversion_state[role].get(field, [None])[0] is None:
+                    conversion_state[role][field] = [[0.0, 0.0]]
+        image.metadata[model.MD_EXTRA_SETTINGS] = {name: conversion_state[role]
+                                                 for name, role in FIBSEMOS_COMPONENT_ROLES.items()
+                                                 if role in conversion_state}
+        beam_names = {model.MD_AT_EM: "SEM", model.MD_AT_FIB: "FIB"}
+        beam_name = beam_names.get(image.metadata.get(model.MD_ACQ_TYPE))
+        if beam_name is not None:
+            image.metadata[model.MD_DESCRIPTION] = beam_name
+        converted = from_odemis_image(image)
+
+        # Legacy converters do not retain the acquisition timestamp and may use
+        # zero for missing settings, including the shift/stigmator placeholders
+        # supplied above. Restore the recorded values here. The new system_state
+        # converter already handles timestamps and missing settings itself.
+        microscope_state = converted.metadata.microscope_state
+        if microscope_state is not None:
+            microscope_state.timestamp = image.metadata.get(model.MD_ACQ_DATE)
+            for role, beam in (("e-beam", microscope_state.electron_beam),
+                               ("ion-beam", microscope_state.ion_beam)):
+                if beam is None:
+                    continue
+                recorded = system_state[role]
+                for field, attribute in (("shift", "shift"), ("stigmator", "stigmation")):
+                    if recorded.get(field, [None])[0] is None:
+                        setattr(beam, attribute, None)
+                beam.beam_current = recorded.get("probeCurrent", [None])[0]
+    return converted
 
 
 class _RectanglePatternGroup(RectanglePattern):
@@ -478,7 +544,7 @@ def convert_milling_tasks_to_milling_stages(
 class FibsemOSMillingTaskManager:
     """Manage running milling tasks via fibsemOS using a persistent microscope connection."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the manager and establish the fibsemOS microscope connection."""
         # create microscope connection
         self.microscope = create_fibsemos_microscope()
@@ -491,7 +557,11 @@ class FibsemOSMillingTaskManager:
         self._future: Optional[futures.Future] = None
 
     def cancel(self, future: futures.Future) -> bool:
-        """Request cancellation of the current milling run."""
+        """Request cancellation of the current milling run.
+
+        :param future: Future associated with the milling run to cancel.
+        :returns: True if cancellation was requested, or False if no run is active.
+        """
         logging.debug("Canceling milling procedure...")
         with self._lock:
             if not self._active:
@@ -510,32 +580,86 @@ class FibsemOSMillingTaskManager:
         return True
 
     def estimate_milling_time(self) -> float:
-        """Estimate the total milling time for the currently configured stages (seconds)."""
+        """Estimate the total milling time for the currently configured stages.
+
+        :returns: Estimated milling duration in seconds.
+        """
         return estimate_total_milling_time(self.milling_stages)
 
-    def _run_stage(self, stage: 'FibsemMillingStage') -> None:
-        """Execute a milling stage and clean up through the shared fibsemOS API.
+    def _normalize_system_state(self, system_state: dict) -> dict:
+        """Validate a recorded snapshot for Tescan or Thermo image conversion.
+
+        The snapshot is indexed by component role. Supply optional fields
+        required by upstream converters while preserving recorded values.
+        Keep probeCurrent as recorded. Thermo uses it as a configured setpoint,
+        while Tescan restores its FIB conditions through the recorded beam preset.
+
+        :param system_state: The dedicated snapshot stored with the feature.
+        :return: An independent dictionary with optional conversion fields populated.
+        :raises ValueError: Required metadata is missing or invalid.
+        """
+        validate_system_state(system_state)
+        state = deepcopy(system_state)
+
+        if not isinstance(self.microscope, OdemisTescanMicroscope):
+            for beam_key in ("e-beam", "ion-beam"):
+                if "probeCurrent" not in state[beam_key]:
+                    raise ValueError(f"Milling system state is missing {beam_key}.probeCurrent.")
+
+        for focus_key in ("ebeam-focus", "ion-focus"):
+            focus_md = state.setdefault(focus_key, {})
+            if not focus_md.get("position"):
+                focus_md["position"] = [{"z": None}]
+            else:
+                focus_md["position"][0].setdefault("z", None)
+
+        for detector_key in ("se-detector", "se-detector-ion"):
+            detector_md = state.setdefault(detector_key, {})
+            for field in ("type", "mode", "brightness", "contrast"):
+                detector_md.setdefault(field, [None])
+
+        return state
+
+    def _finish_milling(self, system_state: dict) -> None:
+        """Clear patterns without selecting a default Tescan imaging preset.
+
+        :param system_state: Imaging settings captured immediately before milling.
+            Thermo uses the recorded FIB current and voltage for cleanup.
+        """
+        if isinstance(self.microscope, OdemisTescanMicroscope):
+            self.microscope.connection.DrawBeam.UnloadLayer()
+            # Reset fibsemOS's cached layer and pre-milling preset.
+            self.microscope._milling_layer_loaded = False
+            self.microscope._preset_before_milling = None
+        else:
+            beam = system_state["ion-beam"]
+            self.microscope.finish_milling(imaging_current=beam["probeCurrent"][0],
+                                          imaging_voltage=beam["accelVoltage"][0])
+
+    def _run_stage(self, stage: 'FibsemMillingStage', system_state: dict) -> None:
+        """Run the shared strategy API and restore conditions without hiding errors.
 
         :param stage: Milling stage with its reference image and alignment settings.
+        :param system_state: Imaging settings captured immediately before milling,
+            passed to pattern cleanup rather than the reference acquisition state.
         """
         channel = stage.milling.milling_channel
         initial_shift = self.microscope.get("shift", beam_type=channel)
-        imaging_beam = self.microscope.system.ion.beam
         failed = False
         try:
-            # fibsemOS 0.5.0a0 removed mill_stages. This API is shared with 0.4.1a1.
+            # fibsemOS 0.5.0a0 removed mill_stages.
+            # Use stage.strategy.run(), also available in fibsemOS 0.4.1a1.
             stage.strategy.run(microscope=self.microscope, stage=stage, asynch=False)
         except BaseException:
             failed = True
             raise
         finally:
-            # Preserve the former mill_stages cleanup: stop after failure, clear
-            # patterns, restore configured imaging conditions and reset beam shift.
-            # Attempt every action without replacing an existing milling error.
+            # Stop milling after failure, clear loaded patterns, and restore the
+            # original beam shift. Attempt every action even if one fails.
+            # Report cleanup errors without replacing an existing milling error.
             cleanup_error = None
             cleanup = [self.microscope.stop_milling] if failed else []
-            cleanup.append(lambda: self.microscope.finish_milling(
-                imaging_current=imaging_beam.beam_current, imaging_voltage=imaging_beam.voltage))
+            cleanup.append(lambda: self._finish_milling(system_state))
             if initial_shift is not None:
                 cleanup.append(lambda: self.microscope.set("shift", value=initial_shift, beam_type=channel))
             for action in cleanup:
@@ -557,28 +681,51 @@ class FibsemOSMillingTaskManager:
                 self._active = False
             raise RuntimeError("Internal error: milling run started without an associated future.")
 
+        restoration_state = None
+        milling_started = False
+        failed = False
         try:
+            recorded_state = deepcopy(self.feature.system_state)
+            system_state = self._normalize_system_state(recorded_state)
             for stage in self.milling_stages:
                 with self._lock:
                     if self._cancel_requested:
                         raise CancelledError()
 
                 logging.info(f"Running milling stage: {stage.name}")
-                ref_img = from_odemis_image(_get_reference_image(self.feature))
+                reference_image = _get_reference_image(self.feature)
+                ref_img = _convert_reference_image(reference_image, system_state)
                 ref_img.metadata.image_settings.path = self.path
                 ref_img.metadata.image_settings.reduced_area = stage.alignment.rect
 
                 ref_img = _crop_to_reduced_area(ref_img, stage.alignment.rect)
-
                 # fibsemOS 0.4.1a0 introduced stage.reference_image for strategy alignment.
                 stage.reference_image = ref_img
                 stage.imaging.path = self.path
-                self._run_stage(stage)
 
+                if restoration_state is None:
+                    # Restore the user's settings from just before milling,
+                    # which may differ from the saved reference alignment state.
+                    restoration_state = capture_system_state()
+                milling_started = True
+                self._run_stage(stage, restoration_state)
+
+        except BaseException:
+            failed = True
+            raise
         finally:
-            with self._lock:
-                self._active = False
-                self._cancel_requested = False
+            try:
+                if milling_started:
+                    try:
+                        restore_system_state(restoration_state)
+                    except Exception:
+                        if not failed:
+                            raise
+                        logging.exception("Imaging restoration failed after interrupted milling.")
+            finally:
+                with self._lock:
+                    self._active = False
+                    self._cancel_requested = False
 
     def async_run(self,
                   *,
@@ -586,7 +733,15 @@ class FibsemOSMillingTaskManager:
                   tasks: List[MillingTaskSettings],
                   feature: CryoFeature,
                   path: Optional[str] = None) -> futures.Future:
-        """Prepare and start a milling run asynchronously (one run at a time)."""
+        """Prepare and start a milling run asynchronously (one run at a time).
+
+        :param future: Future used to report progress, cancellation, and completion.
+        :param tasks: Milling tasks to convert and execute in order.
+        :param feature: Feature holding the reference image and recorded acquisition state.
+        :param path: Output directory for milling images, defaulting to the current directory.
+        :returns: The supplied future associated with the milling run.
+        :raises RuntimeError: Another milling run is already active.
+        """
         if path is None:
             path = os.getcwd()
 

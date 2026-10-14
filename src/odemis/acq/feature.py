@@ -392,6 +392,7 @@ class CryoFeature(object):
         # attributes for automated milling
         self.path: str = None  # TODO:support path creation here, rather than on milling data save
         self.reference_image: model.DataArray = None
+        self.system_state: Optional[dict] = None
 
         # Save the stream used for SuperZ workflow
         self.superz_stream_name: Optional[str] = None
@@ -475,7 +476,8 @@ class CryoFeature(object):
                                stage_position: Dict[str, float],
                                path: str,
                                reference_image: model.DataArray,
-                               milling_tasks: Dict[str, MillingTaskSettings] = None
+                               milling_tasks: Dict[str, MillingTaskSettings] = None,
+                               system_state: Optional[dict] = None
                                ) -> None:
         """Assign the milling task data to the feature and save the reference image.
         This information is required for the automated milling process.
@@ -483,6 +485,7 @@ class CryoFeature(object):
         :param path: the path to save the feature data
         :param reference_image: the reference image of the feature (FIB)
         :param milling_tasks: the milling tasks for the feature (optional)
+        :param system_state: recorded imaging settings, persisted in project.json
         """
 
         alignment_area = constrain_milling_alignment_area(
@@ -499,12 +502,13 @@ class CryoFeature(object):
         os.makedirs(self.path, exist_ok=True)
 
         # assign the reference image
-        self.reference_image = reference_image
+        self.reference_image = model.DataArray(reference_image, metadata=copy.deepcopy(reference_image.metadata))
+        self.system_state = copy.deepcopy(system_state)
 
         # save the reference image to disk (NOTE: we want to overwrite the existing file)
         filename = os.path.join(self.path, f"{self.name.value}-{REFERENCE_IMAGE_FILENAME}")
         exporter = find_fittest_converter(filename)
-        exporter.export(filename, reference_image)
+        exporter.export(filename, self.reference_image)
         self.milling_alignment_area.value = alignment_area
 
         # save the milling position (it can be updated by the user)
@@ -553,6 +557,7 @@ def feature_decoder(feature_raw: Dict) -> CryoFeature:
     if milling_feature_offset is not None:
         feature.milling_feature_offset.value = tuple(milling_feature_offset)
     feature.path = feature_raw.get('path', None)
+    feature.system_state = copy.deepcopy(feature_raw.get('system_state'))
     feature.superz_stream_name = feature_raw.get('superz_stream_name', None)
     feature.superz_focused = feature_raw.get('superz_focused', None)
     milling_alignment_area = feature_raw.get('milling_alignment_area')

@@ -44,7 +44,7 @@ from odemis.acq.feature import (
     MillingAlignmentAreaTooSmallError,
     constrain_milling_alignment_area,
 )
-from odemis.acq.milling import millmng
+from odemis.acq.milling import fibsemos, millmng
 from odemis.acq.milling.millmng import MillingWorkflowTask, run_automated_milling
 from odemis.acq.milling.patterns import (
     CorrelationPatternParameters,
@@ -1490,11 +1490,26 @@ class AutomatedMillingController:
         self._tab.milling_task_controller._update_milling_validation_message()
         self._tab.milling_task_controller._update_mill_btn()
 
-    def _run_automated_milling(self, evt: wx.Event):
+    def _run_automated_milling(self, evt: wx.Event) -> None:
+        """Start automated milling after checking the recorded acquisition state.
+
+        :param evt: Event from the automated milling button.
+        """
 
         # filter the features list, so only the checked ones are used
         features = self._tab_data.main.features.value
         features = [f for i, f in enumerate(features) if self._panel.workflow_features_chk_list.IsChecked(i)]
+        if not features:
+            return
+        if fibsemos.FIBSEMOS_INSTALLED:
+            missing_state = [feature.name.value for feature in features if not feature.system_state]
+            if missing_state:
+                wx.MessageBox(
+                    f"New FIB reference images are required for: {', '.join(missing_state)}.\n\n"
+                    "Select each feature, move to its milling position, and click SAVE POSITION "
+                    "to acquire a new reference image before starting automated milling.",
+                    "New milling references required", wx.OK | wx.ICON_WARNING)
+                return
         stage = self._tab_data.main.stage_bare
         sem_stream = self._tab.sem_stream
         fib_stream = self._tab.fib_stream

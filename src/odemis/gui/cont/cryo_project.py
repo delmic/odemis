@@ -52,7 +52,7 @@ LEGACY_POSTURE_REGISTRY = {
 }
 
 PROJECT_NAME = "project.json"
-PROJECT_VERSION = "1.0"
+PROJECT_VERSION = "1.1"
 LEGACY_PROJECT_NAME = "features.json"
 IMG_FILENAME = "filename"
 IMG_IN_FILE_IDS = "in_file_indices"
@@ -246,6 +246,7 @@ def serialize_project_data(main_data: "CryoMainGUIData") -> Dict:
             'posture_positions': feature.posture_positions,
             "milling_tasks": {k: v.to_dict() for k, v in feature.milling_tasks.items()},
             'milling_alignment_area': feature.milling_alignment_area.value,
+            'system_state': feature.system_state,
             'correlation_data': feature.correlation_data.to_dict() if feature.correlation_data  else {},
             'superz_stream_name': feature.superz_stream_name,
             'superz_focused': feature.superz_focused,
