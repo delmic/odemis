@@ -75,6 +75,7 @@ from odemis.gui.comp.overlay.rectangle import MillingRectangleOverlay
 from odemis.gui.comp.overlay.shapes import EditableShape
 from odemis.gui.comp.popup import show_message
 from odemis.gui.conf import get_acqui_conf
+from odemis.gui.cont.cryo_project import get_feature_dir
 from odemis.gui.cont.features import save_project
 from odemis.gui.layout import theme
 from odemis.gui.util import call_in_wx_main, wxlimit_invocation
@@ -1502,7 +1503,8 @@ class AutomatedMillingController:
 
         # tmp: add the path to the features, as it's not saved in the feature
         for feature in features:
-            feature.path = os.path.join(self.conf.pj_last_path, feature.name.value)
+            feature_dir = get_feature_dir(self.conf.pj_last_path, feature.name.value)
+            feature.path = str(feature_dir) if feature_dir else None
 
         task_list = [t for i, t in enumerate(self.task_list) if self._panel.workflow_task_chk_list.IsChecked(i)]
         logging.info(f"Running automated milling for tasks: {task_list}")

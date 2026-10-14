@@ -22,6 +22,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 import logging
 import json
 import os
+import re
 from packaging.version import Version
 from pathlib import Path
 from typing import Any, Dict, List, Iterable, Optional
@@ -55,6 +56,65 @@ PROJECT_VERSION = "1.0"
 LEGACY_PROJECT_NAME = "features.json"
 IMG_FILENAME = "filename"
 IMG_IN_FILE_IDS = "in_file_indices"
+TRASH_SUFFIX = "_trash"
+
+# Characters which are not allowed in a feature name, as it's also used as directory name
+_UNSAFE_NAME_CHARS = re.compile(r'[\x00-\x1f\x7f/\\<>:"|?*]')
+
+
+def sanitize_feature_name(name: str) -> str:
+    """
+    Make a feature name safe to be used as a file or directory name: path separators, control characters and
+    other special characters are replaced by an underscore, and leading/trailing spaces and dots are removed
+    (so that the name can never be "." or ".." nor hidden).
+    :param name: the proposed feature name
+    :return: the sanitized name (which can be empty if nothing usable remained)
+    """
+    return _UNSAFE_NAME_CHARS.sub("_", name).strip(" .")
+
+
+def get_feature_dir(project_dir: os.PathLike, name: str) -> Optional[Path]:
+    """
+    Get the directory where the data of a feature is stored, which is always directly inside the project directory.
+    :param project_dir: path to the project directory
+    :param name: the name of the feature
+    :return: the path of the feature directory (which may not exist yet), or None if the name doesn't allow
+    to get a valid directory inside the project directory.
+    """
+    safe_name = sanitize_feature_name(name)
+    if not safe_name:
+        return None
+    project_dir = Path(project_dir)
+    feature_dir = project_dir / safe_name
+    if feature_dir.parent != project_dir:
+        return None
+    return feature_dir
+
+
+def trash_feature_dir(feature_dir: os.PathLike) -> Optional[Path]:
+    """
+    Move a feature directory out of the way, by appending "_trash" to its name. As feature names are auto-generated,
+    a deleted name can be reused by a new feature, so the trashed directory must never conflict with a new
+    one (nor with an earlier trashed one). Nothing is deleted.
+    :param feature_dir: the directory to move
+    :return: the new path of the directory, or None if there was nothing to move or it failed
+    """
+    feature_dir = Path(feature_dir)
+    if not feature_dir.is_dir():
+        return None
+
+    trash_dir = feature_dir.with_name(feature_dir.name + TRASH_SUFFIX)
+    i = 1
+    while trash_dir.exists():
+        i += 1
+        trash_dir = feature_dir.with_name(f"{feature_dir.name}{TRASH_SUFFIX}{i}")
+
+    try:
+        feature_dir.rename(trash_dir)
+    except OSError:
+        logging.exception(f"Failed to move feature directory {feature_dir} to {trash_dir}")
+        return None
+    return trash_dir
 
 
 def save_project(main_data: "CryoMainGUIData") -> None:
@@ -133,6 +193,14 @@ def load_project(project_dir: os.PathLike) -> dict:
     for feature in features:
         feature["images"] = deserialize_images(feature["images"], project_dir)
 
+    # The feature directory (containing the milling data) is always named after the feature, so it is not stored in
+    # the project file (older versions did store it, as an absolute path, which is ignored).
+    for feature in features:
+        feature.pop("path", None)
+        feature_dir = get_feature_dir(project_dir, feature["name"])
+        if feature_dir is not None and feature_dir.is_dir():
+            feature["path"] = str(feature_dir)
+
     # Recover absolute image paths for overview images
     overviews = deserialize_images(overviews, project_dir)
 
@@ -183,8 +251,6 @@ def serialize_project_data(main_data: "CryoMainGUIData") -> Dict:
             'superz_focused': feature.superz_focused,
             'images': serialize_images(feature.images.value, project_dir),
         }
-        if feature.path:
-            feature_item['path'] = feature.path
         if feature.milling_feature_offset.value is not None:
             feature_item['milling_feature_offset'] = feature.milling_feature_offset.value
         feature_list.append(feature_item)

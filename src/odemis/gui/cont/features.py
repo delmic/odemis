@@ -24,6 +24,7 @@ import itertools
 import logging
 import math
 import os
+from pathlib import Path
 import threading
 from typing import Optional
 
@@ -38,6 +39,7 @@ from odemis.acq.feature import (
     FEATURE_POLISHED,
     FEATURE_READY_TO_MILL,
     FEATURE_ROUGH_MILLED,
+    REFERENCE_IMAGE_FILENAME,
     CryoFeature,
     collect_feature_data,
     FIBFMCorrelationData,
@@ -51,7 +53,7 @@ from odemis.acq.move import Posture, FM_POSTURES
 from odemis.gui import model as guimod
 from odemis.gui.comp.popup import show_message
 from odemis.gui.conf.licences import LICENCE_MILLING_ENABLED
-from odemis.gui.cont.cryo_project import save_project
+from odemis.gui.cont.cryo_project import get_feature_dir, sanitize_feature_name, save_project, trash_feature_dir
 from odemis.gui.model import TOOL_FEATURE, TOOL_NONE
 from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.widgets import VigilantAttributeConnector
@@ -149,6 +151,11 @@ class CryoFeatureController(object):
         ans = box.ShowModal()
         if ans == wx.ID_YES:
             self._maybe_collect_on_delete(current_feature)
+            # Keep the data on disk, but out of the way of any future feature with the same name
+            feature_dir = get_feature_dir(self._tab.conf.pj_last_path, feature_name)
+            if feature_dir is not None:
+                trash_feature_dir(feature_dir)
+            current_feature.path = None
             self._tab_data_model.main.features.value.remove(current_feature)
             self._tab_data_model.main.currentFeature.value = None
             if self.acqui_mode is guimod.AcquiMode.FIBSEM:
@@ -329,10 +336,15 @@ class CryoFeatureController(object):
 
     def _save_milling_reference(self, feature: CryoFeature, reference_image: model.DataArray) -> bool:
         """Save a reference image or show its alignment-area validation warning."""
+        feature_dir = get_feature_dir(self._tab.conf.pj_last_path, feature.name.value)
+        if feature_dir is None:
+            logging.warning(f"Feature name {feature.name.value!r} cannot be used as directory name")
+            return False
+
         try:
             feature.save_milling_task_data(
                 stage_position=self.pm.stage.position.value,
-                path=os.path.join(self._tab.conf.pj_last_path, feature.name.value),
+                path=str(feature_dir),
                 reference_image=reference_image,
             )
         except MillingAlignmentAreaTooSmallError as exc:
@@ -582,11 +594,45 @@ class CryoFeatureController(object):
 
     def _on_cmb_feature_name_change(self):
         feature = self._tab_data_model.main.currentFeature.value
-        value = self._panel.cmb_features.GetValue()  # Old name
+        value = sanitize_feature_name(self._panel.cmb_features.GetValue())  # New name, safe as directory name
+        if not value:
+            logging.warning("Feature name is empty or invalid, keeping the previous one")
+            value = feature.name.value
         # Update the name of the streams with the new name
         for stream in feature.streams.value:
             stream.name.value = stream.name.value.replace(feature.name.value, value)
+        self._rename_feature_path(feature, value)
         return value
+
+    def _rename_feature_path(self, feature: CryoFeature, new_name: str) -> None:
+        """
+        Update the feature directory (and its reference image) so that it follows the new feature name.
+        The feature name must not have been updated yet.
+        :param feature: the feature being renamed
+        :param new_name: the new name of the feature
+        """
+        old_name = feature.name.value
+        if not feature.path or new_name == old_name:
+            return
+
+        old_path = Path(feature.path)
+        new_path = get_feature_dir(self._tab.conf.pj_last_path, new_name)
+        if new_path is None or old_path == new_path:
+            return
+        if new_path.exists():
+            logging.warning(f"Cannot move feature directory to {new_path}, as it already exists")
+            return
+
+        try:
+            if old_path.is_dir():
+                old_path.rename(new_path)
+                old_ref = new_path / f"{old_name}-{REFERENCE_IMAGE_FILENAME}"
+                if old_ref.exists():
+                    old_ref.rename(new_path / f"{new_name}-{REFERENCE_IMAGE_FILENAME}")
+        except OSError:
+            logging.exception(f"Failed to move feature directory {old_path} to {new_path}")
+            return
+        feature.path = str(new_path)
 
     def _on_feature_status(self, feature_status):
         """

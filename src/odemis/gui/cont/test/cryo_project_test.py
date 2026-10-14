@@ -38,6 +38,9 @@ from odemis.acq.feature import (
 )
 from odemis.acq.move import Posture
 from odemis.gui.cont.cryo_project import (
+    get_feature_dir,
+    sanitize_feature_name,
+    trash_feature_dir,
     load_project,
     read_project_file,
     save_project,
@@ -147,6 +150,48 @@ class TestCryoProject(unittest.TestCase):
             feature = feature_decoder(feature_data)
             self.assertEqual(feature.fm_focus_position.value,
                              {Posture.FM_IMAGING: feature_data["fm_focus_position"][Posture.FM_IMAGING.value]})
+
+    def test_feature_path(self):
+        """Tests that the feature path is not stored, but derived from the feature directory on load."""
+        feature = CryoFeature("Feature-1", {"x": 0, "y": 0, "z": 0}, {"z": 0})
+        feature.path = str(self.test_dir / "Feature-1")
+        main_data = MagicMock()
+        main_data.tab.value.conf.pj_last_path = self.test_dir
+        main_data.features.value = [feature]
+        main_data.overviews.value = []
+
+        save_project(main_data)
+        self.assertNotIn("path", read_project_file(self.test_dir / PROJECT_NAME)["features"][0])
+        # No feature directory (yet)
+        self.assertNotIn("path", load_project(self.test_dir)["features"][0])
+
+        (self.test_dir / "Feature-1").mkdir()
+        self.assertEqual(load_project(self.test_dir)["features"][0]["path"], str(self.test_dir / "Feature-1"))
+
+    def test_sanitize_feature_name(self):
+        """Tests that feature names can't be used to escape from the project directory."""
+        self.assertEqual(sanitize_feature_name("Feature-1"), "Feature-1")
+        self.assertEqual(sanitize_feature_name("../../etc"), "_.._etc")
+        self.assertEqual(sanitize_feature_name("a/b\\c"), "a_b_c")
+        self.assertEqual(sanitize_feature_name(".."), "")
+        self.assertEqual(sanitize_feature_name(" . "), "")
+        for name in ("../x", "/etc/passwd", "a/../../b", "x\x00y", "..", ""):
+            feature_dir = get_feature_dir(self.test_dir, name)
+            if feature_dir is not None:
+                self.assertEqual(feature_dir.parent, self.test_dir)
+        self.assertIsNone(get_feature_dir(self.test_dir, ".."))
+        self.assertIsNone(get_feature_dir(self.test_dir, ""))
+
+    def test_trash_feature_dir(self):
+        """Tests that a deleted feature directory is moved aside, without conflicting with earlier ones."""
+        self.assertIsNone(trash_feature_dir(self.test_dir / "Feature-1"))  # doesn't exist
+
+        feature_dir = self.test_dir / "Feature-1"
+        feature_dir.mkdir()
+        trashed = trash_feature_dir(feature_dir)
+        self.assertFalse(feature_dir.exists())
+        self.assertTrue(trashed.is_dir())
+        self.assertTrue((self.test_dir / "Feature-1_trash").is_dir())
 
     def test_milling_feature_offset_roundtrip(self):
         """The feature/pattern anchor is persisted without changing legacy projects."""
