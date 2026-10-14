@@ -733,6 +733,7 @@ def Sparc2ManualFocus(
                         align_mode, ex)
         # It's correct most of the time
         bl = model.getComponent(role="brightlight")
+        spgr = model.getComponent(role="spectrograph")
 
     manual_focus_loading_time = 10  # Rough estimation of the slit movement
     f = model.ProgressiveFuture(remaining_time=manual_focus_loading_time)
