@@ -19,9 +19,14 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
+import json
 import logging
 import math
 import unittest
+from concurrent import futures
+from copy import deepcopy
+from types import SimpleNamespace
+from typing import Callable, Optional
 from unittest import mock
 
 import numpy
@@ -60,6 +65,8 @@ from odemis.acq.milling.tasks import MillingSettings, MillingTaskSettings
 from odemis import model
 from odemis.acq.feature import CryoFeature
 from odemis.acq.milling.fibsemos import _format_preset, _get_reference_image
+from odemis.acq.milling import system_state
+from odemis.driver import simulated
 
 logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)-15s: %(message)s")
 logging.getLogger().setLevel(logging.DEBUG)
@@ -472,6 +479,448 @@ class TestCompositeSpotSizeCorrection(unittest.TestCase):
         self.ruler.spot_size_correction.value = 16e-9
         with self.assertRaises(ValueError):
             convert_milling_tasks_to_milling_stages([self.task])
+
+
+def create_tescan_metadata() -> dict:
+    """Return recorded Tescan settings without unsupported optional fields."""
+    beam = {
+        "dwellTime": [1e-6, "s"],
+        "horizontalFoV": [100e-6, "m"],
+        "accelVoltage": [30e3, "V"],
+        "resolution": [[8, 6], ""],
+        "rotation": [0.0, "rad"],
+    }
+    metadata = {
+        "e-beam": deepcopy(beam),
+        "ion-beam": deepcopy(beam),
+        "ebeam-focus": {"position": [{"z": 5e-3}, "m"]},
+        "se-detector": {"type": ["SE", ""]},
+        "se-detector-ion": {"type": ["SE", ""]},
+        "stage-bare": {"position": [{"x": 0.0, "y": 0.0, "z": 30e-3, "rx": 0.0, "rz": 0.0}, "m"]},
+    }
+    metadata["e-beam"]["probeCurrent"] = [100e-12, "A"]
+    metadata["ion-beam"]["beamPreset"] = ["30 keV; 150 pA", None]
+    return metadata
+
+
+class TestTescanMetadataDefaults(unittest.TestCase):
+    """Check metadata normalization without acquiring microscope settings."""
+
+    def setUp(self):
+        self.manager = fibsemos.FibsemOSMillingTaskManager.__new__(fibsemos.FibsemOSMillingTaskManager)
+        self.manager.microscope = TescanMicroscopeStub()
+        patcher = mock.patch.object(fibsemos, "OdemisTescanMicroscope", TescanMicroscopeStub, create=True)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_current_values(self):
+        metadata = create_tescan_metadata()
+        # A measured FIB current must not be copied into the setpoint field.
+        metadata["ion-beam"]["probeCurrent"] = [90e-12, "A"]
+        normalized = self.manager._normalize_system_state(metadata)
+        self.assertEqual(normalized["e-beam"]["beamCurrent"], [100e-12, "A"])
+        self.assertIsNone(normalized["ion-beam"]["beamCurrent"][0])
+
+    def test_preserve_recorded_values(self):
+        metadata = create_tescan_metadata()
+        for beam_key in ("e-beam", "ion-beam"):
+            metadata[beam_key]["beamCurrent"] = [150e-12, "A"]
+            metadata[beam_key]["shift"] = [[1e-6, 2e-6], "m"]
+            metadata[beam_key]["stigmator"] = [[0.1, 0.2], ""]
+        metadata["ion-focus"] = {"position": [{"z": 10e-3}, "m"]}
+        metadata["se-detector-ion"]["brightness"] = [0.7, ""]
+        metadata["se-detector-ion"]["contrast"] = [0.0, ""]
+        original = deepcopy(metadata)
+        normalized = self.manager._normalize_system_state(metadata)
+        self.assertEqual(normalized["ion-beam"], original["ion-beam"])
+        self.assertEqual(normalized["ion-focus"], original["ion-focus"])
+        self.assertEqual(normalized["se-detector-ion"]["contrast"], [0.0, ""])
+        normalized["ion-beam"]["beamCurrent"][0] = 50e-12
+        self.assertEqual(metadata, original)
+
+    def test_missing_beam_settings(self):
+        metadata = create_tescan_metadata()
+        del metadata["e-beam"]
+        with self.assertRaisesRegex(ValueError, "missing e-beam"):
+            self.manager._normalize_system_state(metadata)
+
+    def test_invalid_acquisition_settings(self):
+        for field, value in (("dwellTime", 0.0), ("horizontalFoV", math.nan)):
+            with self.subTest(field=field):
+                metadata = create_tescan_metadata()
+                metadata["ion-beam"][field][0] = value
+                with self.assertRaisesRegex(ValueError, rf"invalid ion-beam\.{field}"):
+                    self.manager._normalize_system_state(metadata)
+
+    def test_missing_stage_position(self):
+        metadata = create_tescan_metadata()
+        del metadata["stage-bare"]["position"][0]["z"]
+        with self.assertRaisesRegex(ValueError, r"stage-bare\.position\.z"):
+            self.manager._normalize_system_state(metadata)
+
+    @unittest.skipUnless(fibsemos.FIBSEMOS_INSTALLED, "fibsemOS is not available")
+    def test_image_conversion(self):
+        """Preserve acquisition provenance through real Tescan and Thermo image conversion."""
+        for tescan, current in ((True, None), (False, 20e-12)):
+            with self.subTest(tescan=tescan):
+                self.manager.microscope = TescanMicroscopeStub() if tescan else SimpleNamespace()
+                recorded = create_tescan_metadata()
+                recorded["ion-beam"]["probeCurrent"] = [90e-12 if tescan else current, "A"]
+                if not tescan:
+                    del recorded["ion-beam"]["beamPreset"]
+                metadata = self.manager._normalize_system_state(recorded)
+                image = model.DataArray(numpy.zeros((6, 8), dtype=numpy.uint8), metadata={
+                    model.MD_PIXEL_SIZE: (12.5e-6, 12.5e-6),
+                    model.MD_ACQ_TYPE: model.MD_AT_FIB,
+                    model.MD_DESCRIPTION: "Custom reference stream",
+                    model.MD_ACQ_DATE: 1000.0,
+                })
+                converted = fibsemos._convert_reference_image(image, metadata, path="/tmp/reference.ome.tiff")
+                state = converted.metadata.microscope_state
+                self.assertIn("microscope_state", converted.metadata.to_dict())
+                self.assertEqual(state.stage_position.z, 30e-3)
+                self.assertEqual(state.timestamp, 1000.0)
+                self.assertEqual(state.electron_beam.beam_current, 100e-12)
+                self.assertEqual(state.ion_beam.beam_current, current)
+                self.assertIsNone(state.ion_beam.shift)
+                self.assertIsNone(state.ion_beam.stigmation)
+                self.assertIsNone(state.ion_beam.working_distance)
+                self.assertIsNone(state.ion_detector.brightness)
+                self.assertEqual(converted.metadata.image_settings.dwell_time, 1e-6)
+                self.assertEqual(converted.metadata.image_settings.hfw, 100e-6)
+                self.assertEqual(converted.metadata.image_settings.path, "/tmp")
+                self.assertEqual(converted.metadata.image_settings.filename, "reference.ome.tiff")
+
+
+class TestThermoMetadataNormalization(unittest.TestCase):
+    """Check preservation of Thermo's configured beam currents."""
+
+    def setUp(self):
+        self.manager = fibsemos.FibsemOSMillingTaskManager.__new__(fibsemos.FibsemOSMillingTaskManager)
+        self.manager.microscope = SimpleNamespace()
+        patcher = mock.patch.object(fibsemos, "OdemisTescanMicroscope", TescanMicroscopeStub, create=True)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.metadata = create_tescan_metadata()
+        self.metadata["ion-beam"]["probeCurrent"] = [20e-12, "A"]
+
+    def test_preserve_setpoints(self):
+        normalized = self.manager._normalize_system_state(self.metadata)
+        self.assertEqual(normalized["e-beam"]["beamCurrent"], [100e-12, "A"])
+        self.assertEqual(normalized["ion-beam"]["beamCurrent"], [20e-12, "A"])
+        self.assertEqual(normalized["ion-beam"]["probeCurrent"], [20e-12, "A"])
+        self.assertIsNot(normalized["ion-beam"]["beamCurrent"], normalized["ion-beam"]["probeCurrent"])
+
+    def test_missing_setpoint(self):
+        for beam_key in ("e-beam", "ion-beam"):
+            with self.subTest(beam=beam_key):
+                metadata = deepcopy(self.metadata)
+                del metadata[beam_key]["probeCurrent"]
+                with self.assertRaisesRegex(ValueError, rf"{beam_key}\.probeCurrent"):
+                    self.manager._normalize_system_state(metadata)
+
+class TescanMicroscopeStub:
+    """Identify the Tescan backend in manager tests without importing fibsemOS."""
+
+
+class TestSystemState(unittest.TestCase):
+    """Use real VAs to check mapping, snapshot isolation, and restoration."""
+
+    def setUp(self):
+        self.beam = simulated.GenericComponent("Custom FIB scanner", "ion-beam", vas={
+            "beamPreset": {"value": "imaging"},
+            "horizontalFoV": {"value": 100e-6, "unit": "m"},
+            "rotation": {"value": 0.5, "unit": "rad"},
+            "accelVoltage": {"value": 30e3, "readonly": True},
+            "temperature": {"value": 25.0},
+        })
+        self.beam.resolution = model.ResolutionVA((8, 6), ((1, 1), (100, 100)))
+        self.stage = simulated.Stage("Custom stage", "stage-bare", axes={"x"})
+        self.addCleanup(self.stage.terminate)
+        self.stage.moveAbs({"x": 1e-3}).result()
+        decoy = simulated.GenericComponent("Ion-Beam", None)
+        # VA-only GenericComponent instances have no actuator executor to terminate.
+        for component in (self.beam, decoy):
+            self.addCleanup(model.HwComponent.terminate, component)
+        patcher = mock.patch.object(model, "getComponents", return_value=[self.beam, self.stage, decoy])
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_capture_and_restore(self):
+        snapshot = system_state.capture_system_state()
+        self.assertEqual(set(snapshot), {"ion-beam", "stage-bare"})
+        self.assertEqual(snapshot["ion-beam"]["horizontalFoV"], [100e-6, "m"])
+        self.assertNotIn("temperature", snapshot["ion-beam"])
+        self.assertNotIn(self.beam.name, snapshot)
+        self.stage.moveAbs({"x": 2e-3}).result()
+        self.assertEqual(snapshot["stage-bare"]["position"][0], {"x": 1e-3})
+        self.beam.beamPreset.value = "milling"
+        self.beam.horizontalFoV.value = 400e-6
+        self.beam.rotation.value = 1.0
+        self.beam.resolution.value = (10, 10)
+
+        # Activating a hardware preset can reset scan settings.
+        def activate_preset(value: str) -> str:
+            """Simulate scan settings reset by preset activation."""
+            self.beam.horizontalFoV.value = 400e-6
+            return value
+        self.beam.beamPreset = model.StringVA("milling", setter=activate_preset)
+        # JSON turns tuples into lists.
+        system_state.restore_system_state(json.loads(json.dumps(snapshot)))
+        self.assertEqual(self.beam.beamPreset.value, "imaging")
+        self.assertEqual(self.beam.horizontalFoV.value, 100e-6)
+        self.assertEqual(self.beam.rotation.value, 0.5)
+        self.assertEqual(self.beam.resolution.value, (8, 6))
+        self.assertEqual(self.beam.accelVoltage.value, 30e3)
+        self.assertEqual(self.stage.position.value, {"x": 2e-3})
+
+    def test_focus_restoration(self):
+        focus = simulated.Stage("Custom focus", "ion-focus", axes={"z"})
+        self.addCleanup(focus.terminate)
+        focus.moveAbs({"z": 5e-3}).result()
+        with mock.patch.object(model, "getComponents", return_value=[focus, self.stage]):
+            snapshot = system_state.capture_system_state()
+            focus.moveAbs({"z": 10e-3}).result()
+            system_state.restore_system_state(snapshot)
+            self.assertEqual(focus.position.value, {"z": 5e-3})
+            snapshot["ion-focus"]["position"][0]["z"] = None
+            focus.moveAbs({"z": 10e-3}).result()
+            system_state.restore_system_state(snapshot)
+        self.assertEqual(focus.position.value, {"z": 10e-3})
+        self.assertEqual(self.stage.position.value, {"x": 1e-3})
+
+    def test_restoration_continues_after_failure(self):
+        snapshot = system_state.capture_system_state()
+        self.beam.horizontalFoV.value = 400e-6
+        # Simulate a preset that the hardware can no longer activate.
+        self.beam.beamPreset = model.StringEnumerated("milling", {"milling"})
+        with self.assertLogs(level=logging.ERROR):
+            with self.assertRaisesRegex(RuntimeError, "ion-beam.beamPreset"):
+                system_state.restore_system_state(snapshot)
+        self.assertEqual(self.beam.horizontalFoV.value, 100e-6)
+        self.assertEqual(self.stage.position.value, {"x": 1e-3})
+
+    def test_legacy_migration(self):
+        for naming in ("roles", "legacy", "custom"):
+            with self.subTest(naming=naming):
+                expected = create_tescan_metadata()
+                legacy = deepcopy(expected)
+                if naming == "legacy":
+                    legacy = {name: legacy[role] for name, role in system_state.FIBSEMOS_COMPONENT_ROLES.items()
+                              if role in legacy}
+                elif naming == "custom":
+                    legacy[self.beam.name] = legacy.pop("ion-beam")
+                snapshot = system_state.migrate_system_state(json.dumps(legacy))
+                self.assertEqual(snapshot, expected)
+        self.assertIsNone(system_state.migrate_system_state({}))
+
+    def test_reference_state_uses_acquisition_record(self):
+        """Resolve custom names and preserve recorded values after live settings change."""
+        expected = create_tescan_metadata()
+        detector = simulated.GenericComponent("Custom ion detector", "se-detector-ion")
+        self.addCleanup(model.HwComponent.terminate, detector)
+        recorded = deepcopy(expected)
+        for component in (self.beam, self.stage, detector):
+            recorded[component.name] = recorded.pop(component.role)
+        recorded[self.beam.name]["temperature"] = [25.0, "C"]
+        original = deepcopy(recorded)
+        self.beam.horizontalFoV.value = 400e-6
+        self.stage.moveAbs({"x": 2e-3}).result()
+        with mock.patch.object(model, "getComponents", return_value=[self.beam, self.stage, detector]):
+            state = system_state.system_state_from_settings(recorded, system_state.get_milling_components())
+        self.assertEqual(state, expected)
+        state["ion-beam"]["horizontalFoV"][0] = 200e-6
+        self.assertEqual(recorded, original)
+
+
+class TestMillingAPICompatibility(unittest.TestCase):
+    """Check both strategy and converter APIs without hardware."""
+
+    def setUp(self):
+        self.microscope = TescanMicroscopeStub()
+        for name in ("get", "set", "run_milling", "stop_milling"):
+            setattr(self.microscope, name, mock.Mock())
+        self.microscope.get.return_value = (1e-6, 2e-6)
+        self.microscope.connection = mock.Mock()
+        self.rect = SimpleNamespace(left=0.25, top=0.25, width=0.5, height=0.5)
+        self.stage = SimpleNamespace(name="Test stage", alignment=SimpleNamespace(rect=self.rect),
+                                     milling=SimpleNamespace(milling_channel="ION"), imaging=SimpleNamespace())
+        self.feature = CryoFeature(name="f1", stage_position={}, fm_focus_position={})
+        self.feature.reference_image = model.DataArray(numpy.arange(48).reshape(6, 8), metadata={
+            model.MD_EXTRA_SETTINGS: {"user annotation": ["original", None]},
+            model.MD_ACQ_TYPE: model.MD_AT_FIB,
+            model.MD_DESCRIPTION: "Custom reference stream",
+        })
+        self.feature.system_state = create_tescan_metadata()
+        self.restoration_state = create_tescan_metadata()
+        self.restoration_state["ion-beam"]["beamPreset"][0] = "30 keV; 20 pA"
+        self.restoration_state["ion-beam"]["probeCurrent"] = [20e-12, "A"]
+        self.restoration_state["ion-beam"]["horizontalFoV"][0] = 200e-6
+        self.recorded_microscope_state = SimpleNamespace(electron_beam=None, ion_beam=None)
+        self.ref_image = SimpleNamespace(data=self.feature.reference_image.copy(),
+                                        metadata=SimpleNamespace(image_settings=SimpleNamespace(),
+                                                                 microscope_state=self.recorded_microscope_state))
+
+    def _legacy_strategy(self, microscope: TescanMicroscopeStub, stage: SimpleNamespace,
+                         asynch: bool = False, parent_ui: object = None) -> None:
+        """Emulate the legacy fibsemOS strategy signature."""
+        self.assertIs(stage.reference_image, self.ref_image)
+        self.assertFalse(asynch)
+        self.assertIsNone(parent_ui)
+        microscope.run_milling()
+
+    def _new_strategy(self, microscope: TescanMicroscopeStub, stage: SimpleNamespace,
+                      asynch: bool = False, parent_ui: object = None, stop_event: object = None) -> None:
+        """Emulate the newer strategy with its optional stop event."""
+        self.assertIsNone(stop_event)
+        self._legacy_strategy(microscope, stage, asynch, parent_ui)
+
+    def _local_converter(self, image: model.DataArray, system_state: dict,
+                         path: Optional[str] = None) -> SimpleNamespace:
+        """Emulate the converter accepting a separate system snapshot."""
+        self.assertEqual(system_state["ion-beam"]["beamPreset"][0], "30 keV; 150 pA")
+        self.assertEqual(image.metadata[model.MD_EXTRA_SETTINGS],
+                         self.feature.reference_image.metadata[model.MD_EXTRA_SETTINGS])
+        return self.ref_image
+
+    def _upstream_converter(self, image: model.DataArray, path: Optional[str] = None) -> SimpleNamespace:
+        """Emulate the converter reading settings from image metadata."""
+        state = image.metadata[model.MD_EXTRA_SETTINGS]
+        self.assertEqual(state["Ion-Beam"]["beamPreset"][0], "30 keV; 150 pA")
+        self.assertNotIn("ion-beam", state)
+        self.assertEqual(image.metadata[model.MD_DESCRIPTION], "FIB")
+        return self.ref_image
+
+    def _run_with_api(self, strategy: Callable, converter: Optional[Callable] = None,
+                      restoration_error: Optional[Exception] = None, stages: int = 1) -> None:
+        """Run the real manager with an external API signature or failure."""
+        converter = converter or self._local_converter
+        self.convert = mock.create_autospec(converter, side_effect=converter)
+        self.stage.strategy = SimpleNamespace(run=strategy)
+        self.ref_image.data = self.feature.reference_image.copy()
+        with mock.patch.object(fibsemos, "OdemisTescanMicroscope", TescanMicroscopeStub, create=True), \
+             mock.patch.object(fibsemos, "create_fibsemos_microscope", return_value=self.microscope), \
+             mock.patch.object(fibsemos, "capture_system_state", return_value=deepcopy(self.restoration_state)) as capture, \
+             mock.patch.object(fibsemos, "restore_system_state", side_effect=restoration_error) as restore, \
+             mock.patch.object(fibsemos, "from_odemis_image", self.convert, create=True):
+            self.manager = fibsemos.FibsemOSMillingTaskManager()
+            self.manager._future = futures.Future()
+            self.manager._active = True
+            self.manager.milling_stages = [self.stage] * stages
+            self.manager.feature = self.feature
+            self.manager.path = "/tmp/milling"
+            try:
+                self.manager._run()
+            finally:
+                self.restore = restore
+                self.capture = capture
+
+    def _check_reference_image(self) -> None:
+        """Check the cropped reference and completed manager state."""
+        self.assertIs(self.stage.reference_image, self.ref_image)
+        numpy.testing.assert_array_equal(self.ref_image.data, self.feature.reference_image[1:4, 2:6])
+        self.assertEqual(self.ref_image.metadata.image_settings.path, "/tmp/milling")
+        self.assertIs(self.ref_image.metadata.image_settings.reduced_area, self.rect)
+        self.assertEqual(self.feature.reference_image.shape, (6, 8))
+        self.assertIs(self.ref_image.metadata.microscope_state, self.recorded_microscope_state)
+        self.assertFalse(self.manager._active)
+
+    def test_strategy_and_converter_compatibility(self):
+        cases = ((self._legacy_strategy, self._upstream_converter), (self._new_strategy, self._local_converter))
+        for api, converter in cases:
+            with self.subTest(strategy=api.__name__, converter=converter.__name__):
+                original_state = deepcopy(self.feature.system_state)
+                original_metadata = deepcopy(self.feature.reference_image.metadata)
+                strategy = mock.create_autospec(api, side_effect=api)
+                self._run_with_api(strategy, converter)
+                self.assertEqual(strategy.call_count, 1)
+                self.assertEqual(self.feature.reference_image.metadata, original_metadata)
+                self.assertEqual(self.feature.system_state, original_state)
+                image = self.convert.call_args.args[0]
+                self.assertIsNot(image.metadata, self.feature.reference_image.metadata)
+                self.assertTrue(numpy.shares_memory(image, self.feature.reference_image))
+                self.capture.assert_called_once_with()
+                self.restore.assert_called_once_with(self.restoration_state)
+                self._check_reference_image()
+                self.microscope.connection.DrawBeam.UnloadLayer.assert_called()
+                self.microscope.connection.FIB.Preset.Activate.assert_not_called()
+                self.microscope.set.assert_called_with("shift", value=(1e-6, 2e-6), beam_type="ION")
+
+    def test_metadata_and_snapshot_are_independent(self):
+        """Converter edits must not change the feature or its restoration snapshot."""
+        original_state = deepcopy(self.feature.system_state)
+        original_metadata = deepcopy(self.feature.reference_image.metadata)
+
+        def converter(image: model.DataArray, system_state: dict,
+                      path: Optional[str] = None) -> SimpleNamespace:
+            """Simulate an external converter modifying its inputs."""
+            image.metadata[model.MD_EXTRA_SETTINGS]["user annotation"][0] = "changed"
+            system_state["ion-beam"]["dwellTime"][0] = 5e-6
+            return self.ref_image
+
+        strategy = mock.create_autospec(self._new_strategy)
+        self._run_with_api(strategy, converter)
+        self.assertEqual(self.feature.reference_image.metadata, original_metadata)
+        self.assertEqual(self.feature.system_state, original_state)
+        self.restore.assert_called_once_with(self.restoration_state)
+
+    def test_missing_state_or_preset_prevents_milling(self):
+        for state in (None, create_tescan_metadata()):
+            with self.subTest(state=state):
+                self.feature.system_state = state
+                if state is not None:
+                    del state["ion-beam"]["beamPreset"]
+                strategy = mock.create_autospec(self._new_strategy)
+                with self.assertRaisesRegex(ValueError, "acquire a new reference image"):
+                    self._run_with_api(strategy)
+                strategy.assert_not_called()
+                self.restore.assert_not_called()
+                self.assertFalse(self.manager._active)
+
+    def test_thermo_current_normalization(self):
+        self.microscope = mock.Mock()
+        self.feature.system_state["ion-beam"]["probeCurrent"] = [20e-12, "A"]
+        strategy = mock.create_autospec(self._new_strategy, side_effect=self._new_strategy)
+        self._run_with_api(strategy)
+        self.microscope.finish_milling.assert_called_once_with(imaging_current=20e-12, imaging_voltage=30e3)
+        self.assertNotIn("beamCurrent", self.feature.system_state["ion-beam"])
+        self._check_reference_image()
+
+    def test_errors_are_not_retried(self):
+        for failure in ("conversion", "milling"):
+            with self.subTest(failure=failure):
+                strategy = mock.create_autospec(self._new_strategy)
+                converter = self._local_converter
+                if failure == "conversion":
+                    def converter(image: model.DataArray, system_state: dict,
+                                  path: Optional[str] = None) -> SimpleNamespace:
+                        """Simulate an internal converter failure."""
+                        raise TypeError("Conversion failed")
+                else:
+                    strategy.side_effect = TypeError("Milling failed")
+                with self.assertRaisesRegex(TypeError, "failed"):
+                    self._run_with_api(strategy, converter, stages=2)
+                self.assertEqual(self.convert.call_count, 1)
+                self.assertEqual(strategy.call_count, int(failure == "milling"))
+                self.assertEqual(self.restore.call_count, int(failure == "milling"))
+                self.assertFalse(self.manager._active)
+
+    def test_cleanup_failure_preserves_milling_error(self):
+        """A pattern cleanup error must not replace the original milling error."""
+        self.microscope.connection.DrawBeam.UnloadLayer.side_effect = RuntimeError("Cleanup failed")
+        strategy = mock.create_autospec(self._new_strategy, side_effect=TypeError("Milling failed"))
+        with self.assertRaisesRegex(TypeError, "Milling failed"):
+            self._run_with_api(strategy)
+        self.restore.assert_called_once_with(self.restoration_state)
+        self.microscope.set.assert_called_once_with("shift", value=(1e-6, 2e-6), beam_type="ION")
+        self.assertFalse(self.manager._active)
+
+    def test_restoration_failure_is_reported(self):
+        """Report failed restoration after an otherwise successful milling run."""
+        strategy = mock.create_autospec(self._new_strategy, side_effect=self._new_strategy)
+        with self.assertRaisesRegex(RuntimeError, "Restoration failed"):
+            self._run_with_api(strategy, restoration_error=RuntimeError("Restoration failed"))
+        self.assertFalse(self.manager._active)
 
 
 class TestResolveFeatureReferenceImage(unittest.TestCase):

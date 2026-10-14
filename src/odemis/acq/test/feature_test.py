@@ -124,7 +124,10 @@ class TestFeatureEncoderDecoder(unittest.TestCase):
         )
         stage_position = {"x": 25e-6, "y": 40e-6, "z": 32e-3, "rx": 0.31, "rz": 0}
         self.path = os.path.join(os.getcwd(), feature.name.value)
-        reference_image = model.DataArray(numpy.zeros(shape=(1024, 1536)), metadata={})
+        reference_image = model.DataArray(numpy.zeros(shape=(1024, 1536)), metadata={
+            model.MD_EXTRA_SETTINGS: {"Camera": {"temperature": [25.0, "°C"]}},
+        })
+        system_state = {"ion-beam": {"beamPreset": ["imaging", None]}}
         milling_tasks = load_milling_tasks(DEFAULT_MILLING_TASKS_PATH)
         milling_feature_offset = (12e-6, -8e-6)
 
@@ -137,12 +140,19 @@ class TestFeatureEncoderDecoder(unittest.TestCase):
             stage_position=stage_position,
             path=self.path,
             reference_image=reference_image,
-            milling_tasks=milling_tasks
+            milling_tasks=milling_tasks,
+            system_state=system_state,
         )
         feature.set_milling_feature_offset(milling_feature_offset)
 
         self.assertEqual(feature.path, self.path)
         self.assertEqual(feature.reference_image.shape, reference_image.shape)
+        self.assertEqual(feature.system_state, system_state)
+        system_state["ion-beam"]["beamPreset"][0] = "changed"
+        reference_image.metadata[model.MD_EXTRA_SETTINGS]["Camera"]["temperature"][0] = 26.0
+        self.assertEqual(feature.system_state["ion-beam"]["beamPreset"][0], "imaging")
+        self.assertEqual(feature.reference_image.metadata[model.MD_EXTRA_SETTINGS]["Camera"]["temperature"][0], 25.0)
+        self.assertNotIn("system_state", feature.reference_image.metadata)
         self.assertEqual(feature.get_posture_position(Posture.MILLING), stage_position)
         self.assertEqual(feature.milling_feature_offset.value, milling_feature_offset)
         for task in feature.milling_tasks.values():
