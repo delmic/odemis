@@ -135,6 +135,7 @@ class SparcRecipesController:
         wizard = Wizard(self._streambar_controller._stream_bar, title="Export")
         files_page = FilesPage(wizard, message, wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT)
         streams_page = Sparc2StreamsPage(wizard, self._tab_data.main, self._streambar_controller.menu_actions)
+        streams_page.SetMinSize((400, 600))
         sse = [s.get_settings_entries() for s in self._tab_data.streams.value]
         sse.append(self._tab_data.semStream.get_settings_entries())
         sse.append(self._tab_data.driftCorrector.get_settings_entries())
@@ -223,6 +224,7 @@ class SparcRecipesController:
         files_page = FilesPage(wizard, message, wx.FD_OPEN | wx.FD_FILE_MUST_EXIST | wx.FD_MULTIPLE)
         files_page.remove_streams_cbox.Show()
         streams_page = Sparc2StreamsPage(wizard, self._tab_data.main, self._streambar_controller.menu_actions)
+        streams_page.SetMinSize((400, 600))
 
         wizard.FitToPage(files_page)
         wizard.FitToPage(streams_page)
