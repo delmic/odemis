@@ -157,7 +157,11 @@ class SparcRecipesController:
         # Pause streams to avoid issues
         self._streambar_controller.pauseStreams()
 
-        wizard, files_page, streams_page = self._create_export_wizard()
+        wx.BeginBusyCursor()
+        try:
+            wizard, files_page, streams_page = self._create_export_wizard()
+        finally:
+            wx.EndBusyCursor()
 
         try:
             self._tab_data.streams.unsubscribe(self._on_streams)
@@ -196,17 +200,21 @@ class SparcRecipesController:
                 # If validation fails, prevent page change
                 evt.Veto()
             elif page is files_page:
-                for file_path in files_page.file_paths:
-                    try:
-                        with open(file_path, "r") as json_file:
-                            config = json.load(json_file)
-                        streams_page.set_streams_settings_entries(config)
-                    except Exception as e:
-                        show_error(f"An error occurred while reading the file {file_path}:\n{str(e)}")
-                        evt.Veto()
-                        return
-                # Take a snapshot of the current settings entries, to later know if they were modified by the user
-                streams_page.take_snapshot()
+                wx.BeginBusyCursor()
+                try:
+                    for file_path in files_page.file_paths:
+                        try:
+                            with open(file_path, "r") as json_file:
+                                config = json.load(json_file)
+                            streams_page.set_streams_settings_entries(config)
+                        except Exception as e:
+                            show_error(f"An error occurred while reading the file {file_path}:\n{str(e)}")
+                            evt.Veto()
+                            return
+                    # Take a snapshot of the current settings entries, to later know if they were modified by the user
+                    streams_page.take_snapshot()
+                finally:
+                    wx.EndBusyCursor()
 
     def _create_import_wizard(self):
         """Create the import wizard for importing stream settings entries from a .json files."""
@@ -273,7 +281,11 @@ class SparcRecipesController:
         # Pause streams to avoid issues
         self._streambar_controller.pauseStreams()
 
-        wizard, files_page, streams_page = self._create_import_wizard()
+        wx.BeginBusyCursor()
+        try:
+            wizard, files_page, streams_page = self._create_import_wizard()
+        finally:
+            wx.EndBusyCursor()
 
         try:
             self._tab_data.streams.unsubscribe(self._on_streams)
