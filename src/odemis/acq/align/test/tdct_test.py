@@ -121,5 +121,35 @@ class TestTDCT(unittest.TestCase):
         self.assertAlmostEqual(poi[0], poi_um[0] * 1e-6)
         self.assertAlmostEqual(poi[1], poi_um[1] * 1e-6)
 
+    def test_run_tdct_correlation_rotation_init(self):
+        """The rotation_init allows to select between the two mirrored solutions"""
+        from tdct.pyto.rigid_3d import Rigid3D
+        expected = numpy.array([-180, 80, -180])  # phi, theta, psi in degrees
+        rot = Rigid3D.make_r_ck(Rigid3D.euler_to_ck(numpy.radians(expected), mode='x'))
+        rng = numpy.random.RandomState(1)
+        # Almost flat set of points, for which the solver cannot distinguish the plane from its mirror
+        fm_coords = numpy.column_stack([rng.uniform(100, 900, 4), rng.uniform(100, 900, 4), rng.uniform(0, 1, 4)])
+        fib_coords = 0.8 * (rot @ fm_coords.T)[:2].T + 50 + rng.normal(0, 12, (4, 2))
+        fib_image = model.DataArray(numpy.zeros(shape=(1024, 1536)),
+                                    metadata={model.MD_PIXEL_SIZE: (100e-9, 100e-9)})
+        fm_image = numpy.zeros(shape=(40, 1024, 1024))
+
+        def run(rotation_init):
+            ret = tdct.run_tdct_correlation(fib_coords=fib_coords.astype(numpy.float32),
+                                            fm_coords=fm_coords.astype(numpy.float32),
+                                            poi_coords=fm_coords[:1].astype(numpy.float32),
+                                            fib_image=fib_image, fm_image=fm_image,
+                                            path=os.getcwd(), rotation_init=rotation_init)
+            return numpy.array(ret["output"]["transformation"]["rotation_eulers"])
+
+        numpy.random.seed(0)
+        flipped = run(None)
+        self.assertGreater(abs(flipped[0] - expected[0]) % 360, 90)  # default gives the mirrored solution
+
+        numpy.random.seed(0)
+        eulers = run(expected + (8, -5, 6))
+        diff = (eulers - expected + 180) % 360 - 180
+        numpy.testing.assert_allclose(diff, 0, atol=5)
+
 if __name__ == "__main__":
     unittest.main()

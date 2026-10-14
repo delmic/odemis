@@ -92,6 +92,14 @@ RIM_COR_DEFAULT = 0.495  # See MD_RIM_COR. This value works fine for 50x objecti
 # i.e. size in pixel[0]=pixel[1]=pixel[2].
 REFINE_SEARCH_RANGE = 1.5e-6  # m, search range for fiducial refinement
 
+# Approximate rotation (phi, theta, psi) in degrees of the FM -> FIB transformation.
+# The FIB projection cannot tell a plane from its mirror image, so 3DCT may return either the correct solution
+# or the flipped one. The two differ by ~180° in phi and psi, so only these need to be right: theta (~90° minus
+# the milling angle of 10-20°) is just a rough guess. Seeding the optimiser around it selects the correct solution.
+TDCT_ROTATION_INIT = (-180, 80, -180)
+# Size of the neighbourhood around TDCT_ROTATION_INIT used for the initial guesses (Cayley-Klein units, 0.2 ~ 30°)
+TDCT_RESTRICT_ROTATIONS = 0.2
+
 # If the milling angle of a FIB image and an FM z-stack are below the tolerance, they are considered to be matching.
 MILLING_ANGLE_TOLERANCE = math.radians(0.1)  # Now 0.1 degree, but this depends on stage accuracy, so might need to update this later.
 
@@ -705,7 +713,9 @@ class CorrelationPointsController:
         self.correlation_target.correlation_result = run_tdct_correlation(fib_coords=fib_coords, fm_coords=fm_coords,
                                                                           poi_coords=poi_coords,
                                                                           fib_image=fib_da, fm_image=fm_image,
-                                                                          path=path)
+                                                                          path=path,
+                                                                          rotation_init=TDCT_ROTATION_INIT,
+                                                                          restrict_rotations=TDCT_RESTRICT_ROTATIONS)
         # Update the output parameters of the correlation
         self._tab_data_model.projected_points = []
         self.correlation_target.fib_projected_fiducials = []
@@ -1159,7 +1169,7 @@ class CorrelationPointsController:
         multi_crop = raw_multi[(slice(None),) + roi]  # We search along all stack slices (first axis)
         # Find best channel and compute COM
         best_c = get_brightest_channel(multi_crop)
-        com = compute_center_of_mass(multi_crop[best_c], baseline_ratio=0.95)
+        com = compute_center_of_mass(multi_crop[best_c], baseline_ratio=0.99)
         com_z = com[0]
         com_y_crop = com[1] + roi[1].start
         com_x_crop = com[2] + roi[2].start
