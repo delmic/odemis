@@ -380,6 +380,35 @@ class TestMeteorTescan1FibsemMove(move_tfs3_test.TestMeteorTFS3Move):
         self.pm.switch_posture(Posture.FIB_VIEW_FM).result()
         self.assertAlmostEqual(self.ccd.getMetadata()[model.MD_ROTATION_COR], math.pi, places=6)
 
+    def test_init_posture_scan_rotation(self):
+        """Regression test: when starting Odemis while the microscope is already at a known posture
+        (such as MILLING or SEM), the scan rotation and MD_ROTATION_COR must be enforced upon startup."""
+        # Move the stage directly to MILLING position without calling switch_posture
+        milling_pos = self.pm.get_target_position(Posture.MILLING)
+        self.stage_bare.moveAbs(milling_pos).result()
+
+        # Reset scanner rotation and MD_ROTATION_COR to 0
+        self.ebeam.rotation.value = 0
+        self.ebeam.updateMetadata({model.MD_ROTATION_COR: 0})
+        self.ion_beam.rotation.value = 0
+        self.ion_beam.updateMetadata({model.MD_ROTATION_COR: 0})
+
+        # Instantiate a new PostureManager (simulating Odemis startup while already in MILLING posture)
+        new_pm = MicroscopePostureManager(self.microscope)
+        self.assertEqual(new_pm.current_posture.value, Posture.MILLING)
+
+        # Scanners must have rotation and MD_ROTATION_COR enforced so images are not rotated
+        self._assert_scanner_rotation(self.ebeam, self.sem_imaging_scan_rotation)
+        self._assert_scanner_rotation(self.ion_beam, self.sem_imaging_scan_rotation)
+
+        # Also test FM_IMAGING
+        fm_pos = self.pm.get_target_position(Posture.FM_IMAGING)
+        self.stage_bare.moveAbs(fm_pos).result()
+        self.ccd.updateMetadata({model.MD_ROTATION_COR: -1})
+        new_pm = MicroscopePostureManager(self.microscope)
+        self.assertEqual(new_pm.current_posture.value, Posture.FM_IMAGING)
+        self.assertAlmostEqual(self.ccd.getMetadata()[model.MD_ROTATION_COR], 0, places=6)
+
 
 if __name__ == "__main__":
     unittest.main()
