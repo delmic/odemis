@@ -46,6 +46,7 @@ from odemis.gui.comp.buttons import (
     BTN_TOGGLE_PROGRESS,
 )
 from odemis.gui.comp.edit_position_metadata import EditMeteorCalibrationDialog
+from odemis.gui.conf.licences import ODEMIS_ADVANCED_FLAG
 from odemis.gui.cont.cryo_project import load_project, IMG_IN_FILE_IDS, IMG_FILENAME, save_project
 from odemis.gui.cont.tabs.correlation_tab import CorrelationTab
 from odemis.gui.cont.tabs.localization_tab import LocalizationTab
@@ -137,11 +138,16 @@ class CryoChamberTab(Tab):
             self.position_btns = {
                 Posture.SEM_IMAGING: self.panel.btn_switch_sem_imaging,
                 Posture.FM_IMAGING: self.panel.btn_switch_fm_imaging,
-                Posture.MILLING: self.panel.btn_switch_milling,
-                Posture.FIB_VIEW_FM: self.panel.btn_switch_fib_view_fm,
-                Posture.FIB_IMAGING: self.panel.btn_switch_fib_imaging,
-                Posture.TRENCHING: self.panel.btn_switch_trenching,
             }
+
+            if ODEMIS_ADVANCED_FLAG:
+                self.position_btns.update({
+                    Posture.MILLING: self.panel.btn_switch_milling,
+                    Posture.FIB_IMAGING: self.panel.btn_switch_fib_imaging,
+                    Posture.FIB_VIEW_FM: self.panel.btn_switch_fib_view_fm,
+                    Posture.TRENCHING: self.panel.btn_switch_trenching,
+                })
+
             # Remove the ones which are not supported on this system
             self.position_btns = {posture: btn for posture, btn in self.position_btns.items()
                                   if posture in main_data.posture_manager.postures}
