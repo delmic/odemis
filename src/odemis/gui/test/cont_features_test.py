@@ -92,6 +92,18 @@ class CryoFeatureControllerTestCase(unittest.TestCase):
         self.assertTrue(any((self.project_dir / "Feature 1").glob("*.ome.tiff")))
 
     @patch("odemis.gui.cont.features.show_message")
+    def test_missing_preset_is_rejected_before_acquisition(self, message: Mock) -> None:
+        """Leave an existing reference intact when the FIB preset is unknown."""
+        self.stream.emitter.beamPreset = model.StringVA("")
+        self.feature.reference_image = self.reference_image
+
+        self.controller.save_milling_position(wx.CommandEvent())
+
+        self.assertFalse(hasattr(self.controller, "_acq_future"))
+        self.assertIs(self.feature.reference_image, self.reference_image)
+        message.assert_called_once()
+
+    @patch("odemis.gui.cont.features.show_message")
     def test_missing_acquisition_settings_are_rejected(self, message: Mock) -> None:
         """Warn and retain the old reference when acquisition settings are absent."""
         self.feature.reference_image = self.reference_image

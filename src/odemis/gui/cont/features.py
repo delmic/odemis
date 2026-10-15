@@ -258,6 +258,13 @@ class CryoFeatureController(object):
 
         stream = self._tab.fib_stream  # the fib stream
 
+        preset = getattr(stream.emitter, "beamPreset", None)
+        if preset is not None and not preset.value:
+            show_message(self._tab.main_frame, "FIB imaging preset unavailable",
+                         "Select a Beam Preset before saving a milling reference image.",
+                         level=logging.WARNING)
+            return
+
         # Validate the resolution that the stream will use before starting a
         # potentially slow FIB acquisition. ScannerStream applies these same
         # ROI settings when the acquisition starts.

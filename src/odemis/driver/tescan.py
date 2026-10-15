@@ -30,7 +30,7 @@ import socket
 import threading
 import time
 import weakref
-from typing import List, Literal, Callable, Any, Dict, Tuple, Union
+from typing import List, Literal, Callable, Any, Dict, Optional, Tuple, Union
 
 import numpy
 
@@ -742,7 +742,10 @@ class Scanner(model.Emitter):
             self.probeCurrent.subscribe(self._onPC)
         elif self._device_handler.device_type == DeviceType.ION:
             beam_presets = self.get_beam_presets()
-            self.beamPreset = model.StringEnumerated(DEFAULT_ION_PRESET, beam_presets, setter=self._setBeamPreset)
+            preset = self._get_beam_preset()
+            if preset not in beam_presets:
+                preset = DEFAULT_ION_PRESET
+            self.beamPreset = model.StringEnumerated(preset, beam_presets, setter=self._setBeamPreset)
             # For clarity, still maintain read-only VA's. The values from the preset titles do not match exactly with
             # the actual device values.
             self.accelVoltage = model.FloatVA(volt, unit="V", readonly=True)
@@ -830,10 +833,25 @@ class Scanner(model.Emitter):
         """
         beam_presets = self._device_handler.PresetEnum().split("\n")
         beam_presets = set(p for p in beam_presets if p)
-        # Add an empty preset to serve as the default, since the current preset cannot be
-        # obtained directly via the API.
+        # Keep an empty choice for microscopes that do not report their last preset.
         beam_presets.add(DEFAULT_ION_PRESET)
         return beam_presets
+
+    def _get_beam_preset(self) -> Optional[str]:
+        """Read the last FIB preset without activating it.
+
+        :returns: Reported preset, or None when unavailable.
+        """
+        try:
+            parameters = self._device_handler.GetDeviceParams(2)
+        except Exception:
+            logging.debug("Could not read the FIB preset from device parameters", exc_info=True)
+            return None
+        for line in (parameters or "").splitlines():
+            key, separator, value = line.partition("=")
+            if separator and key.strip() == "LastPreset":
+                return value.strip()
+        return None
 
     def _get_shutter_id_by_type(self, shutter_type: int) -> int:
         """
@@ -1243,6 +1261,13 @@ class Scanner(model.Emitter):
                                 if new_shutter != self.shutter._value:
                                     self.shutter._value = new_shutter
                                     self.shutter.notify(new_shutter)
+
+                    if self._device_handler.device_type == DeviceType.ION:
+                        preset = self._get_beam_preset()
+                        if preset in self.beamPreset.choices and preset != self.beamPreset._value:
+                            # Update the readback without calling the preset activation setter.
+                            self.beamPreset._value = preset
+                            self.beamPreset.notify(preset)
 
                     new_ext = bool(self._device_handler.ScGetExternal())
                     if new_ext != self.external._value:
