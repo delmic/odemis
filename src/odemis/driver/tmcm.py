@@ -1943,7 +1943,14 @@ class TMCLController(model.Actuator):
                 rng = (rng_mid - rng_width, rng_mid + rng_width)
 
             if not rng[0] <= tgt_pos <= rng[1]:
-                # TODO: if it's already outside, then allow to go back
+                # If already outside of the range, allow moves going closer to the range
+                cur_dist = max(rng[0] - cur_pos[axis], cur_pos[axis] - rng[1])
+                tgt_dist = max(rng[0] - tgt_pos, tgt_pos - rng[1])
+                if cur_dist > 0 and tgt_dist < cur_dist:
+                    logging.info("Axis %s at %s, out of %f->%f, allowing move to %s as it is getting closer",
+                                 axis, cur_pos[axis], rng[0], rng[1], tgt_pos)
+                    continue
+
                 rng = axis_def.range
                 raise ValueError("Position %s for axis %s outside of range %f->%f"
                                  % (val, axis, rng[0], rng[1]))
@@ -3143,7 +3150,14 @@ class CANController(model.Actuator):
                 rng = (rng_mid - rng_width, rng_mid + rng_width)
 
             if not rng[0] <= tgt_pos <= rng[1]:
-                # TODO: if it's already outside, then allow to go back
+                # If already outside of the range, allow moves going closer to the range
+                cur_dist = max(rng[0] - cur_pos[axis], cur_pos[axis] - rng[1])
+                tgt_dist = max(rng[0] - tgt_pos, tgt_pos - rng[1])
+                if cur_dist > 0 and tgt_dist < cur_dist:
+                    logging.info("Axis %s at %s, out of %f->%f, allowing move to %s as it is getting closer",
+                                 axis, cur_pos[axis], rng[0], rng[1], tgt_pos)
+                    continue
+
                 rng = axis_def.range
                 raise ValueError("Position %s for axis %s outside of range %f->%f"
                                  % (val, axis, rng[0], rng[1]))
