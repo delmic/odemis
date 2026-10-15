@@ -32,6 +32,8 @@
     init: {
         device: null, # null = first device available
 #        device: "fake",
+#        transp: [1, 2],
+#        max_res: [1024, 836],  # Should be multiple of 8
     },
     properties: {
         targetTemperature: 20,  # °C, to reduce active cooling

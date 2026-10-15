@@ -2053,11 +2053,20 @@ class TUCam(model.DigitalCamera):
     values, it is recommended to set them in the following order:
     Binning > Resolution > Translation.
     """
-    def __init__(self, name: str, role: str, device: Optional[str]=None, **kwargs) -> None:
+    def __init__(self, name: str, role: str, device: Optional[str] = None,
+                 max_res: Optional[Tuple[int, int]] = None, **kwargs) -> None:
         """
         See Digital Camera for the common parameters.
         :param device: serial number of the device, or "fake" to use a simulator.
         If None, the first camera found is used.
+        :param max_res: (width, height, in px) limits the maximum resolution reported, in user
+        coordinates (ie, after applying the transpose). It must be at least the minimum
+        RoI size and at most the resolution of the sensor. If None, the full sensor size is
+        used. The cropped region is centered on the sensor, but can be shifted using the
+        .translation VA. The sensor size metadata (MD_SENSOR_SIZE) does report always the complete
+        sensor size.
+        :raises ValueError: if max_res is out of range, or not a multiple of the hardware
+        granularity (X: multiple of 8, Y: multiple of 2, in hardware orientation).
         """
         model.DigitalCamera.__init__(self, name, role, **kwargs)
 
@@ -2108,6 +2117,8 @@ class TUCam(model.DigitalCamera):
         self._prev_exposure_time = None
         self._prev_gain = None
 
+        max_res_user = tuple(max_res) if max_res is not None else None
+
         # Max resolution depends on the binning, so to know the max resolution, need to set binning to 1x1
         max_res, _ = self._dll.get_max_resolution(0)
         self._metadata[model.MD_SENSOR_SIZE] = self._transposeSizeToUser(max_res)
@@ -2117,6 +2128,22 @@ class TUCam(model.DigitalCamera):
         # TUIDP_BLACKLEVEL doesn't seem to be implemented on the Dhyana 400BSI, but test show it's 100
         self._metadata[model.MD_BASELINE] = 100  # average value for signal == 0
 
+        self._sensor_res = max_res  # full sensor, in hardware order
+        if max_res_user is not None:
+            if len(max_res_user) != 2:
+                raise ValueError(f"max_res must contain exactly two values, but got {max_res_user}")
+            max_res = self._transposeSizeFromUser(max_res_user)
+            min_res = MIN_RES_DHYANA_400BSI
+            if not all(mn <= mr <= sr for mn, mr, sr in zip(min_res, max_res, self._sensor_res)):
+                raise ValueError(f"max_res has to be between {self._transposeSizeToUser(min_res)} "
+                                 f"and {self._transposeSizeToUser(self._sensor_res)}, "
+                                 f"but got {tuple(max_res_user)}")
+            # The hardware granularity is: X multiple of 8, Y multiple of 2
+            rounded = (max_res[0] - max_res[0] % 8, max_res[1] - max_res[1] % 2)
+            if rounded != tuple(max_res):
+                raise ValueError(f"max_res {tuple(max_res_user)} not supported by the hardware, "
+                                 f"use {self._transposeSizeToUser(rounded)} instead")
+        self._max_res = max_res  # max RoI at binning 1, in hardware order
         self._shape = max_res + (2 ** 16,)  # _shape always uses the hardware order
 
         # The Dhyana supports changing from HDR (low + high gain combined for 16 bits res), to
@@ -2156,7 +2183,7 @@ class TUCam(model.DigitalCamera):
                                              setter=self._set_resolution)
 
         # Translation: to adjust the center of the RoI
-        hlf_shape = (max_res[0] // 2 - 1, max_res[1] // 2 - 1)
+        hlf_shape = (self._sensor_res[0] // 2 - 1, self._sensor_res[1] // 2 - 1)
         uh_shape = self._transposeSizeToUser(hlf_shape)
         tran_rng = ((-uh_shape[0], -uh_shape[1]),
                     (uh_shape[0], uh_shape[1]))
@@ -2303,10 +2330,15 @@ class TUCam(model.DigitalCamera):
         # the Y resolution has to be a multiple of 2
         res = res[0] - (res[0] % 8), res[1] - (res[1] % 2)
         # Clip, according to the current binning (but cannot use .binning VA, as it might not be updated)
-        max_res, _ = self._dll.get_max_resolution(self._resolution_idx)  # depends on the binning
+        sensor_res, binning = self._dll.get_max_resolution(self._resolution_idx)  # depends on the binning
+        # Also limit to max_res (given at binning 1), keeping the hardware granularity
+        lim_res = (min(sensor_res[0], self._max_res[0] // binning) // 8 * 8,
+                   min(sensor_res[1], self._max_res[1] // binning) // 2 * 2)
+        res = min(res[0], lim_res[0]), min(res[1], lim_res[1])
+        # Ensure not below min_res
         min_res = MIN_RES_DHYANA_400BSI
-        res = (min(max(min_res[0], res[0]), max_res[0]),
-               min(max(min_res[1], res[1]), max_res[1]))
+        res = max(min_res[0], res[0]), max(min_res[1], res[1])
+        max_res = sensor_res  # the RoI is centered on the sensor
 
         self._roi = (int(max_res[0] / 2) - int(res[0] / 2),  # left
                      int(max_res[1] / 2) - int(res[1] / 2),  # top
@@ -2327,7 +2359,7 @@ class TUCam(model.DigitalCamera):
         trans = self._transposeTransFromUser(value)
         # compute the min/max of the shift. It's the same as the margin between
         # the centered ROI and the border, taking into account the binning.
-        max_res = self._shape[:2]
+        max_res = self._sensor_res  # translation is relative to the full sensor
         _, binning = self._dll.get_max_resolution(self._resolution_idx)
         res = self._roi[2:]  # current resolution
         max_tran = ((max_res[0] - res[0] * binning) // 2,
