@@ -26,9 +26,13 @@ import shutil
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import MagicMock
+from types import SimpleNamespace
+from unittest.mock import MagicMock, patch
+
+import numpy
 
 import odemis.acq.test as acq_test
+from odemis import model
 from odemis.model import MD_FAV_POS_ACTIVE
 from odemis.acq.feature import (
     CryoFeature,
@@ -64,6 +68,9 @@ class TestCryoProject(unittest.TestCase):
 
         self.legacy_project_json = Path(acq_test.__file__).parent / "test-features.json"
         self.project_json_v1_0 = Path(acq_test.__file__).parent / "test-cryo-project-v1_0.json"
+        self.main_data = SimpleNamespace(
+            tab=model.VigilantAttribute(SimpleNamespace(conf=SimpleNamespace(pj_last_path=self.test_dir))),
+            features=model.ListVA(), overviews=model.ListVA())
 
     def tearDown(self) -> None:
         """Clean up temporary directory after each test."""
@@ -109,6 +116,7 @@ class TestCryoProject(unittest.TestCase):
                 feature_data.pop("milling_alignment_area"),
                 list(DEFAULT_MILLING_ALIGNMENT_AREA),
             )
+            self.assertIsNone(feature_data.pop("system_state"))
         self.assertEqual(reloaded_project_data["features"], project_data["features"])
         self.assertEqual(reloaded_project_data["overviews"], project_data["overviews"])
         for feature, legacy_feature in zip(main_data.features.value, legacy_features):
@@ -197,15 +205,47 @@ class TestCryoProject(unittest.TestCase):
         """The feature/pattern anchor is persisted without changing legacy projects."""
         feature = CryoFeature("Feature-1", {"x": 0, "y": 0, "z": 0}, {Posture.FM_IMAGING: {"z": 0}})
         feature.milling_feature_offset.value = (12e-6, -8e-6)
-        main_data = MagicMock()
-        main_data.tab.value.conf.pj_last_path = self.test_dir
-        main_data.features.value = [feature]
-        main_data.overviews.value = []
+        feature.system_state = {"ion-beam": {"beamPreset": ["imaging", None]}}
+        main_data = self.main_data
+        main_data.features.value = [feature, CryoFeature("Feature-2", {}, {}, milling_tasks={})]
 
         save_project(main_data)
-        feature_data = load_project(self.test_dir)["features"][0]
-        self.assertEqual(feature_decoder(feature_data).milling_feature_offset.value,
-                         feature.milling_feature_offset.value)
+        features = load_project(self.test_dir)["features"]
+        self.assertIsNone(features[1]["system_state"])
+        decoded = feature_decoder(features[0])
+        self.assertEqual(decoded.milling_feature_offset.value, feature.milling_feature_offset.value)
+        self.assertEqual(decoded.system_state, feature.system_state)
+        decoded.system_state["ion-beam"]["beamPreset"][0] = "changed"
+        self.assertEqual(features[0]["system_state"], feature.system_state)
+
+    def test_reference_state_migration(self):
+        """Migrate recorded image settings once and give project state precedence."""
+        beam = {"dwellTime": [1e-6, "s"], "horizontalFoV": [100e-6, "m"],
+                "resolution": [[1024, 768], None], "rotation": [0.0, "rad"],
+                "accelVoltage": [30e3, "V"], "beamPreset": ["imaging", None]}
+        recorded = {"Ion-Beam": beam, "Electron-Beam": beam,
+                    "Stage": {"position": [{"x": 0, "y": 0, "z": 0, "rx": 0, "rz": 0}, None]}}
+        feature = CryoFeature("Feature-1", {}, {})
+        reference_image = model.DataArray(numpy.zeros((768, 1024), dtype=numpy.uint8),
+                                          metadata={model.MD_EXTRA_SETTINGS: recorded})
+        feature.save_milling_task_data({}, str(self.test_dir / feature.name.value), reference_image)
+        main_data = self.main_data
+        main_data.features.value = [feature]
+        save_project(main_data)
+        legacy = load_project(self.test_dir)["features"][0]
+        del legacy["system_state"]
+        with patch.object(model, "getComponents", side_effect=AssertionError("Must recover without a microscope")):
+            migrated = feature_decoder(legacy)
+        expected = {"ion-beam": beam, "e-beam": beam, "stage-bare": recorded["Stage"]}
+        self.assertEqual(migrated.system_state, expected)
+        self.assertNotIn("system_state", migrated.reference_image.metadata)
+        migrated.system_state["ion-beam"]["beamPreset"][0] = "project preset"
+        main_data.features.value = [migrated]
+        save_project(main_data)
+        reloaded = feature_decoder(load_project(self.test_dir)["features"][0])
+        self.assertEqual(reloaded.system_state["ion-beam"]["beamPreset"][0], "project preset")
+        self.assertEqual(reloaded.reference_image.metadata[model.MD_EXTRA_SETTINGS]["Ion-Beam"]["beamPreset"][0],
+                         "imaging")
 
     def test_correlation_fm_posture_roundtrip(self):
         """The posture of the correlated FM data is persisted, and defaults to FM imaging for older projects."""

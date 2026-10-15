@@ -1023,8 +1023,9 @@ class TestFIB(BaseFIBTest, unittest.TestCase):
     def test_load_presets(self):
         # We should have some presets available by default
         self.assertGreater(len(self.scanner.beamPreset.choices), 0)
-        # Check if default is set
-        self.assertEqual(self.scanner.beamPreset.value, tescan.DEFAULT_ION_PRESET)
+        # The initial selection follows the microscope's reported preset.
+        expected = self.scanner._get_beam_preset()
+        self.assertEqual(self.scanner.beamPreset.value, expected or tescan.DEFAULT_ION_PRESET)
 
     def test_set_presets(self):
         # Change presets (we use hardcoded presets here). If the hardcoded presets are not available on the hardware in

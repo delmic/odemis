@@ -49,6 +49,7 @@ from odemis.acq.feature import (
     constrain_milling_alignment_area,
     get_feature_position_at_posture,
 )
+from odemis.acq.milling.system_state import get_milling_components, system_state_from_settings
 from odemis.acq.move import Posture, FM_POSTURES
 from odemis.gui import model as guimod
 from odemis.gui.comp.popup import show_message
@@ -257,6 +258,13 @@ class CryoFeatureController(object):
 
         stream = self._tab.fib_stream  # the fib stream
 
+        preset = getattr(stream.emitter, "beamPreset", None)
+        if preset is not None and not preset.value:
+            show_message(self._tab.main_frame, "FIB imaging preset unavailable",
+                         "Select a Beam Preset before saving a milling reference image.",
+                         level=logging.WARNING)
+            return
+
         # Validate the resolution that the stream will use before starting a
         # potentially slow FIB acquisition. ScannerStream applies these same
         # ROI settings when the acquisition starts.
@@ -296,13 +304,25 @@ class CryoFeatureController(object):
         from odemis.acq import acqmng
         self._acq_future = acqmng.acquire(
                 [stream], self._tab_data_model.main.settings_obs)
-        self._acq_future.result()
+        acquired_data, error = self._acq_future.result()
+        if error is not None:
+            raise error
 
-        if stream.raw is None:
+        if not acquired_data:
             logging.warning(f"No FIB image available to save for {feature.name.value}")
             return
 
-        if not self._save_milling_reference(feature, stream.raw[0]):
+        reference_image = acquired_data[0]
+        try:
+            system_state = system_state_from_settings(reference_image.metadata.get(model.MD_EXTRA_SETTINGS),
+                                                      get_milling_components())
+        except ValueError as exc:
+            logging.warning("Cannot save FIB reference image for %s: %s", feature.name.value, exc)
+            show_message(self._tab.main_frame, "Unable to save milling reference",
+                         "The reference image has missing or invalid acquisition settings. "
+                         "Acquire a new FIB reference image and try again.", level=logging.WARNING)
+            return
+        if not self._save_milling_reference(feature, reference_image, system_state):
             return
 
         # Store the feature within the newly acquired image. Position the
@@ -334,8 +354,9 @@ class CryoFeatureController(object):
         self._tab_data_model.main.currentFeature.value = None
         self._tab_data_model.main.currentFeature.value = feature
 
-    def _save_milling_reference(self, feature: CryoFeature, reference_image: model.DataArray) -> bool:
-        """Save a reference image or show its alignment-area validation warning."""
+    def _save_milling_reference(self, feature: CryoFeature, reference_image: model.DataArray,
+                               system_state: dict) -> bool:
+        """Save the reference and recorded state or show its alignment-area validation warning."""
         feature_dir = get_feature_dir(self._tab.conf.pj_last_path, feature.name.value)
         if feature_dir is None:
             logging.warning(f"Feature name {feature.name.value!r} cannot be used as directory name")
@@ -343,9 +364,10 @@ class CryoFeatureController(object):
 
         try:
             feature.save_milling_task_data(
-                stage_position=self.pm.stage.position.value,
+                stage_position=system_state["stage-bare"]["position"][0],
                 path=str(feature_dir),
                 reference_image=reference_image,
+                system_state=system_state,
             )
         except MillingAlignmentAreaTooSmallError as exc:
             self._show_milling_reference_warning(feature, exc)
