@@ -980,6 +980,12 @@ class StreakCamAlignSettingsController(SettingsBarController):
         self.panel_streak.GetSizer().GetItem(0).SetBorder(0)
         self.panel_streak.Layout()
 
+        # The calibration file only makes sense if the delay generator has a
+        # time range -> delay table.
+        has_tr2d = model.MD_TIME_RANGE_TO_DELAY in self.streak_delay.getMetadata()
+        self.panel.pnl_streak_calib_file.Show(has_tr2d)
+        self.panel.pnl_streak.Layout()
+
         self.panel.btn_open_streak_calib_file.Bind(wx.EVT_BUTTON, self._onOpenCalibFile)
         self.panel.btn_save_streak_calib_file.Bind(wx.EVT_BUTTON, self._onSaveCalibFile)
 
@@ -991,8 +997,13 @@ class StreakCamAlignSettingsController(SettingsBarController):
         evt.Skip()
         cur_timeRange = self.streak_unit.timeRange.value
         requested_triggerDelay = self.ctrl_triggerDelay.GetValue()
-        # get a copy of  MD
-        trigger2delay_MD = self.streak_delay.getMetadata()[model.MD_TIME_RANGE_TO_DELAY]
+        # get a copy of MD
+        try:
+            trigger2delay_MD = self.streak_delay.getMetadata()[model.MD_TIME_RANGE_TO_DELAY]
+        except KeyError:
+            # No metadata -> this means we shouldn't have any connection
+            logging.info("No MD_TIME_RANGE_TO_DELAY metadata found, not connecting time range to delay.")
+            return
 
         # check if key already exists (prevent creating new key due to floating point issues)
         key = util.find_closest(cur_timeRange, trigger2delay_MD.keys())
