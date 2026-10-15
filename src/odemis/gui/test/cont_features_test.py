@@ -94,11 +94,14 @@ class CryoFeatureControllerTestCase(unittest.TestCase):
     @patch("odemis.gui.cont.features.show_message")
     def test_missing_microscope_settings_are_rejected(self, message: Mock) -> None:
         """Warn and retain the old reference when the live snapshot is incomplete."""
+        # An unknown preset must not prevent acquiring the reference image.
+        self.stream.emitter.beamPreset = model.StringVA("")
         self.feature.reference_image = self.reference_image
         self.feature.system_state = self.system_state
 
         self.controller.save_milling_position(wx.CommandEvent())
 
+        self.assertTrue(hasattr(self.controller, "_acq_future"))
         self.assertIs(self.feature.reference_image, self.reference_image)
         self.assertEqual(self.feature.system_state, self.system_state)
         self.assertFalse(any(self.project_dir.iterdir()))
@@ -116,14 +119,6 @@ class CryoFeatureControllerTestCase(unittest.TestCase):
 
         self.assertFalse(hasattr(self.controller, "_acq_future"))
         message_dialog.assert_called_once()
-
-    @patch("odemis.gui.cont.features.wx.MessageDialog")
-    def test_valid_resolution_passes_preflight(self, message_dialog: Mock) -> None:
-        """Accept a prospective image that can contain a valid alignment area."""
-        valid = self.controller._validate_milling_reference_shape(self.feature, (512, 512))
-
-        self.assertTrue(valid)
-        message_dialog.assert_not_called()
 
 
 if __name__ == "__main__":

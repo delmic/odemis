@@ -3,7 +3,7 @@
 """
 Created on 12 May 2014
 
-Copyright © 2014 Kimon Tsitsikas, Delmic
+Copyright © 2014-2026 Kimon Tsitsikas, Delmic
 
 This file is part of Odemis.
 
@@ -1023,8 +1023,22 @@ class TestFIB(BaseFIBTest, unittest.TestCase):
     def test_load_presets(self):
         # We should have some presets available by default
         self.assertGreater(len(self.scanner.beamPreset.choices), 0)
-        # Check if default is set
-        self.assertEqual(self.scanner.beamPreset.value, tescan.DEFAULT_ION_PRESET)
+        # The initial selection follows the microscope's reported preset.
+        expected = self.scanner._get_beam_preset()
+        self.assertEqual(self.scanner.beamPreset.value, expected or tescan.DEFAULT_ION_PRESET)
+
+    def test_acquisition_refreshes_preset(self):
+        """Read the preset during acquisition without activating one on the microscope."""
+        preset = next(preset for preset in self.scanner.beamPreset.choices if preset)
+        for previous, reported in (("", preset), (preset, "")):
+            with self.subTest(reported=reported), \
+                 mock.patch.object(self.scanner._device_handler, "GetDeviceParams",
+                                   return_value=f"LastPreset={reported}\n"), \
+                 mock.patch.object(self.scanner._device_handler, "PresetSetEx") as activate:
+                self.scanner.beamPreset._value = previous
+                self.sed.data.get()
+                self.assertEqual(self.scanner.beamPreset.value, reported)
+                activate.assert_not_called()
 
     def test_set_presets(self):
         # Change presets (we use hardcoded presets here). If the hardcoded presets are not available on the hardware in
