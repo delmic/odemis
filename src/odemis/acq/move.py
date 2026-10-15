@@ -620,7 +620,11 @@ class MeteorPostureManager(MicroscopePostureManager):
         if Posture.FIB_VIEW_FM not in self.postures:
             return False
         fib_view_fm_orientation = self.get_posture_orientation(Posture.FIB_VIEW_FM)
-        return isNearPosition(pos, fib_view_fm_orientation, self.rotational_axes, atol_rotation=POSTURE_ANGLE_ATOL)
+
+        stage_tilt_range = [self.calculate_stage_tilt(a, posture=Posture.FIB_VIEW_FM) for a in MILLING_RANGE]
+        tilt_in_range = isInRange(pos, active_range={"rx": stage_tilt_range}, axes={"rx"})
+        rotation_close = isNearPosition(pos, fib_view_fm_orientation, axes={"rz"}, atol_rotation=POSTURE_ANGLE_ATOL)
+        return tilt_in_range and rotation_close
 
     def get_posture_orientation(self, posture: Posture) -> Dict[str, float]:
         """Get the orientation of the stage for the given posture
