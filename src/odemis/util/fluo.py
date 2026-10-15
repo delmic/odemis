@@ -18,7 +18,15 @@ You should have received a copy of the GNU General Public License along with Ode
 # various functions to help with computations related to fluorescence microscopy
 
 from collections.abc import Iterable
+from typing import Sequence, Tuple, Union
+
 from odemis.model import BAND_PASS_THROUGH
+
+# A band is either the min/max (2 floats) or the -99%, -25%, middle, +25%, +99% (5 floats)
+# of the band in m, or BAND_PASS_THROUGH (a string).
+Band = Union[str, Sequence[float]]
+# One band, or several bands (multi-band filter)
+MultiBand = Union[Band, Sequence[Sequence[float]]]
 
 # constants to indicate how well a emission/excitation setting fits a dye
 # emission/excitation (peak)
@@ -27,12 +35,14 @@ FIT_BAD = 1 # Might work, but not at its best
 FIT_IMPOSSIBLE = 0 # Unlikely to work
 
 
-def get_center(band):
+def get_center(band: MultiBand) -> Union[float, Tuple]:
     """
-    Return the center wavelength(es) of a emission/excitation band
-    band ((list of) tuple of 2 or 5 floats, or BAND_PASS_THROUGH): either the min/max
-      of the band or the -99%, -25%, middle, +25%, +99% of the band in m.
-    return ((tuple of) float): wavelength in m or list of wavelength for each band
+    Return the center wavelength(s) of an emission/excitation band.
+    :param band: either the min/max of the band or the -99%, -25%, middle, +25%,
+        +99% of the band in m, or a list of such bands, or BAND_PASS_THROUGH.
+    :returns: wavelength in m, or tuple of wavelengths (one for each band) if
+        multiple bands were given.
+    :raises TypeError: if the band is a string other than BAND_PASS_THROUGH.
     """
     if band == BAND_PASS_THROUGH:
         return 5000e-9  # Something large, so that if it's sorted, it's after every other band
@@ -50,13 +60,13 @@ def get_center(band):
     return center
 
 
-def get_one_band_em(bands, ex_band):
+def get_one_band_em(bands: MultiBand, ex_band: MultiBand) -> Band:
     """
     Return the band given or if it's a multi-band, return just the most likely
-    one based on the current excitation band
-    bands ((list of) tuple of 2 or 5 floats, or BAND_PASS_THROUGH): emission band(s)
-    ex_band ((list of) tuple of 2 or 5 floats, or BAND_PASS_THROUGH): excitation band(s)
-    return (tuple of 2 or 5 floats, or BAND_PASS_THROUGH): emission band
+    one based on the current excitation band.
+    :param bands: emission band(s)
+    :param ex_band: excitation band(s)
+    :returns: the emission band (2 or 5 floats), or BAND_PASS_THROUGH
     """
     if bands == BAND_PASS_THROUGH:
         return bands
@@ -86,25 +96,25 @@ def get_one_band_em(bands, ex_band):
     return em_band
 
 
-def get_one_center_em(bands, ex_band):
+def get_one_center_em(bands: MultiBand, ex_band: MultiBand) -> float:
     """
     Return the center of an emission band, and if it's a multi-band, return just
-    one of the centers based on the current excitation band
-    bands ((list of) tuple of 2 or 5 floats, or BAND_PASS_THROUGH): emission band(s)
-    ex_band ((list of) tuple of 2 or 5 floats, or BAND_PASS_THROUGH): excitation band(s)
-    return (float): wavelength in m
+    one of the centers based on the current excitation band.
+    :param bands: emission band(s)
+    :param ex_band: excitation band(s)
+    :returns: wavelength in m
     """
     return get_center(get_one_band_em(bands, ex_band))
 
 
-def get_one_band_ex(bands, em_band):
+def get_one_band_ex(bands: MultiBand, em_band: MultiBand) -> Band:
     """
     Return the excitation band, and if it's a multi-band, return the band
-      fitting best the current emission band: the first excitation wavelength
-      below the emission.
-    bands ((list of) tuple of 2 or 5 floats, or BAND_PASS_THROUGH): excitation band(s)
-    em_band ((list of) tuple of 2 or 5 floats, or BAND_PASS_THROUGH): emission band(s)
-    return (float): wavelength in m
+    fitting best the current emission band: the first excitation wavelength
+    below the emission.
+    :param bands: excitation band(s)
+    :param em_band: emission band(s)
+    :returns: the excitation band (2 or 5 floats), or BAND_PASS_THROUGH
     """
     if bands == BAND_PASS_THROUGH:
         return bands
@@ -136,24 +146,24 @@ def get_one_band_ex(bands, em_band):
     return ex_band
 
 
-def get_one_center_ex(bands, em_band):
+def get_one_center_ex(bands: MultiBand, em_band: MultiBand) -> float:
     """
     Return the center of an excitation band, and if it's a multi-band, return
-    just one of the centers based on the current emission band
-    bands ((list of) tuple of 2 or 5 floats, or BAND_PASS_THROUGH): excitation band(s)
-    em_band ((list of) tuple of 2 or 5 floats, or BAND_PASS_THROUGH): emission band(s)
-    return (float): wavelength in m
+    just one of the centers based on the current emission band.
+    :param bands: excitation band(s)
+    :param em_band: emission band(s)
+    :returns: wavelength in m
     """
     return get_center(get_one_band_ex(bands, em_band))
 
 
-def get_one_center(band):
+def get_one_center(band: MultiBand) -> float:
     """
     Return the center of a band, and if it's a multi-band, return just one of the centers.
     If possible use get_one_center_ex() or get_one_center_em() to get more
     likely value.
-
-    :return: (float) wavelength in m
+    :param band: band(s) to get the center from
+    :returns: wavelength in m
     """
     if isinstance(band[0], Iterable) and band != BAND_PASS_THROUGH:
         return get_center(band[0])
@@ -161,14 +171,15 @@ def get_one_center(band):
         return get_center(band)
 
 
-def estimate_fit_to_dye(wl, band):
+def estimate_fit_to_dye(wl: float, band: MultiBand) -> int:
     """
     Estimate how well the light settings of the hardware fit for a given dye
     emission or excitation wavelength.
-    wl (float): the wavelength of peak of the dye
-    band ((list of) tuple of 2 or 5 floats, or BAND_PASS_THROUGH): either the min/max
-      of the band or the -99%, -25%, middle, +25%, +99% of the band in m.
-    return (FIT_*): how well it fits (the higher the better)
+    :param wl: the wavelength of peak of the dye, in m
+    :param band: either the min/max of the band or the -99%, -25%, middle,
+        +25%, +99% of the band in m, or a list of such bands, or BAND_PASS_THROUGH.
+    :returns: how well it fits, as one of FIT_GOOD, FIT_BAD, or FIT_IMPOSSIBLE
+        (the higher the better)
     """
     if band == BAND_PASS_THROUGH:
         return FIT_IMPOSSIBLE
@@ -186,14 +197,14 @@ def estimate_fit_to_dye(wl, band):
         return FIT_IMPOSSIBLE
 
 
-def quantify_fit_to_dye(wl, band):
+def quantify_fit_to_dye(wl: float, band: MultiBand) -> float:
     """
     Quantifies how well the given wavelength matches the given
-      band: the better the match, the higher the return value will be.
-    wl (float): the wavelength of peak of the dye
-    band ((list of) tuple of 2 or 5 floats, or BAND_PASS_THROUGH): either the min/max
-      of the band or the -99%, -25%, middle, +25%, +99% of the band in m.
-    return (0<float): the more, the merrier
+    band: the better the match, the higher the return value will be.
+    :param wl: the wavelength of peak of the dye, in m
+    :param band: either the min/max of the band or the -99%, -25%, middle,
+        +25%, +99% of the band in m, or a list of such bands, or BAND_PASS_THROUGH.
+    :returns: a score >= 0. The higher, the better the fit.
     """
     if band == BAND_PASS_THROUGH:
         return 0  # Pass-through is never good for fluorescence microscopy
@@ -219,26 +230,26 @@ def quantify_fit_to_dye(wl, band):
         return 0.0001 / max(dist_border, 1e-9)
 
 
-def find_best_band_for_dye(wl, bands):
+def find_best_band_for_dye(wl: float, bands: Iterable[MultiBand]) -> MultiBand:
     """
     Pick the best band for the given dye emission or excitation.
-    wl (float): the wavelength of peak of the dye
-    bands ({(list of) tuple of 2 or 5 floats or BAND_PASS_THROUGH}): set of either the min/max
-      of the band or the -99%, -25%, middle, +25%, +99% of the band in m.
-    return ((list of) tuple of 2 or 5 floats): the best fitting bands
+    :param wl: the wavelength of peak of the dye, in m
+    :param bands: set of bands, each being either the min/max of the band or the
+        -99%, -25%, middle, +25%, +99% of the band in m, or a list of such bands,
+        or BAND_PASS_THROUGH.
+    :returns: the best fitting band
     """
     # The most fitting band: narrowest band centered around the wavelength
     return max((b for b in bands), key=lambda x: quantify_fit_to_dye(wl, x))
 
 
-def to_readable_band(band):
-    """ Convert a emission or excitation band into readable text
-
-    :param band: (str or (list of) tuple of 2 or 5 floats): either the min/max of the band or the
-        -99%, -25%, middle, +25%, +99% of the band in m. It can also be a string
-        in which case it will be returned as-is
-    :return: (unicode) human readable string
-
+def to_readable_band(band: MultiBand) -> str:
+    """
+    Convert an emission or excitation band into readable text.
+    :param band: either the min/max of the band or the -99%, -25%, middle,
+        +25%, +99% of the band in m, or a list of such bands. It can also be a
+        string in which case it will be returned as-is.
+    :returns: human readable string
     """
     # if string: => return as is
     # if one band => center/bandwidth nm (bandwidth not displayed if < 5nm)
