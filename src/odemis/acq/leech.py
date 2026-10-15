@@ -150,6 +150,7 @@ class AnchorDriftCorrector(LeechAcquirer):
         self._detector = detector
         self._dc_estimator = None
         self._period_acq = None  # number of acq left until next drift correction is performed
+        self.log_path = None
 
         # roi: the anchor region, it must be set to something different from
         #  UNDEFINED_ROI to run.
@@ -277,7 +278,8 @@ class AnchorDriftCorrector(LeechAcquirer):
         self._dc_estimator = drift.AnchoredEstimator(self._scanner,
                                                      self._detector,
                                                      self.roi.value,
-                                                     self.dwellTime.value)
+                                                     self.dwellTime.value,
+                                                     log_path=self.log_path)
 
         # First acquisition of anchor area
         self._dc_estimator.acquire()
