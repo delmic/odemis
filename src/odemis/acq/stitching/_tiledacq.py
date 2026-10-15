@@ -838,14 +838,15 @@ class TiledAcquisitionTask(object):
         # Hence, observed time due to stitching is set to zero
         self._save_time["stitch"] = [0]
         move_to_tile_start = None
-        start_time = time.time()
 
         # Sort the tile_indices in zigzag order to optimize the stage movement
         zigzag_indices = self._sort_tile_indices_zigzag(self._tile_indices)
 
         for ix, iy in zigzag_indices:
+            self._future.wait_if_paused()  # Block here between tiles if a pause is requested
             if i > 0:
-                self.average_acquisition_time = (time.time() - start_time) / i
+                elapsed = self._future.elapsed_time
+                self.average_acquisition_time = elapsed / i
 
             self._moveToTile((ix, iy), prev_idx, self._sfov)
             if move_to_tile_start:
