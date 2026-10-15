@@ -1,0 +1,113 @@
+#!/bin/bash
+set -euo pipefail
+# Point the "dev" PYTHONPATH in /etc/odemis.conf to a given odemis git worktree.
+# This is handy when several worktrees of the odemis repository are checked out
+# (e.g. one per feature branch) and you want to quickly switch which one is used
+# when running Odemis in development mode.
+#
+# Usage:
+#   odemis-select-worktree              # use the worktree containing the current directory
+#   odemis-select-worktree <path>       # use the worktree containing <path>
+#   odemis-select-worktree --unset      # comment out the PYTHONPATH line (disable dev override)
+#
+# Only the odemis "src/" entry at the start of the PYTHONPATH="..." line is
+# replaced; the rest of the line (e.g. the Pyro4 path, "$PYTHONPATH") is kept
+# untouched. Requires root privileges to write to /etc/odemis.conf.
+
+CONF_FILE="/etc/odemis.conf"
+
+run_as_root() {
+    if [ "$(id -u)" -eq 0 ]; then
+        "$@"
+    else
+        sudo "$@"
+    fi
+}
+
+show_usage() {
+    echo "Usage:"
+    echo "  odemis-select-worktree [<path>]"
+    echo "      Point the dev PYTHONPATH to the odemis worktree containing <path>"
+    echo "      (or the current directory if <path> is omitted)."
+    echo "  odemis-select-worktree --unset"
+    echo "      Comment out the PYTHONPATH line in $CONF_FILE."
+}
+
+unset_worktree() {
+    if [ ! -f "$CONF_FILE" ]; then
+        echo "ERROR: config file not found: $CONF_FILE" >&2
+        exit 1
+    fi
+
+    if ! grep -q '^PYTHONPATH=' "$CONF_FILE"; then
+        echo "PYTHONPATH is already unset in $CONF_FILE"
+        exit 0
+    fi
+
+    run_as_root sed -i -E '0,/^PYTHONPATH=/s/^(PYTHONPATH=.*)/#\1/' "$CONF_FILE"
+
+    echo "Commented out PYTHONPATH in $CONF_FILE:"
+    grep -E '^#?PYTHONPATH=' "$CONF_FILE" | head -n1
+}
+
+select_worktree() {
+    local target_dir="$1"
+
+    if ! command -v git >/dev/null 2>&1; then
+        echo "ERROR: git is not installed" >&2
+        exit 1
+    fi
+
+    local worktree_root
+    worktree_root="$(git -C "$target_dir" rev-parse --show-toplevel 2>/dev/null)" || {
+        echo "ERROR: '$target_dir' is not inside a git worktree" >&2
+        exit 1
+    }
+
+    local src_dir="$worktree_root/src"
+    if [ ! -d "$src_dir" ]; then
+        echo "ERROR: expected source directory not found: $src_dir" >&2
+        exit 1
+    fi
+
+    if [ ! -f "$CONF_FILE" ]; then
+        echo "ERROR: config file not found: $CONF_FILE" >&2
+        exit 1
+    fi
+
+    # Uncomment the PYTHONPATH line if it was previously disabled via --unset.
+    if ! grep -q '^PYTHONPATH=' "$CONF_FILE" && grep -q '^#\s*PYTHONPATH=' "$CONF_FILE"; then
+        run_as_root sed -i -E '0,/^#\s*PYTHONPATH=/s/^#\s*(PYTHONPATH=.*)/\1/' "$CONF_FILE"
+    fi
+
+    if ! grep -q '^PYTHONPATH=' "$CONF_FILE"; then
+        echo "ERROR: no PYTHONPATH line found in $CONF_FILE" >&2
+        echo "Hint: run 'odemis-select-channel --select dev' first to enable development mode." >&2
+        exit 1
+    fi
+
+    # Preserve the rest of the PYTHONPATH assignment (e.g. Pyro4 path, trailing
+    # "$PYTHONPATH"), only replacing the odemis src/ component (first path entry).
+    local current_line rest new_line sed_script
+    current_line="$(grep '^PYTHONPATH=' "$CONF_FILE" | head -n1)"
+    rest="$(echo "$current_line" | sed -E 's/^PYTHONPATH="[^:"]*:?//')"
+    new_line="PYTHONPATH=\"$src_dir/:$rest"
+
+    sed_script="0,/^PYTHONPATH=/s#^PYTHONPATH=.*#${new_line//#/\\#}#"
+    run_as_root sed -i -E "$sed_script" "$CONF_FILE"
+
+    echo "Updated $CONF_FILE:"
+    grep '^PYTHONPATH=' "$CONF_FILE"
+}
+
+case "${1:-}" in
+    --unset)
+        unset_worktree
+        ;;
+    --help)
+        show_usage
+        ;;
+    *)
+        select_worktree "${1:-$PWD}"
+        ;;
+esac
