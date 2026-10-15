@@ -135,6 +135,7 @@ class SparcRecipesController:
         wizard = Wizard(self._streambar_controller._stream_bar, title="Export")
         files_page = FilesPage(wizard, message, wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT)
         streams_page = Sparc2StreamsPage(wizard, self._tab_data.main, self._streambar_controller.menu_actions)
+        streams_page.SetMinSize((400, 600))
         sse = [s.get_settings_entries() for s in self._tab_data.streams.value]
         sse.append(self._tab_data.semStream.get_settings_entries())
         sse.append(self._tab_data.driftCorrector.get_settings_entries())
@@ -157,7 +158,11 @@ class SparcRecipesController:
         # Pause streams to avoid issues
         self._streambar_controller.pauseStreams()
 
-        wizard, files_page, streams_page = self._create_export_wizard()
+        wx.BeginBusyCursor()
+        try:
+            wizard, files_page, streams_page = self._create_export_wizard()
+        finally:
+            wx.EndBusyCursor()
 
         try:
             self._tab_data.streams.unsubscribe(self._on_streams)
@@ -169,7 +174,7 @@ class SparcRecipesController:
                         entry.pop("roi", None)
                 # Get the first file path (there should be only one in save mode)
                 file_path = files_page.file_paths[0]
-                with open(file_path, "w") as json_file:
+                with open(file_path, "w", encoding="utf-8") as json_file:
                     json.dump(streams_settings_entries, json_file, indent=2)
                 self._tab_data.recipes = {os.path.splitext(os.path.basename(file_path))[0]}
                 self._update_current_recipes_label()
@@ -196,17 +201,21 @@ class SparcRecipesController:
                 # If validation fails, prevent page change
                 evt.Veto()
             elif page is files_page:
-                for file_path in files_page.file_paths:
-                    try:
-                        with open(file_path, "r") as json_file:
-                            config = json.load(json_file)
-                        streams_page.set_streams_settings_entries(config)
-                    except Exception as e:
-                        show_error(f"An error occurred while reading the file {file_path}:\n{str(e)}")
-                        evt.Veto()
-                        return
-                # Take a snapshot of the current settings entries, to later know if they were modified by the user
-                streams_page.take_snapshot()
+                wx.BeginBusyCursor()
+                try:
+                    for file_path in files_page.file_paths:
+                        try:
+                            with open(file_path, "r", encoding="utf-8") as json_file:
+                                config = json.load(json_file)
+                            streams_page.set_streams_settings_entries(config)
+                        except Exception as e:
+                            show_error(f"An error occurred while reading the file {file_path}:\n{str(e)}")
+                            evt.Veto()
+                            return
+                    # Take a snapshot of the current settings entries, to later know if they were modified by the user
+                    streams_page.take_snapshot()
+                finally:
+                    wx.EndBusyCursor()
 
     def _create_import_wizard(self):
         """Create the import wizard for importing stream settings entries from a .json files."""
@@ -215,6 +224,7 @@ class SparcRecipesController:
         files_page = FilesPage(wizard, message, wx.FD_OPEN | wx.FD_FILE_MUST_EXIST | wx.FD_MULTIPLE)
         files_page.remove_streams_cbox.Show()
         streams_page = Sparc2StreamsPage(wizard, self._tab_data.main, self._streambar_controller.menu_actions)
+        streams_page.SetMinSize((400, 600))
 
         wizard.FitToPage(files_page)
         wizard.FitToPage(streams_page)
@@ -273,7 +283,11 @@ class SparcRecipesController:
         # Pause streams to avoid issues
         self._streambar_controller.pauseStreams()
 
-        wizard, files_page, streams_page = self._create_import_wizard()
+        wx.BeginBusyCursor()
+        try:
+            wizard, files_page, streams_page = self._create_import_wizard()
+        finally:
+            wx.EndBusyCursor()
 
         try:
             self._tab_data.streams.unsubscribe(self._on_streams)
