@@ -31,7 +31,7 @@ import numpy
 import wx
 
 from odemis import model
-from odemis.acq.feature import CryoFeature
+from odemis.acq.feature import CryoFeature, FIBFMCorrelationData, Target, TargetType
 from odemis.acq.move import Posture
 from odemis.acq.stream import FIBStream
 from odemis.driver import simsem
@@ -90,6 +90,20 @@ class CryoFeatureControllerTestCase(unittest.TestCase):
         self.assertEqual(self.feature.get_posture_position(Posture.MILLING), {"x": 1e-3, "y": 2e-3})
         self.assertEqual(self.feature.system_state, self.system_state)
         self.assertTrue(any((self.project_dir / "Feature 1").glob("*.ome.tiff")))
+
+    def test_reselecting_current_feature_preserves_correlation_target(self):
+        """Keep the selected FM target and correlation data on repeated navigation."""
+        self.controller._current_feature = self.feature
+        correlation_data = self.feature.correlation_data = FIBFMCorrelationData()
+        target = Target(x=0, y=0, z=0, name="FM-1", type=TargetType.Fiducial, index=1, fm_focus_position=0)
+        main = self.controller._tab_data_model.main
+        main.currentTarget = model.VigilantAttribute(target)
+        main.targets = model.ListVA([target])
+
+        CryoFeatureController._on_current_feature_changes.__wrapped__(self.controller, self.feature)
+
+        self.assertIs(main.currentTarget.value, target)
+        self.assertIs(self.feature.correlation_data, correlation_data)
 
     @patch("odemis.gui.cont.features.show_message")
     def test_missing_microscope_settings_are_rejected(self, message: Mock) -> None:
