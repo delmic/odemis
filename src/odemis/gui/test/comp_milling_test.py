@@ -97,17 +97,18 @@ class MillingTaskPanelTestCase(test.GuiTestCase):
         super().tearDown()
 
     def test_pattern_polygon_matches_displayed_rotation(self) -> None:
-        """Use the same rotation direction for validation and the drawn rectangle."""
-        canvas = Mock()
-        canvas.get_half_buffer_size.return_value = (0, 0)
-        canvas.phys_to_view.side_effect = lambda point, offset: (point[0] / 1e-6, -point[1] / 1e-6)
-        canvas.view_to_phys.side_effect = lambda point, offset: (point[0] * 1e-6, -point[1] * 1e-6)
-        image = SimpleNamespace(metadata={model.MD_POS: (0, 0)})
-        for rotation in (0, math.pi / 6, math.pi / 4, 3 * math.pi / 4):
+        """Keep the display and validation counterclockwise in physical coordinates."""
+        canvas = miccanvas.DblMicroscopeCanvas(self.panel)
+        self.addCleanup(canvas.Destroy)
+        canvas.scale = 1e6
+        image = model.DataArray(numpy.zeros((1, 1)), {model.MD_POS: (0, 0)})
+        for rotation in (0, math.pi / 6, 7 * math.pi / 4):
             with self.subTest(rotation=rotation):
                 pattern = RectanglePatternParameters(width=80e-6, height=10e-6, depth=1e-6,
                                                      center=(20e-6, -30e-6), rotation=rotation)
                 shape = rectangle_pattern_to_shape(canvas, image, pattern)
+                edge = shape.p_point2 - shape.p_point1
+                self.assertAlmostEqual(math.atan2(edge.y, edge.x) % (2 * math.pi), rotation)
                 expected = Polygon(shape.get_physical_sel())
                 actual = _get_milling_rectangle_polygon(pattern)
                 self.assertLess(actual.symmetric_difference(expected).area / expected.area, 1e-10)
