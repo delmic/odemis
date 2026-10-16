@@ -30,6 +30,7 @@ from odemis.acq.feature import CryoFeature, MIN_MILLING_ALIGNMENT_AREA_PIXELS
 from odemis.acq.milling import DEFAULT_MILLING_TASKS_PATH
 from odemis.acq.milling.patterns import RectanglePatternParameters
 from odemis.acq.milling.tasks import load_milling_tasks
+from odemis.acq.move import MeteorPostureManager, Posture
 from odemis.acq.stream import StaticSEMStream
 from odemis.gui.comp.overlay._constants import (
     MILLING_ALIGNMENT_AREA_COLOR,
@@ -244,8 +245,8 @@ class MillingTaskPanelTestCase(test.GuiTestCase):
 
         self.assertAlmostEqual(pattern.spacing.value, 12e-6)
 
-    def test_pattern_movement_selection_and_recenter(self) -> None:
-        """Move patterns and recenter only displayed patterns on the feature."""
+    def test_pattern_movement_selection(self) -> None:
+        """Move only the selected patterns and preserve their relative positions."""
         task_list = wx.CheckListBox(self.panel, choices=list(self.tasks))
         task_list.SetSelection(task_list.FindString("Microexpansion"))
         move_all = wx.CheckBox(self.panel)
@@ -302,23 +303,32 @@ class MillingTaskPanelTestCase(test.GuiTestCase):
         move_all.SetValue(False)
         self.assertEqual(self.controller._get_patterns_for_manual_move(), [])
 
-        for pattern in visible_patterns:
-            pattern.center.value = (20e-6, 20e-6)
+    def test_recenter_uses_trenching_marker(self) -> None:
+        """Use the trenching marker rather than the stale saved offset."""
+        self.tasks["Ruler"].selected = False
+        hidden_pattern = self.tasks["Ruler"].patterns[0]
         hidden_center = hidden_pattern.center.value
-        feature = SimpleNamespace(
-            milling_feature_offset=model.TupleVA(marker),
-            milling_tasks=self.tasks,
-        )
+        feature = CryoFeature("Feature", {"x": 0, "y": 0, "z": 0}, {}, milling_tasks=self.tasks)
+        feature.reference_image = model.DataArray(
+            numpy.zeros((10, 10)), metadata={
+                model.MD_POS: (100e-6, -200e-6),
+                model.MD_STAGE_POSITION_RAW: {"x": 100e-6, "y": -200e-6, "z": 0}})
+        feature.milling_feature_offset.value = (2e-6, -3e-6)
+        feature.set_posture_position(Posture.TRENCHING, {"x": -120e-6, "y": 194e-6, "z": 0})
+        # Use the real position conversion with a known 180-degree trenching transform.
+        pm = object.__new__(MeteorPostureManager)
+        pm.current_posture = model.VigilantAttribute(Posture.TRENCHING)
+        pm._axes_dep = {"x": "y", "y": "z"}
+        pm._inv_transforms = {Posture.TRENCHING: numpy.diag([-1, -1, 1])}
+        pm._offset = {Posture.TRENCHING: numpy.zeros(3)}
+        self.controller.pm = pm
         self.controller._tab_data = SimpleNamespace(
             main=SimpleNamespace(currentFeature=model.VigilantAttribute(feature)))
         self.controller.allow_milling_pattern_move = True
         with patch("odemis.gui.cont.milling.save_project"):
             self.controller._snap_patterns_to_feature(None)
-        for pattern in visible_patterns:
-            self.assertEqual(
-                pattern.center.value,
-                pattern.get_center_at_feature(marker),
-            )
+        for actual, expected in zip(self.tasks["Microexpansion"].patterns[0].center.value, (20e-6, 6e-6)):
+            self.assertAlmostEqual(actual, expected)
         self.assertEqual(hidden_pattern.center.value, hidden_center)
 
     def test_pattern_stack_center_uses_generated_geometry_bounds(self) -> None:

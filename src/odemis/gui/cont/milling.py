@@ -42,6 +42,8 @@ from odemis.acq.feature import (
     CryoFeature,
     MillingAlignmentAreaTooSmallError,
     constrain_milling_alignment_area,
+    get_feature_sample_position,
+    set_feature_position_from_milling_offset,
 )
 from odemis.acq.milling import fibsemos, millmng
 from odemis.acq.milling.millmng import MillingWorkflowTask, run_automated_milling
@@ -367,7 +369,7 @@ class MillingTaskController:
         feature = self._tab_data.main.currentFeature.value
         can_move = feature is not None and self.allow_milling_pattern_move
         self._panel.chk_move_all_patterns.Enable(can_move)
-        self._panel.btn_snap_patterns_to_feature.Enable(can_move and feature.milling_feature_offset.value is not None)
+        self._panel.btn_snap_patterns_to_feature.Enable(can_move and feature.reference_image is not None)
 
     def _get_reference_stream(self, feature: CryoFeature) -> Optional[StaticStream]:
         """Return the displayed stream containing the feature reference image."""
@@ -1121,10 +1123,13 @@ class MillingTaskController:
             logging.warning(
                 "Cannot recenter milling patterns without a selected feature.")
             return
-        if feature.milling_feature_offset.value is None:
-            logging.warning("Cannot recenter milling patterns without a feature marker.")
+        if feature.reference_image is None:
+            logging.warning("Cannot recenter milling patterns without a reference image.")
             return
-        self.move_milling_tasks(feature.milling_feature_offset.value)
+        sample_pos = get_feature_sample_position(self.pm, feature, self.pm.current_posture.value)
+        relative_pos = pos_to_relative((sample_pos["x"], sample_pos["y"]), feature.reference_image)
+        feature.set_milling_feature_offset(relative_pos, move_patterns=False)
+        self.move_milling_tasks(relative_pos)
 
     def set_milling_feature_position(self,
                                      pos: Tuple[float, float],
@@ -1145,6 +1150,7 @@ class MillingTaskController:
             logging.warning("Cannot position milling feature without a selected feature.")
             return
 
+        set_feature_position_from_milling_offset(self.pm, feature, pos)
         feature.set_milling_feature_offset(pos, move_patterns=move_patterns)
         self._update_pattern_movement_controls()
 

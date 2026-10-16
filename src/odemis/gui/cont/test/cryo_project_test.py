@@ -21,6 +21,7 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
+import json
 import logging
 import shutil
 import tempfile
@@ -38,9 +39,11 @@ from odemis.acq.feature import (
     CryoFeature,
     DEFAULT_MILLING_ALIGNMENT_AREA,
     FIBFMCorrelationData,
+    REFERENCE_IMAGE_FILENAME,
     feature_decoder,
 )
 from odemis.acq.move import Posture
+from odemis.dataio import tiff
 from odemis.gui.cont.cryo_project import (
     get_feature_dir,
     sanitize_feature_name,
@@ -159,6 +162,17 @@ class TestCryoProject(unittest.TestCase):
             self.assertEqual(feature.fm_focus_position.value,
                              {Posture.FM_IMAGING: feature_data["fm_focus_position"][Posture.FM_IMAGING.value]})
 
+    def test_v1_1_project_marks_legacy_milling_positions(self):
+        """Migrate positions from projects that already stored imaging settings."""
+        project = read_project_file(self.project_json_v1_0)
+        project["version"] = "1.1"
+        (self.test_dir / PROJECT_NAME).write_text(json.dumps(project), encoding="utf-8")
+
+        features = load_project(self.test_dir)["features"]
+
+        self.assertTrue(features)
+        self.assertTrue(all(feature["legacy_milling_position"] for feature in features))
+
     def test_feature_path(self):
         """Tests that the feature path is not stored, but derived from the feature directory on load."""
         feature = CryoFeature("Feature-1", {"x": 0, "y": 0, "z": 0}, {"z": 0})
@@ -213,6 +227,7 @@ class TestCryoProject(unittest.TestCase):
         features = load_project(self.test_dir)["features"]
         self.assertIsNone(features[1]["system_state"])
         decoded = feature_decoder(features[0])
+        self.assertFalse(decoded.legacy_milling_position)
         self.assertEqual(decoded.milling_feature_offset.value, feature.milling_feature_offset.value)
         self.assertEqual(decoded.system_state, feature.system_state)
         decoded.system_state["ion-beam"]["beamPreset"][0] = "changed"
@@ -228,7 +243,10 @@ class TestCryoProject(unittest.TestCase):
         feature = CryoFeature("Feature-1", {}, {})
         reference_image = model.DataArray(numpy.zeros((768, 1024), dtype=numpy.uint8),
                                           metadata={model.MD_EXTRA_SETTINGS: recorded})
-        feature.save_milling_task_data({}, str(self.test_dir / feature.name.value), reference_image)
+        feature_dir = self.test_dir / feature.name.value
+        feature_dir.mkdir()
+        feature.path = str(feature_dir)
+        tiff.export(str(feature_dir / f"{feature.name.value}-{REFERENCE_IMAGE_FILENAME}"), reference_image)
         main_data = self.main_data
         main_data.features.value = [feature]
         save_project(main_data)

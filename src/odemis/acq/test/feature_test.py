@@ -45,6 +45,7 @@ from odemis.acq.feature import (
 from odemis.acq.milling import DEFAULT_MILLING_TASKS_PATH
 from odemis.acq.move import Posture
 from odemis.acq.stream import StaticFluoStream
+from odemis.util.dataio import open_acquisition
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -130,6 +131,7 @@ class TestFeatureEncoderDecoder(unittest.TestCase):
         system_state = {"ion-beam": {"beamPreset": ["imaging", None]}}
         milling_tasks = load_milling_tasks(DEFAULT_MILLING_TASKS_PATH)
         milling_feature_offset = (12e-6, -8e-6)
+        feature.set_posture_position(Posture.MILLING, dict(feature.stage_position.value))
 
         # randomly remove some milling tasks (to simulate user choice)
         task_name = random.choice(list(milling_tasks.keys()))
@@ -151,7 +153,8 @@ class TestFeatureEncoderDecoder(unittest.TestCase):
         reference_image.metadata[model.MD_EXTRA_SETTINGS]["Camera"]["temperature"][0] = 26.0
         self.assertEqual(feature.system_state["ion-beam"]["beamPreset"][0], "imaging")
         self.assertEqual(feature.reference_image.metadata[model.MD_EXTRA_SETTINGS]["Camera"]["temperature"][0], 25.0)
-        self.assertEqual(feature.get_posture_position(Posture.MILLING), stage_position)
+        self.assertEqual(feature.get_posture_position(Posture.MILLING), feature.stage_position.value)
+        self.assertEqual(feature.get_milling_reference_position(), stage_position)
         self.assertEqual(feature.milling_feature_offset.value, milling_feature_offset)
         for task in feature.milling_tasks.values():
             for pattern in task.patterns:
@@ -167,6 +170,7 @@ class TestFeatureEncoderDecoder(unittest.TestCase):
 
         filename = os.path.join(feature.path, f"{feature.name.value}-{REFERENCE_IMAGE_FILENAME}")
         self.assertTrue(os.path.exists(filename))
+        self.assertEqual(open_acquisition(filename)[0].metadata[model.MD_STAGE_POSITION_RAW], stage_position)
 
 
 class TestCollectFlag(unittest.TestCase):
