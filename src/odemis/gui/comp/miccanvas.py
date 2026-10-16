@@ -557,22 +557,30 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
                     continue
                 first_tile = rgbim[0][0]
                 md = first_tile.metadata
+                # Calculate the shape and the center of the total image composed of the tiles
+                tiles_merged_shape = util.img.getTilesSize(rgbim)
+                pos = util.img.getCenterOfTiles(rgbim, tiles_merged_shape)
+
+                # Convert to RGBA (reusing the cached ones if possible)
+                # Note: all the .metadata of all rgba_tile is empty and only the metadata of the
+                # first rgba_tile will be updated by set_images()
                 new_array = []
                 for tile_column in rgbim:
                     new_array_col = []
                     for tile in tile_column:
                         rgba_tile = self._format_rgba_darray_cached(tile)
+                        if tile is first_tile:
+                            # Make sure we cannot modify the metadata of the first tile, which might
+                            # already be used for drawing, with different metadata (pos).
+                            rgba_tile_copy = rgba_tile.view()
+                            rgba_tile_copy.metadata = rgba_tile_copy.metadata.copy()
+                            rgba_tile = rgba_tile_copy
+
                         im_cache.append((weakref.ref(tile), rgba_tile))
                         new_array_col.append(rgba_tile)
-                        rgba_tile.metadata = md
                     new_array.append(tuple(new_array_col))
                 # creates a 2D tuple with the converted tiles
                 rgba_im = tuple(new_array)
-
-                # Calculate the shape of the image composed of the tiles
-                tiles_merged_shape = util.img.getTilesSize(rgba_im)
-                # the center of the image composed of the tiles
-                pos = util.img.getCenterOfTiles(rgba_im, tiles_merged_shape)
             else:
                 # Get converted RGBA image from cache, or create it and cache it
                 # On large images it costs 100 ms (per image and per canvas)
