@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 """
-Copyright © 2023-2025 Delmic
+@author: Alexéy Ilyushkin
+
+Copyright © 2023-2026 Alexéy Ilyushkin, Delmic
 
 This file is part of Odemis.
 
@@ -21,8 +23,12 @@ import os
 import time
 import unittest
 
+import numpy
+
 import odemis
 from odemis import model
+from odemis.acq.feature import (CryoFeature, get_feature_navigation_position, get_feature_position_at_posture,
+                                get_feature_sample_position, set_feature_position_from_milling_offset)
 from odemis.acq.test import move_tfs1_test, move_tfs3_test
 from odemis.util import testing
 from odemis.acq.move import MeteorTescan1PostureManager, MicroscopePostureManager, Posture
@@ -177,6 +183,46 @@ class TestMeteorTescan1FibsemMove(move_tfs3_test.TestMeteorTFS3Move):
         MIC_CONFIG = METEOR_TESCAN1_FIBSEM_HW_CONFIG
 
     ROTATION_AXES = {'rx', 'rz'}
+
+    def _make_reference_feature(self, posture: Posture) -> CryoFeature:
+        """Create a marker offset from a reference using the simulator's real calibration."""
+        sem_position = dict(self.stage_grid_centers[Posture.GRID_1.value])
+        sem_position.update(self.pm.get_posture_orientation(Posture.SEM_IMAGING))
+        reference_position = self.pm.to_posture(sem_position, posture)
+        center = self.pm.to_sample_stage_from_stage_position(reference_position, posture)
+        feature = CryoFeature("Reference feature", reference_position, {}, milling_tasks={})
+        feature.reference_image = model.DataArray(numpy.zeros((8, 8)), metadata={
+            model.MD_POS: (center["x"], center["y"]), model.MD_STAGE_POSITION_RAW: reference_position})
+        set_feature_position_from_milling_offset(self.pm, feature, (12e-6, -8e-6))
+        feature.milling_feature_offset.value = (12e-6, -8e-6)
+        return feature
+
+    def test_reference_navigation_preserves_posture(self):
+        """Return to the reference only in its posture; FM and milling retain their own targets."""
+        feature = self._make_reference_feature(Posture.TRENCHING)
+        reference_position = feature.get_milling_reference_position()
+        self.assertEqual(get_feature_navigation_position(self.pm, feature, Posture.TRENCHING), reference_position)
+        for posture in (Posture.MILLING, Posture.FM_IMAGING):
+            with self.subTest(posture=posture):
+                destination = get_feature_navigation_position(self.pm, feature, posture)
+                self.assertEqual(self.pm.get_current_posture(destination), posture)
+                self.assertEqual(destination, get_feature_position_at_posture(self.pm, feature, posture))
+
+    def test_legacy_reference_position_migration(self):
+        """Recover milling markers without applying a stale milling offset to trenching markers."""
+        for posture in (Posture.MILLING, Posture.TRENCHING):
+            with self.subTest(posture=posture):
+                feature = self._make_reference_feature(posture)
+                expected_marker = get_feature_sample_position(self.pm, feature, posture)
+                reference_position = feature.get_milling_reference_position()
+                feature.legacy_milling_position = True
+                feature.set_posture_position(Posture.MILLING, reference_position)
+                if posture == Posture.TRENCHING:
+                    feature.milling_feature_offset.value = (111e-6, -684e-6)
+                testing.assert_pos_almost_equal(
+                    get_feature_sample_position(self.pm, feature, posture), expected_marker, atol=1e-9)
+                self.assertFalse(feature.legacy_milling_position)
+                self.assertEqual(feature.get_milling_reference_position(), reference_position)
 
     @classmethod
     def setUpClass(cls):

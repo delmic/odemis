@@ -914,7 +914,7 @@ class CryoAcquiController(object):
                         feature.fm_focus_position.value = {**feature.fm_focus_position.value,
                                                            fm_posture: {"z": poi_coords[2]}}
                     # Update the shared feature/pattern anchor around the projected POI.
-                    # The saved milling stage position remains the reference-image center.
+                    # The reference acquisition pose remains independent of the marker.
                     target = correlation_dict.fib_projected_pois[0]
                     rel_pos = pos_to_relative(target.coordinates.value[:2], feature.reference_image)
                     fibsem_tab.milling_task_controller.set_milling_feature_position(rel_pos)

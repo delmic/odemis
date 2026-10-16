@@ -48,6 +48,8 @@ from odemis.acq.feature import (
     TargetType,
     constrain_milling_alignment_area,
     get_feature_position_at_posture,
+    get_feature_navigation_position,
+    get_feature_sample_position,
 )
 from odemis.acq.move import Posture, FM_POSTURES
 from odemis.gui import model as guimod
@@ -186,19 +188,20 @@ class CryoFeatureController(object):
             self._display_go_to_feature_warning()
             return
 
-        if (self.acqui_mode is guimod.AcquiMode.FIBSEM
-                and current_posture == Posture.MILLING
-                and feature.reference_image is None):
-            show_message(
-                self._tab.main_frame,
-                "No FIB reference available",
-                f"No FIB reference image is saved for {feature.name.value}. "
-                "The stage will move to the feature marker instead.",
-                timeout=5.0,
-                level=logging.WARNING,
-            )
+        if self.acqui_mode is guimod.AcquiMode.FIBSEM and current_posture in (Posture.MILLING, Posture.TRENCHING):
+            reference_position = feature.get_milling_reference_position()
+            if (feature.reference_image is None or reference_position is None
+                    or self.pm.get_current_posture(reference_position) != current_posture):
+                show_message(
+                    self._tab.main_frame,
+                    "No FIB reference available",
+                    f"No FIB reference image is saved for {feature.name.value} at {current_posture.value}. "
+                    "The stage will move to the feature marker instead.",
+                    timeout=5.0,
+                    level=logging.WARNING,
+                )
 
-        stage_position = get_feature_position_at_posture(pm=self.pm, feature=feature, posture=current_posture)
+        stage_position = get_feature_navigation_position(self.pm, feature, current_posture)
         # Older projects may contain posture metadata that is not a movable stage axis.
         stage_position = {axis: value for axis, value in stage_position.items() if axis in self.pm.stage.axes}
         fm_focus_position = feature.get_fm_focus_position(current_posture, self._main_data_model.focus)
@@ -265,32 +268,17 @@ class CryoFeatureController(object):
         if not self._validate_milling_reference_shape(feature, image_shape):
             return
 
-        # Preserve the physical feature position before the milling posture is
-        # updated to the current stage position (the center of the reference
-        # image). If a reference image already exists, its relative feature
-        # offset is the authoritative position.
+        # Preserve the displayed marker while replacing its reference image.
+        sample_pos = get_feature_sample_position(self.pm, feature, self.pm.current_posture.value)
         feature_offset = feature.milling_feature_offset.value
         snap_patterns_to_feature = feature_offset is None
-        feature_sample_pos = None
         previous_image_pos = None
         if feature.reference_image is not None:
             previous_image_pos = feature.reference_image.metadata.get(model.MD_POS)
-            if feature_offset is not None and previous_image_pos is not None:
-                feature_sample_pos = (previous_image_pos[0] + feature_offset[0],
-                                      previous_image_pos[1] + feature_offset[1])
-
-        if feature_sample_pos is None:
-            milling_pos = feature.get_posture_position(Posture.MILLING)
-            if milling_pos is not None:
-                sample_pos = self.pm.to_sample_stage_from_stage_position(
-                    milling_pos, posture=Posture.MILLING)
-                feature_sample_pos = (sample_pos["x"], sample_pos["y"])
-            else:
-                current_posture = self.pm.get_current_posture()
-                if current_posture in (Posture.MILLING, Posture.TRENCHING):
-                    sample_pos = self.pm.to_sample_stage_from_stage_position(
-                        self.pm.stage.position.value, posture=current_posture)
-                    feature_sample_pos = (sample_pos["x"], sample_pos["y"])
+            reference_position = feature.get_milling_reference_position()
+            if (reference_position is not None
+                    and self.pm.get_current_posture(reference_position) != self.pm.current_posture.value):
+                snap_patterns_to_feature = True
 
         # acquire a new fib image for reference
         from odemis.acq import acqmng
@@ -307,25 +295,22 @@ class CryoFeatureController(object):
 
         # Store the feature within the newly acquired image. Position the
         # milling patterns around it only when its offset is initialized. The
-        # milling posture remains the image-center stage coordinate.
-        if feature_sample_pos is not None:
-            image_pos = feature.reference_image.metadata.get(model.MD_POS)
-            if image_pos is not None:
-                if previous_image_pos is not None and not snap_patterns_to_feature:
-                    # Keep each pattern at the same sample position when the
-                    # reference-image center changes.
-                    center_shift = (previous_image_pos[0] - image_pos[0],
-                                    previous_image_pos[1] - image_pos[1])
-                    for task in feature.milling_tasks.values():
-                        for pattern in task.patterns:
-                            pattern_pos = pattern.center.value
-                            pattern.center.value = (pattern_pos[0] + center_shift[0],
-                                                    pattern_pos[1] + center_shift[1])
+        # acquisition pose remains independent of the marker.
+        image_pos = feature.reference_image.metadata.get(model.MD_POS)
+        if image_pos is not None:
+            if previous_image_pos is not None and not snap_patterns_to_feature:
+                # Keep each pattern at the same sample position when the
+                # reference-image center changes.
+                center_shift = (previous_image_pos[0] - image_pos[0],
+                                previous_image_pos[1] - image_pos[1])
+                for task in feature.milling_tasks.values():
+                    for pattern in task.patterns:
+                        pattern_pos = pattern.center.value
+                        pattern.center.value = (pattern_pos[0] + center_shift[0],
+                                                pattern_pos[1] + center_shift[1])
 
-                relative_pos = (feature_sample_pos[0] - image_pos[0],
-                                feature_sample_pos[1] - image_pos[1])
-                feature.set_milling_feature_offset(
-                    relative_pos, move_patterns=snap_patterns_to_feature)
+            relative_pos = (sample_pos["x"] - image_pos[0], sample_pos["y"] - image_pos[1])
+            feature.set_milling_feature_offset(relative_pos, move_patterns=snap_patterns_to_feature)
 
         save_project(self._tab_data_model.main)
         self._tab.milling_task_controller.draw_milling_tasks()
