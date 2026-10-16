@@ -197,9 +197,35 @@ class PnlTabFibsem(wx.Panel):
             viewport.SetForegroundColour(self._theme.text_secondary)
             viewport.SetBackgroundColour(self._theme.viewport_background)
 
+        self.pnl_milling_selection_hint = wx.Panel(self.vp_secom_br)
+        self.pnl_milling_selection_hint.SetBackgroundColour(self._theme.viewport_background)
+        hint = wx.StaticText(
+            self.pnl_milling_selection_hint,
+            label="Select only one feature at a time\nto view its milling patterns.",
+            style=wx.ALIGN_CENTER_HORIZONTAL,
+        )
+        hint.SetForegroundColour(self._theme.text_secondary)
+        set_font(hint, self._theme.font_size_checklist)
+        hint_sizer = wx.BoxSizer(wx.VERTICAL)
+        hint_sizer.AddStretchSpacer()
+        hint_sizer.Add(hint, flag=wx.ALIGN_CENTER_HORIZONTAL | wx.ALL, border=self._theme.spacing_standard)
+        hint_sizer.AddStretchSpacer()
+        self.pnl_milling_selection_hint.SetSizer(hint_sizer)
+        self.pnl_milling_selection_hint.Hide()
+        self.vp_secom_br.GetSizer().Add(self.pnl_milling_selection_hint, proportion=1, flag=wx.EXPAND)
+
         # Controllers access the viewport tuple before the first size event.
         self.pnl_secom_grid.viewports = viewports
         return self.pnl_secom_grid
+
+    def show_milling_selection_hint(self, show: bool) -> None:
+        """Replace the milling preview with guidance while bulk-selecting features."""
+        if self.pnl_milling_selection_hint.IsShown() == show:
+            return
+        self.vp_secom_br.canvas.Show(not show)
+        self.vp_secom_br.bottom_legend.Show(not show)
+        self.pnl_milling_selection_hint.Show(show)
+        self.vp_secom_br.Layout()
 
     def _build_settings_column(self) -> wx.Panel:
         """Build the scrollable FIBSEM settings column.
@@ -842,7 +868,9 @@ class PnlTabFibsem(wx.Panel):
         panel.SetBackgroundColour(self._theme.section_header)
 
         with vbox() as sizer:
-            self.workflow_features_chk_list = wx.CheckListBox(panel)
+            self.workflow_features_chk_list = wx.CheckListBox(panel, style=wx.LB_EXTENDED)
+            self.workflow_features_chk_list.SetToolTip(
+                "Ctrl/Shift+click: select multiple. Space: toggle checks. Ctrl+A: select all.")
             set_font(
                 self.workflow_features_chk_list,
                 self._theme.font_size_checklist,
@@ -999,7 +1027,8 @@ class PnlTabFibsem(wx.Panel):
                 self.milling_task_chk_list,
                 self._theme.font_size_checklist,
             )
-            selection_tip = "Ctrl+click to select multiple patterns. Press Space to check or uncheck them."
+            selection_tip = (
+                "Ctrl+click: select multiple. Space: toggle checks. Ctrl+A: select all.")
             self.milling_task_chk_list.SetToolTip(selection_tip)
             controls_sizer.Add(
                 self.milling_task_chk_list,
