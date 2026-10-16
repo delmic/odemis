@@ -714,11 +714,24 @@ class SpectrumSettingsStream(CCDSettingsStream):
     to be used in the Spectrum stream.
     If so the user can control the power of the source through a slider bar on the stream.
     """
-    def __init__(self, name, detector, dataflow, emitter, light=None, **kwargs):
+    def __init__(self, name, detector, dataflow, emitter, light=None, l2=None, **kwargs):
+        """
+        l2 (None or Actuator with "x" axis): lens 2 (aka "lens-switch"). If provided,
+          the .largeArea VA is available to select the large-area (lens 2 active) mode.
+        """
         if "acq_type" not in kwargs:
             kwargs["acq_type"] = model.MD_AT_SPECTRUM
         self.light = light
         super(SpectrumSettingsStream, self).__init__(name, detector, dataflow, emitter, **kwargs)
+
+        self.l2 = l2
+        if l2:
+            # True: use lens 2, to collect light from a larger area (at the cost of signal)
+            self.largeArea = model.BooleanVA(False)
+            self._l2_future = None
+            # Fail early if the lens 2 positions cannot be found
+            self._l2_position(True)
+            self._l2_position(False)
         # For SPARC: typical user wants density a bit lower than SEM
         self.pixelSize.value *= 6
 
@@ -752,13 +765,47 @@ class SpectrumSettingsStream(CCDSettingsStream):
     # Overrides the (un)linkHwVAs methods, so that the MDStream also turn on/off the light during synchronized acquisition
     def _linkHwVAs(self):
         super()._linkHwVAs()
+        if self.l2:
+            self.largeArea.subscribe(self._onLargeArea, init=True)
+            try:
+                self._l2_future.result(60)
+            except Exception:
+                logging.exception("Failed to move lens 2.")
         if self.light:
             self._setup_light()
 
     def _unlinkHwVAs(self):
+        if self.l2:
+            self.largeArea.unsubscribe(self._onLargeArea)
         if self.light:
             self._stop_light()
         super()._unlinkHwVAs()
+
+    def _l2_position(self, active: bool) -> float:
+        """
+        :param active: True for the position with lens 2 in the optical path
+        :return: position of the "x" axis of lens 2
+        """
+        key = model.MD_FAV_POS_ACTIVE if active else model.MD_FAV_POS_DEACTIVE
+        md = self.l2.getMetadata()
+        if key in md:
+            return md[key]["x"]
+
+        # Older convention: two choices named "on" and "off"
+        name = "on" if active else "off"
+        for pos, pos_name in self.l2.axes["x"].choices.items():
+            if pos_name == name:
+                return pos
+        raise ValueError("Lens 2 actuator should have a %s metadata or '%s' position" % (key, name))
+
+    def _onLargeArea(self, large_area: bool):
+        """
+        Moves lens 2 in or out of the optical path. The move is asynchronous, the future is
+        stored in ._l2_future.
+        """
+        pos = self._l2_position(large_area)
+        logging.debug("Moving lens 2 to position %s.", pos)
+        self._l2_future = self.l2.moveAbs({"x": pos})
 
     def _setup_light(self, ch_power: Optional[float] = None):
         """
