@@ -41,7 +41,6 @@ from odemis.acq.align import AutoFocus
 from odemis.acq.move import Posture
 from odemis.acq.stream import LiveStream, StaticStream
 from odemis.gui import conf
-from odemis.gui.conf.data import get_local_vas
 from odemis.gui.cont import settings
 from odemis.gui.cont.acquisition.cryo_acq import CryoAcquiController
 from odemis.gui.cont.acquisition.cryo_z_localization import CryoZLocalizationController
@@ -438,22 +437,20 @@ class LocalizationTab(Tab):
         # Chamber tab, and the tab should wait for the move to be complete before
         # actually be enabled.
         if is_acquiring:
-            self._stage.position.unsubscribe(self._on_stage_pos)
+            self.main_data.posture_manager.current_posture.unsubscribe(self._on_current_posture)
         else:
-            self._stage.position.subscribe(self._on_stage_pos, init=True)
-
+            self.main_data.posture_manager.current_posture.subscribe(self._on_current_posture, init=True)
     # role -> tooltip message
     DISABLED_TAB_TOOLTIP = {
         "meteor": "Localization can only be performed in FM mode",
     }
 
-    def _on_stage_pos(self, pos):
+    def _on_current_posture(self, posture:Posture) -> None:
         """
-        Called when the stage is moved, and perform the following actions:
-        - enable the tab if posture is fm imaging or fib-view fm, disable otherwise
+        Called when the posture is changed and perform the following actions:
+        - enable the tab if posture is fm imaging, slm imaging or fib-view fm, disable otherwise
         - set current posture label and bitmap based on current posture
-
-        :param pos: (dict str->float or None) updated position of the stage
+        :param posture: the current posture
         """
         guiutil.enable_tab_on_stage_position(
             self,
@@ -462,6 +459,7 @@ class LocalizationTab(Tab):
             tooltip=self.DISABLED_TAB_TOOLTIP.get(self.main_data.role)
         )
         self._acquisition_controller._update_overview_acquisition_button()
+        pos = self.main_data.posture_manager.stage.position.value
         # Update the current posture read-only indicator if needed
         if self.main_data.posture_manager.at_fib_view_fm_posture(pos):
             self.panel.lbl_current_posture.SetLabel(Posture.FIB_VIEW_FM.value)
@@ -470,11 +468,11 @@ class LocalizationTab(Tab):
             self.panel.lbl_current_posture.SetLabel(Posture.FM_IMAGING.value)
             self.panel.bmp_current_posture.SetBitmap(self.bmp_fm_imaging)
         else:
-            logging.info(f"Unknown stage position {pos} for localization")
+            logging.info(f"Unknown posture {posture} for localization")
 
     def terminate(self):
         super(LocalizationTab, self).terminate()
-        self._stage.position.unsubscribe(self._on_stage_pos)
+        self.main_data.posture_manager.current_posture.unsubscribe(self._on_current_posture)
         # make sure the streams are stopped
         for s in self.tab_data_model.streams.value:
             s.is_active.value = False
