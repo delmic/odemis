@@ -27,7 +27,6 @@ import logging
 import math
 import os
 import threading
-import time
 from collections import OrderedDict
 from typing import Optional
 
@@ -1794,12 +1793,18 @@ class SparcStreamsController(StreamBarController):
                 axes["filter"] = ("band", fw)
                 break
 
+        # Large area mode needs lens 2 to affect this spectrometer (otherwise it's on another optical path)
+        l2 = None
+        if main_data.lens_switch and main_data.opm.affects(main_data.lens_switch.name, detector.name):
+            l2 = main_data.lens_switch
+
         spec_stream = acqstream.SpectrumSettingsStream(
             self.get_unique_stream_name(name),
             detector,
             detector.data,
             main_data.ebeam,
             main_data.light,
+            l2=l2,
             sstage=main_data.scan_stage,
             opm=main_data.opm,
             axis_map=axes,

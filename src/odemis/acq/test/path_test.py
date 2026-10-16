@@ -475,7 +475,6 @@ class Sparc2PathTestCase(unittest.TestCase):
         # setting spectral
         self.optmngr.setPath("spectral").result()
         # Assert that actuator was moved according to mode given
-        assert_pos_as_in_mode(self, self.lenswitch, "spectral")
         assert_pos_as_in_mode(self, self.slit, "spectral")
         self.assertEqual(self.cl_det_sel.position.value, {'x': 0.01})
         testing.assert_pos_almost_equal(self.lensmover.position.value, l1_pos_exp, atol=1e-6)
@@ -595,7 +594,6 @@ class Sparc2PathTestCase(unittest.TestCase):
 
         self.optmngr.setPath(sps).result()
         # Assert that actuator was moved according to mode given
-        assert_pos_as_in_mode(self, self.lenswitch, "spectral")
         assert_pos_as_in_mode(self, self.slit, "spectral")
         self.assertEqual(self.spec_det_sel.position.value, {'rx': 1.5707963267948966})
         self.assertEqual(self.cl_det_sel.position.value, {'x': 0.01})
@@ -610,7 +608,6 @@ class Sparc2PathTestCase(unittest.TestCase):
 
         self.optmngr.setPath(specs).result()
         # Assert that actuator was moved according to mode given
-        assert_pos_as_in_mode(self, self.lenswitch, "spectral")
         assert_pos_as_in_mode(self, self.slit, "spectral")
         self.assertEqual(self.spec_det_sel.position.value, {'rx': 0})
         self.assertEqual(self.cl_det_sel.position.value, {'x': 0.01})
@@ -625,7 +622,6 @@ class Sparc2PathTestCase(unittest.TestCase):
 
         self.optmngr.setPath(sps).result()
         # Assert that actuator was moved according to mode given
-        assert_pos_as_in_mode(self, self.lenswitch, "spectral")
         assert_pos_as_in_mode(self, self.slit, "spectral")
         self.assertEqual(self.spec_det_sel.position.value, {'rx': 0})
         self.assertEqual(self.cl_det_sel.position.value, {'x': 0.01})
@@ -683,7 +679,6 @@ class Sparc2PolAnalyzerPathTestCase(unittest.TestCase):
         self.analyzer.moveAbs({"pol": "vertical"})
         self.optmngr.setPath("spectral").result()
         # Assert that actuator was moved according to mode given
-        assert_pos_as_in_mode(self, self.lenswitch, "spectral")
         assert_pos_as_in_mode(self, self.slit, "spectral")
         self.assertEqual(self.analyzer.position.value, {'pol': "pass-through"})
         testing.assert_pos_almost_equal(self.lensmover.position.value, l1_pos_exp, atol=1e-6)
@@ -764,7 +759,6 @@ class Sparc2PolAnalyzerPathTestCase(unittest.TestCase):
         # Change positions
         self.optmngr.setPath(sps).result()
         # Assert that actuator was moved according to mode given
-        assert_pos_as_in_mode(self, self.lenswitch, "spectral")
         assert_pos_as_in_mode(self, self.slit, "spectral")
         self.assertEqual(self.analyzer.position.value, {'pol': "pass-through"})
         self.assertEqual(self.spec_det_sel.position.value, {'rx': 1.5707963267948966})
@@ -833,8 +827,6 @@ class Sparc2ExtSpecPathTestCase(unittest.TestCase):
         # setting spectral (with the external spectrometer)
         spgph_pos = self.specgraph.position.value
         self.optmngr.setPath("spectral", detector=self.spec).result()
-        # Assert that actuator was moved according to mode given
-        assert_pos_as_in_mode(self, self.lenswitch, "spectral")
         # No slit check, as slit-in-big does _not_ affects the (external) spectrometer
         # No specgraph_dedicated check, as any position is fine
         # Check that specgraph (not -dedicated) should _not_ move (as it's not
@@ -942,7 +934,6 @@ class Sparc2ExtSpecPathTestCase(unittest.TestCase):
 
         self.optmngr.setPath(specs).result()
         # Assert that actuator was moved according to mode given
-        assert_pos_as_in_mode(self, self.lenswitch, "spectral")
         # No slit/spectrograph as they are not affecting the detector
         self.assertAlmostEqual(self.spec_sel.position.value["x"], 0.026112848)
 
@@ -951,7 +942,6 @@ class Sparc2ExtSpecPathTestCase(unittest.TestCase):
 
         self.optmngr.setPath(sps).result()
         # Assert that actuator was moved according to mode given
-        assert_pos_as_in_mode(self, self.lenswitch, "spectral")
         self.assertAlmostEqual(self.spec_sel.position.value["x"], 0.026112848)
 
 
@@ -1121,7 +1111,6 @@ class Sparc2FourSpecPathTestCase(unittest.TestCase):
 
         self.optmngr.setPath(specs).result()
         # Assert that actuator was moved according to mode given
-        assert_pos_as_in_mode(self, self.lenswitch, "spectral")
         # No slit/spectrograph as they are not affecting the detector
         self.assertAlmostEqual(self.spec_sel.position.value["x"], 0.026112848)
         self.assertAlmostEqual(self.spec_dd_sel.position.value["rx"], 1.57, places=2)
@@ -1131,7 +1120,6 @@ class Sparc2FourSpecPathTestCase(unittest.TestCase):
 
         self.optmngr.setPath(sps).result()
         # Assert that actuator was moved according to mode given
-        assert_pos_as_in_mode(self, self.lenswitch, "spectral")
         self.assertAlmostEqual(self.spec_sel.position.value["x"], 0.026112848)
         self.assertAlmostEqual(self.spec_dd_sel.position.value["rx"], 1.57, places=2)
 
@@ -1141,7 +1129,6 @@ class Sparc2FourSpecPathTestCase(unittest.TestCase):
 
         self.optmngr.setPath(specs).result()
         # Assert that actuator was moved according to mode given
-        assert_pos_as_in_mode(self, self.lenswitch, "spectral")
         # No slit/spectrograph as they are not affecting the detector
         self.assertAlmostEqual(self.spec_sel.position.value["x"], 0.022)
         self.assertAlmostEqual(self.spec_det_sel.position.value["rx"], 1.57, places=2)
@@ -1152,7 +1139,6 @@ class Sparc2FourSpecPathTestCase(unittest.TestCase):
 
         self.optmngr.setPath(specs).result()
         # Assert that actuator was moved according to mode given
-        assert_pos_as_in_mode(self, self.lenswitch, "spectral")
         # No slit/spectrograph as they are not affecting the detector
         self.assertAlmostEqual(self.spec_sel.position.value["x"], 0.026112848)
         self.assertAlmostEqual(self.spec_dd_sel.position.value["rx"], 0, places=2)
