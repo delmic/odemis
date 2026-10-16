@@ -353,6 +353,18 @@ class TestMeteorTescan1FibsemMove(move_tfs3_test.TestMeteorTFS3Move):
         final_pos = self.stage_bare.position.value
         testing.assert_pos_almost_equal(initial_pos, final_pos)
 
+    def test_trenching_outside_raw_sem_range(self):
+        """Recognize Trenching using its equivalent SEM position."""
+        sem_pos = dict(self.stage_grid_centers[Posture.GRID_1.value])
+        sem_pos.update(self.stage_md[model.MD_FAV_SEM_POS_ACTIVE])
+        sem_range = self.stage_md[model.MD_SEM_IMAGING_RANGE]
+        sem_pos["x"] = sem_range["x"][0] + 1e-3
+        trenching_pos = self.pm.to_posture(sem_pos, Posture.TRENCHING)
+        self.assertGreater(trenching_pos["x"], sem_range["x"][1])
+        self.assertEqual(self.pm.get_current_posture(trenching_pos), Posture.TRENCHING)
+        trenching_pos["x"] += 0.1
+        self.assertEqual(self.pm.get_current_posture(trenching_pos), Posture.UNKNOWN)
+
     def test_sem_fib_scan_rotation(self):
         """Test that a sequence of posture switches lead to the expected scan rotations"""
         self.pm.switch_posture(Posture.SEM_IMAGING).result()
