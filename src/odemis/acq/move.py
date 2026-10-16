@@ -509,13 +509,17 @@ class MeteorPostureManager(MicroscopePostureManager):
                 return Posture.FM_IMAGING
             if self.at_fib_view_fm_posture(position):
                 return Posture.FIB_VIEW_FM
+        if self.at_trenching_posture(position):
+            # Trenching rotates the sample out of the raw SEM XYZ range.
+            sem_position = self._transform_from_trenching_to_sem(position)
+            if isInRange(sem_position, stage_sem_imaging_rng, self.linear_axes):
+                return Posture.TRENCHING
+            return Posture.UNKNOWN
         if isInRange(position, stage_sem_imaging_rng, self.linear_axes):
             if self.at_fib_imaging_posture(position):
                 return Posture.FIB_IMAGING
             if self.at_milling_posture(position):
                 return Posture.MILLING
-            if self.at_trenching_posture(position):
-                return Posture.TRENCHING
             return Posture.SEM_IMAGING
         # None of the above -> unknown position
         return Posture.UNKNOWN

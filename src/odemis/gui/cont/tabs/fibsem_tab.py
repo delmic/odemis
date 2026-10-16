@@ -346,6 +346,8 @@ class FibsemTab(Tab):
         logging.debug(f"mouse down event, canvas: {active_canvas}")
 
         if evt.AltDown():
+            if not self._posture_switch_future.done():
+                return
             # get the position of the mouse, convert to physical position
             pos = evt.GetPosition()
             p_pos = active_canvas.view_to_phys(pos, active_canvas.get_half_buffer_size())
@@ -361,6 +363,12 @@ class FibsemTab(Tab):
                                 atol=1e-2):
                 dy *= -1
                 logging.debug("Scan rotation detected, inverting dy")
+            target_pos = self.pm.stage.position.value.copy()
+            for axis, shift in self.pm._transform_from_chamber_to_stage({"z": dy}).items():
+                target_pos[axis] += shift
+            if self.pm.get_current_posture(target_pos) not in FIBSEM_POSTURES:
+                logging.warning("Vertical correction would leave the FIBSEM imaging area: %s", target_pos)
+                return
             logging.info(f"Moving stage vertically by: {dy}")
             f = self.pm.sample_stage.moveRelChamberCoordinates({"z": dy})
             f.result()
@@ -477,19 +485,26 @@ class FibsemTab(Tab):
 
     def _move_to_milling_posture(self, *args):
         """Update the stage to move to the milling posture"""
-        self._posture_switch_future = self.pm.switch_posture(Posture.MILLING)
-
-        # Do NOT call f.result(). Instead, add a callback:
-        self._posture_switch_future.add_done_callback(self._on_move_complete)
+        self._switch_posture(Posture.MILLING)
 
     def _move_to_sem_posture(self, *args):
         """Update the stage to move to the sem posture"""
-        self._posture_switch_future = self.pm.switch_posture(Posture.SEM_IMAGING)
-        self._posture_switch_future.add_done_callback(self._on_move_complete)
+        self._switch_posture(Posture.SEM_IMAGING)
 
     def _move_to_trenching_posture(self, *args):
         """Update the stage to move to the trenching posture"""
-        self._posture_switch_future = self.pm.switch_posture(Posture.TRENCHING)
+        self._switch_posture(Posture.TRENCHING)
+
+    def _switch_posture(self, posture: Posture) -> None:
+        """Show only the destination as in progress until the move finishes."""
+        if not self._posture_switch_future.done():
+            return
+        for target, button in ((Posture.SEM_IMAGING, self.panel.btn_switch_sem_imaging),
+                               (Posture.MILLING, self.panel.btn_switch_milling),
+                               (Posture.TRENCHING, self.panel.btn_switch_trenching)):
+            button.Enable(False)
+            button.SetValue(BTN_TOGGLE_PROGRESS if target == posture else BTN_TOGGLE_OFF)
+        self._posture_switch_future = self.pm.switch_posture(posture)
         self._posture_switch_future.add_done_callback(self._on_move_complete)
 
     @call_in_wx_main
@@ -500,6 +515,7 @@ class FibsemTab(Tab):
             logging.info("Posture switch was cancelled")
         except Exception:
             logging.exception("Failed to switch posture")
+        self._on_stage_pos(self.pm.stage.position.value)
 
     def terminate(self):
         self.main_data.stage.position.unsubscribe(self._on_stage_pos)
