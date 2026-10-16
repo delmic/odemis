@@ -1,3 +1,16 @@
+odemis (3.8.5-1) focal; urgency=medium
+
+  * New version: 3.8.5
+  * Main bug fixes and improvements:
+   - Fix compatibility with Ubuntu 20.04
+   - Add support for crop area on Tucsen cameras (max_res)
+   - Fluorescent stream settings were shown partly under the scroll-bar
+   - SPARC: spectrum viewport didn't resize when the GUI window was made narrower
+   - SPARC: laser interlock trigger could in some rare cases cause a GUI crash
+   - METEOR: Better error message in case a z-stack acquisition failed
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Fri, 16 Oct 2026 14:47:27 +0200
+
 odemis (3.8.4-1) focal; urgency=medium
 
   * New version: 3.8.4
