@@ -20,11 +20,22 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 import unittest
 from dataclasses import replace
+from types import SimpleNamespace
 
 import wx
 
 import odemis.gui.layout as layout
+from odemis import model
+from odemis.acq.feature import (
+    FEATURE_ACTIVE,
+    FEATURE_DEACTIVE,
+    FEATURE_READY_TO_MILL,
+    FEATURE_ROUGH_MILLED,
+    CryoFeature,
+)
 from odemis.gui.comp.viewport import FeatureOverviewViewport, LiveViewport
+from odemis.gui.cont.features import CryoFeatureController
+from odemis.gui.cont.milling import AutomatedMillingController
 from odemis.gui.layout.components.panel_tab_fibsem import PnlTabFibsem
 
 
@@ -53,8 +64,10 @@ class PnlTabFibsemTest(unittest.TestCase):
         wx.Yield()
 
     def tearDown(self) -> None:
-        """Destroy the FIBSEM panel host frame."""
+        """Drain callbacks before destroying the FIBSEM panel host frame."""
+        wx.Yield()
         self.frame.Destroy()
+        wx.Yield()
 
     def test_controller_widget_api_and_initial_state(self) -> None:
         """Expose controller controls with their expected initial state."""
@@ -158,8 +171,9 @@ class PnlTabFibsemTest(unittest.TestCase):
         )
         self.assertTrue(self.panel.chk_move_all_patterns.GetValue())
         self.assertTrue(self.panel.milling_task_chk_list.GetWindowStyleFlag() & wx.LB_EXTENDED)
+        self.assertTrue(self.panel.workflow_features_chk_list.GetWindowStyleFlag() & wx.LB_EXTENDED)
         selection_tip = self.panel.milling_task_chk_list.GetToolTipText()
-        self.assertIn("Ctrl+click to select multiple patterns", selection_tip)
+        self.assertIn("Ctrl+click: select multiple", selection_tip)
         self.assertEqual(
             self.panel.btn_snap_patterns_to_feature.GetLabel(),
             "Recenter on Feature",
@@ -168,6 +182,191 @@ class PnlTabFibsemTest(unittest.TestCase):
         self.assertEqual(self.panel.gauge_automated_milling.GetRange(), 100)
         self.assertEqual(self.panel.gauge_milling_series.GetRange(), 100)
 
+    def _create_automation_controller(self) -> AutomatedMillingController:
+        """Connect real feature models to the panel without microscope hardware."""
+        self.features = [CryoFeature(f"Feature {i}", {}, {}, milling_tasks={}) for i in range(3)]
+        for feature in self.features:
+            feature.status.value = FEATURE_READY_TO_MILL
+        self.main = SimpleNamespace(
+            features=model.ListVA(self.features),
+            currentFeature=model.VigilantAttribute(self.features[0]),
+        )
+        tab = SimpleNamespace(milling_task_controller=SimpleNamespace(
+            _update_milling_validation_message=lambda: None,
+            _update_mill_btn=lambda: None,
+        ))
+        self.controller = AutomatedMillingController(SimpleNamespace(main=self.main), self.panel, tab)
+        wx.Yield()
+        return self.controller
+
+    def test_workflow_step_interaction_clears_highlight_without_changing_checks(self) -> None:
+        """Keep the original checklist while discarding its row-selection state."""
+        self._create_automation_controller()
+        task_list = self.panel.workflow_task_chk_list
+        task_list.Check(0, False)
+        for event_type in (wx.wxEVT_LISTBOX, wx.wxEVT_CHECKLISTBOX):
+            task_list.SetSelection(0)
+            event = wx.CommandEvent(event_type, task_list.GetId())
+            event.SetInt(0)
+            task_list.GetEventHandler().ProcessEvent(event)
+
+            self.assertEqual(task_list.GetSelection(), wx.NOT_FOUND)
+            self.assertEqual(list(task_list.GetCheckedItems()), [1])
+
+    def _send_feature_selection(self, indices) -> None:
+        """Dispatch a native selection event after setting the highlighted rows."""
+        feature_list = self.panel.workflow_features_chk_list
+        feature_list.SetSelection(wx.NOT_FOUND)
+        for index in indices:
+            feature_list.SetSelection(index)
+        event = wx.CommandEvent(wx.wxEVT_LISTBOX, feature_list.GetId())
+        event.SetInt(indices[-1] if indices else wx.NOT_FOUND)
+        feature_list.GetEventHandler().ProcessEvent(event)
+        wx.Yield()
+
+    def _send_feature_key(self, key: int, control: bool = False) -> None:
+        """Dispatch keyboard input through the real checklist's bound handlers."""
+        feature_list = self.panel.workflow_features_chk_list
+        event = wx.KeyEvent(wx.wxEVT_KEY_DOWN)
+        event.SetKeyCode(key)
+        event.SetControlDown(control)
+        feature_list.GetEventHandler().ProcessEvent(event)
+        wx.Yield()
+
+    def test_dropdown_navigation_replaces_bulk_selection(self) -> None:
+        """Changing or reselecting the active dropdown feature restores one preview."""
+        self._create_automation_controller()
+        feature_list = self.panel.workflow_features_chk_list
+        feature_list.Check(1, False)
+        dropdown = self.panel.cmb_features
+        dropdown.Clear()
+        for feature in self.features:
+            dropdown.Append(feature.name.value, feature)
+        feature_controller = CryoFeatureController.__new__(CryoFeatureController)
+        feature_controller._tab_data_model = self.controller._tab_data
+        feature_controller._panel = self.panel
+        dropdown.Bind(wx.EVT_COMBOBOX, feature_controller._on_cmb_features_change)
+
+        for index in (1, 2):
+            self._send_feature_selection([2])
+            self._send_feature_selection([0, 1, 2])
+            dropdown.SetSelection(index)
+            event = wx.CommandEvent(wx.wxEVT_COMBOBOX, dropdown.GetId())
+            dropdown.GetEventHandler().ProcessEvent(event)
+            wx.Yield()
+
+            self.assertIs(self.main.currentFeature.value, self.features[index])
+            self.assertEqual(list(feature_list.GetSelections()), [index])
+            self.assertEqual(list(feature_list.GetCheckedItems()), [0, 2])
+            self.assertFalse(self.panel.pnl_milling_selection_hint.IsShown())
+
+    def test_feature_removal_keeps_selection_valid(self) -> None:
+        """Keep an active feature while any remain, and clear it after the last deletion."""
+        self._create_automation_controller()
+        self._send_feature_selection([2])
+        self.main.features.value = self.features[:2]
+        wx.Yield()
+        self.assertIs(self.main.currentFeature.value, self.features[0])
+        self.assertEqual(list(self.panel.workflow_features_chk_list.GetSelections()), [0])
+
+        self.main.features.value = []
+        wx.Yield()
+        self.assertIsNone(self.main.currentFeature.value)
+        self.assertEqual(self.panel.workflow_features_chk_list.GetCount(), 0)
+
+    def test_new_feature_is_checked_and_selected(self) -> None:
+        """Queue a new Active feature and preserve check choices as it is prepared."""
+        self._create_automation_controller()
+        feature_list = self.panel.workflow_features_chk_list
+        feature_list.Check(1, False)
+        self._send_feature_selection([0, 1])
+        feature = CryoFeature("New feature", {}, {}, milling_tasks={})
+        self.main.features.value.append(feature)
+        self.main.currentFeature.value = feature
+        wx.Yield()
+
+        self.assertEqual(feature.status.value, FEATURE_ACTIVE)
+        self.assertEqual(list(feature_list.GetSelections()), [3])
+        self.assertEqual(list(feature_list.GetCheckedItems()), [0, 2, 3])
+        self.assertFalse(self.panel.pnl_milling_selection_hint.IsShown())
+
+        feature.status.value = FEATURE_READY_TO_MILL
+        wx.Yield()
+        self.assertEqual(list(feature_list.GetCheckedItems()), [0, 2, 3])
+
+        feature_list.Check(3, False)
+        feature.status.value = FEATURE_ROUGH_MILLED
+        wx.Yield()
+        self.assertEqual(list(feature_list.GetCheckedItems()), [0, 2])
+
+    def test_status_refresh_preserves_bulk_highlights_checks_and_active_feature(self) -> None:
+        """Refreshing labels keeps the active feature separate from bulk row selection."""
+        self._create_automation_controller()
+        feature_list = self.panel.workflow_features_chk_list
+        feature_list.Check(1, False)
+        self._send_feature_selection([2])
+        self._send_feature_selection([0, 1])
+
+        self.features[0].status.value = FEATURE_ROUGH_MILLED
+        wx.Yield()
+
+        self.assertEqual(list(feature_list.GetCheckedItems()), [0, 2])
+        self.assertEqual(list(feature_list.GetSelections()), [0, 1])
+        self.assertIs(self.main.currentFeature.value, self.features[2])
+        self.assertTrue(self.panel.pnl_milling_selection_hint.IsShown())
+        self.assertIn(FEATURE_ROUGH_MILLED, feature_list.GetString(0))
+
+    def test_ctrl_a_and_space_keep_bulk_selection_separate_from_active_feature(self) -> None:
+        """Ctrl+A highlights rows; Space changes their checks; both preserve the active feature."""
+        self._create_automation_controller()
+        feature_list = self.panel.workflow_features_chk_list
+        feature_list.Check(1, False)
+        self._send_feature_selection([2])
+        self._send_feature_key(ord("A"), control=True)
+        self.assertEqual(list(feature_list.GetSelections()), [0, 1, 2])
+        self.assertEqual(list(feature_list.GetCheckedItems()), [0, 2])
+        self.assertTrue(self.panel.pnl_milling_selection_hint.IsShown())
+        for expected in ([0, 1, 2], []):
+            self._send_feature_key(wx.WXK_SPACE)
+            self.assertEqual(list(feature_list.GetCheckedItems()), expected)
+            self.assertIs(self.main.currentFeature.value, self.features[2])
+
+        self._send_feature_key(ord("A"), control=True)
+        self.assertEqual(list(feature_list.GetSelections()), [2])
+        self.assertEqual(list(feature_list.GetCheckedItems()), [])
+        self.assertFalse(self.panel.pnl_milling_selection_hint.IsShown())
+
+    def test_space_skips_ineligible_bulk_selected_features(self) -> None:
+        """Bulk checks only include eligible features while preserving the highlight set."""
+        self._create_automation_controller()
+        feature_list = self.panel.workflow_features_chk_list
+        self.features[0].status.value = FEATURE_ACTIVE
+        self.features[2].status.value = FEATURE_DEACTIVE
+        wx.Yield()
+        self._send_feature_selection([0, 1, 2])
+        for expected in ([], [0, 1]):
+            self._send_feature_key(wx.WXK_SPACE)
+            self.assertEqual(list(feature_list.GetCheckedItems()), expected)
+            self.assertEqual(list(feature_list.GetSelections()), [0, 1, 2])
+
+    def test_queued_navigation_cannot_erase_newer_bulk_highlights(self) -> None:
+        """Pending navigation callbacks must not collapse a later Ctrl+A interaction."""
+        self._create_automation_controller()
+        self.main.currentFeature.value = self.features[2]
+        self._send_feature_key(ord("A"), control=True)
+
+        self.assertEqual(list(self.panel.workflow_features_chk_list.GetSelections()), [0, 1, 2])
+        self.assertIs(self.main.currentFeature.value, self.features[2])
+        self.assertTrue(self.panel.pnl_milling_selection_hint.IsShown())
+
+    def test_empty_milling_selection_does_not_start_a_workflow(self) -> None:
+        """Mass unchecking must safely prevent workflow startup with no selected features."""
+        controller = self._create_automation_controller()
+        for feature_checks, step_checks in (([], [0, 1]), ([0, 1, 2], [])):
+            self.panel.workflow_features_chk_list.SetCheckedItems(feature_checks)
+            self.panel.workflow_task_chk_list.SetCheckedItems(step_checks)
+            controller._run_automated_milling(None)
+            self.assertFalse(hasattr(controller, "automation_future"))
 
     def test_button_foregrounds(self) -> None:
         """Apply normal and contrasting foregrounds independently."""
@@ -212,7 +411,9 @@ class PnlTabFibsemTest(unittest.TestCase):
                 panel.GetBackgroundColour(),
                 wx.Colour(selected_theme.background),
             )
+            wx.Yield()
             panel.Destroy()
+            wx.Yield()
         finally:
             layout.theme = original_theme
 
