@@ -2,7 +2,7 @@
 """
 :created: 16 Feb 2012
 :author: Éric Piel
-:copyright: © 2012 - 2022 Éric Piel, Rinze de Laat, Philip Winkler, Delmic
+:copyright: © 2012 - 2026 Éric Piel, Rinze de Laat, Philip Winkler, Delmic
 
 This file is part of Odemis.
 
@@ -382,7 +382,10 @@ class MainGUIData(object):
                 # List VA contains all the CryoFeatures
                 self.features = model.ListVA()
                 self.overviews = model.ListVA()
-                # VA for the currently selected feature
+                # VA for the current feature. Explicit overlay/dropdown navigation
+                # also notifies when the same feature is selected again, allowing
+                # AutomatedMillingController to restore one highlight and its preview
+                # after bulk selection. Subscribers must preserve state on reselection.
                 self.currentFeature = model.VigilantAttribute(None)
                 # VAs for currently selected targets
                 self.targets = model.ListVA()

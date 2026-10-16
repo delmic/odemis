@@ -99,6 +99,7 @@ class CryoFeatureController(object):
         self._feature_name_va_connector = None
         self._feature_status_va_connector = None
         self._feature_z_va_connector = None
+        self._current_feature: Optional[CryoFeature] = None
 
         # Feature whose status VA we are subscribed to for data-collection triggering.
         self._feature_for_collection: Optional[CryoFeature] = None
@@ -492,11 +493,16 @@ class CryoFeatureController(object):
         self._update_feature_cmb_list()
 
     @call_in_wx_main
-    def _on_current_feature_changes(self, feature):
+    def _on_current_feature_changes(self, feature: Optional[CryoFeature]) -> None:
+        """Update feature controls and correlation targets when the feature changes.
+
+        :param feature: Newly selected feature, or None when the selection is cleared.
         """
-        Update the feature panel controls when the current feature VA is modified
-        :param feature: (CryoFeature or None) the newly selected current feature
-        """
+        # Explicit navigation may notify again for the same feature. Keep its
+        # existing connectors, correlation data, and selected FM target intact.
+        if feature is not None and feature is self._current_feature:
+            return
+        self._current_feature = feature
         if self._feature_name_va_connector:
             self._feature_name_va_connector.disconnect()
 
@@ -684,7 +690,9 @@ class CryoFeatureController(object):
             logging.warning("cmb_features selection = -1.")
             return
         selected_feature = self._panel.cmb_features.GetClientData(index)
-        self._tab_data_model.main.currentFeature.value = selected_feature
+        # Notify even on reselection so AutomatedMillingController restores the
+        # sole feature highlight and preview after a bulk selection.
+        self._tab_data_model.main.currentFeature._set_value(selected_feature, must_notify=True)
 
     def _on_cmb_feature_status_change(self):
         """

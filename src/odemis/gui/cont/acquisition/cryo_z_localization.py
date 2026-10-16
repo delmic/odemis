@@ -4,7 +4,7 @@ Created on 22 Aug 2012
 
 @author: Éric Piel, Rinze de Laat, Philip Winkler
 
-Copyright © 2012-2022 Éric Piel, Rinze de Laat, Delmic
+Copyright © 2012-2026 Éric Piel, Rinze de Laat, Delmic
 
 This file is part of Odemis.
 
@@ -28,7 +28,7 @@ of microscope images.
 """
 import logging
 from concurrent.futures._base import CancelledError
-from typing import List, Optional
+from typing import Any, List, Optional
 
 import wx
 
@@ -378,11 +378,10 @@ class CryoZLocalizationController(object):
             logging.warning("Combobox poi size has no value %s", value)
 
     @call_in_wx_main
-    def _on_current_feature(self, _=None) -> None:
-        """
-        Called when the current feature is changed, or is_acquiring is changed
-        Enable/disable the localization button depending on the current state of the parameters and reload the
-        relevant parameters related to the current feature.
+    def _on_current_feature(self, _: Any = None) -> None:
+        """Refresh correlation controls and localization availability.
+
+        :param _: Feature or acquisition notification, read from the current model.
         """
         # Only possible to run the function iff:
         # * A feature is selected
@@ -397,7 +396,8 @@ class CryoZLocalizationController(object):
             if has_feature:
                 feature = self._tab_data.main.currentFeature.value
                 correlation_data = self._tab_data.main.currentFeature.value.correlation_data
-                self._panel.cmb_targets.Clear()
+                # Target-list notifications update the dropdown. Repeated feature
+                # navigation must preserve it when the targets have not changed.
                 streams = self._tab_data.streams.value
                 if feature.superz_stream_name:
                     self._selected_stream = next((s for s in streams if isinstance(s, FluoStream) and
