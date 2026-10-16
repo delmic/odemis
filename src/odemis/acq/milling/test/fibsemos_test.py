@@ -112,12 +112,13 @@ class TestConvertPatterns(unittest.TestCase):
 
     def test_convert_rectangle_pattern(self):
         pattern_param = create_rectangle_pattern_params()
+        pattern_param.rotation.value = math.pi / 6
         converted = convert_pattern_to_fibsemos(pattern_param)
         self.assertIsInstance(converted, RectanglePattern)
         self.assertAlmostEqual(converted.width, pattern_param.width.value)
         self.assertAlmostEqual(converted.height, pattern_param.height.value)
         self.assertAlmostEqual(converted.depth, pattern_param.depth.value)
-        self.assertAlmostEqual(converted.rotation, pattern_param.rotation.value)
+        self.assertAlmostEqual(converted.rotation, 330)
         self.assertEqual(converted.scan_direction, pattern_param.scan_direction.value)
         self.assertEqual(converted.point, Point(x=pattern_param.center.value[0],
                                                 y=pattern_param.center.value[1]))
@@ -393,7 +394,8 @@ class TestConvertMillingTasksToMillingStages(unittest.TestCase):
         rotated_rectangles = [rectangle for rectangle in stage.pattern.define()
                               if rectangle.rotation]
         self.assertEqual(len(rotated_rectangles), 1)
-        self.assertAlmostEqual(rotated_rectangles[0].rotation, math.pi / 4)
+        # The N diagonal descends to the right: 45 degrees clockwise in Odemis.
+        self.assertAlmostEqual(rotated_rectangles[0].rotation, 7 * math.pi / 4)
 
     def test_waffle_trench_uses_one_milling_stage(self) -> None:
         """Send both waffle trench rectangles in one milling stage."""
@@ -417,10 +419,11 @@ class TestReferenceImagePatternConversion(unittest.TestCase):
             top_width=22e-6, top_height=37e-6, bottom_width=20e-6, bottom_height=17e-6,
             depth=1e-6, spacing=3e-6, center=(3e-6, -5e-6))
         cases = (
-            (rectangle, math.pi, [(-3e-6, 5e-6, 7 * math.pi / 6)]),
-            (rectangle, math.pi / 2, [(-5e-6, -3e-6, 2 * math.pi / 3)]),
-            (composite, math.pi / 2, [(15e-6, -3e-6, math.pi / 2),
-                                     (-15e-6, -3e-6, math.pi / 2)]),
+            (rectangle, 0, [(3e-6, -5e-6, 11 * math.pi / 6)]),
+            (rectangle, math.pi, [(-3e-6, 5e-6, 5 * math.pi / 6)]),
+            (rectangle, math.pi / 2, [(-5e-6, -3e-6, 4 * math.pi / 3)]),
+            (composite, math.pi / 2, [(15e-6, -3e-6, 3 * math.pi / 2),
+                                     (-15e-6, -3e-6, 3 * math.pi / 2)]),
         )
         milling = MillingSettings(current=60e-12, voltage=30000, field_of_view=150e-6)
         for pattern, rotation, expected in cases:

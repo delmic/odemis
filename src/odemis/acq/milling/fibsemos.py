@@ -268,7 +268,8 @@ def _convert_rectangle_pattern(p: RectanglePatternParameters) -> 'RectanglePatte
         width=_apply_spot_size_correction(p.width.value, correction, "rectangle width"),
         height=_apply_spot_size_correction(p.height.value, correction, "rectangle height"),
         depth=p.depth.value,
-        rotation=math.degrees(p.rotation.value),
+        # Odemis overlay angles are clockwise; fibsemOS uses counterclockwise angles.
+        rotation=math.degrees(-p.rotation.value % (2 * math.pi)),
         scan_direction=p.scan_direction.value,
         point=Point(x=p.center.value[0], y=p.center.value[1])
     )
@@ -504,8 +505,8 @@ def _rotate_milling_stage_to_image_axes(stage: 'FibsemMillingStage', rotation: f
             width=shape.width,
             height=shape.height,
             depth=shape.depth,
-            # Pattern angles are clockwise, opposite to image metadata rotation.
-            rotation=math.degrees((shape.rotation + rotation) % (2 * math.pi)),
+            # Both angles are now counterclockwise. Express the pattern in image axes.
+            rotation=math.degrees((shape.rotation - rotation) % (2 * math.pi)),
             time=shape.time,
             passes=shape.passes,
             scan_direction=shape.scan_direction,
