@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 """
-Copyright © 2023-2025 Delmic
+@author: Alexéy Ilyushkin
+
+Copyright © 2023-2026 Alexéy Ilyushkin, Delmic
 
 This file is part of Odemis.
 
