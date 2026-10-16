@@ -22,7 +22,7 @@ see http://www.gnu.org/licenses/.
 import json
 import logging
 import os
-from typing import Any, Optional
+from typing import Any, Optional, Tuple
 
 import numpy
 
@@ -354,7 +354,7 @@ def open_files_and_stitch(infns: list, registration_method: int = REGISTER_IDENT
     return st_weaved_data
 
 
-def _use_scan_rotation_as_rotation(tiles: tuple[model.DataArray]) -> Optional[float]:
+def _use_scan_rotation_as_rotation(tiles: Tuple[model.DataArray]) -> Optional[float]:
     """
     If the tiles have scan rotation metadata, use it as rotation metadata, so that the weaver can
     handle it and the final image looks correctly connected.
