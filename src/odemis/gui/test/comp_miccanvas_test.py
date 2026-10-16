@@ -35,6 +35,9 @@ import logging
 import wx
 import time
 
+from odemis import model
+from odemis.acq.stream import RGBStream
+import numpy
 import odemis.gui.comp.miccanvas as miccanvas
 import odemis.gui.comp.canvas as canvas
 import odemis.gui.comp.viewport as viewport
@@ -413,6 +416,154 @@ class PlotCanvasTestCase(test.GuiTestCase):
 
                         self.assertAlmostEqual(bp[0], nbp[0], msg=err)
                         self.assertAlmostEqual(bp[1], nbp[1], msg=err)
+
+
+class TiledImagesUpdateTestCase(test.GuiTestCase):
+    """
+    Checks that updating the tiled images displayed (from another thread than the GUI thread)
+    never leaves the canvas in a state which cannot be drawn.
+    """
+
+    frame_class = test.test_gui.CanvasTestFrame
+
+    TILE_SIZE = 64
+    GRID_SIZE = 4  # tiles per row and per column
+
+    def setUp(self):
+        test.gui_loop()
+        self.mmodel = self.create_simple_tab_model()
+        self.view = self.mmodel.focussedView.value
+        self.canvas = miccanvas.DblMicroscopeCanvas(self.panel)
+        self.canvas.background_brush = wx.BRUSHSTYLE_SOLID
+        self.add_control(self.canvas, flags=wx.EXPAND, proportion=1)
+        test.gui_loop()
+        self.canvas.setView(self.view, self.mmodel)
+        self.canvas.fit_view_to_next_image = False
+
+        # Normal RGB streams, but whose projection image is directly set to some tiles
+        self.streams = []
+        self.projections = []
+        for i in range(2):
+            md = {
+                model.MD_DIMS: "YXC",
+                model.MD_PIXEL_SIZE: (1e-6, 1e-6),
+                model.MD_POS: (0, 0),
+            }
+            da = model.DataArray(numpy.zeros((8, 8, 3), dtype=numpy.uint8), metadata=md)
+            self.streams.append(RGBStream("stream %d" % i, da))
+        for s in self.streams:
+            self.view.addStream(s)
+        for p in self.view.stream_tree.getProjections():
+            # The bounding box normally doesn't support tiles which are set by hand
+            p.getBoundingBox = lambda: (-1e-3, -1e-3, 1e-3, 1e-3)
+            self.projections.append(p)
+        test.gui_loop(0.2)  # Let the projections generate their initial image
+
+        # Tiles which are re-used in every update, so that they come from the canvas cache
+        self._shared_tiles = {}
+        # Last "first tile" of each stream: it is displayed, and is part of the next update
+        self._prev_first_tiles = {}
+
+    def tearDown(self):
+        for p in self.projections:
+            self.view.removeStream(p.stream)
+        test.gui_loop()
+        self.remove_all()
+
+    def _make_tile(self, value: int) -> model.DataArray:
+        """
+        :param value: grey level of the tile
+        :returns: a new tile, with its own metadata
+        """
+        md = {
+            model.MD_DIMS: "YXC",
+            model.MD_PIXEL_SIZE: (1e-6, 1e-6),
+            model.MD_POS: (0, 0),
+        }
+        return model.DataArray(numpy.full((self.TILE_SIZE, self.TILE_SIZE, 3), value, dtype=numpy.uint8),
+                               metadata=md)
+
+    def _make_grid(self, stream: object, update_num: int) -> tuple:
+        """
+        Create the tiles as a stream with a pyramidal image would do when panning/zooming: the first
+        tile is new, the previous first tile is still used (at a different position), and the other
+        tiles are the same as before.
+        :param stream: the stream for which to generate the tiles
+        :param update_num: the update count
+        :returns: tuple of tuple of tiles (as a list of columns)
+        """
+        first = self._make_tile(255 if update_num % 2 else 0)
+        prev_first = self._prev_first_tiles.get(stream)
+        if prev_first is None:
+            prev_first = self._make_tile(128)
+        self._prev_first_tiles[stream] = first
+
+        cols = []
+        for x in range(self.GRID_SIZE):
+            col = []
+            for y in range(self.GRID_SIZE):
+                if (x, y) == (0, 0):
+                    tile = first
+                elif (x, y) == (1, 0):
+                    tile = prev_first
+                else:
+                    key = (stream, x, y)
+                    tile = self._shared_tiles.setdefault(key, self._make_tile(255 * ((x + y) % 2)))
+                col.append(tile)
+            cols.append(tuple(col))
+        return tuple(cols)
+
+    def _update_images(self, update_num: int):
+        for p in self.projections:
+            p.image.value = self._make_grid(p, update_num)
+
+    def test_draw_with_threaded_updates(self):
+        """
+        Update the images in a separate thread at high frequency, while the GUI thread is drawing.
+        """
+        errors = []
+        orig_draw_merged = self.canvas._draw_merged_images
+
+        def draw_merged_recorded(*args, **kwargs):
+            try:
+                return orig_draw_merged(*args, **kwargs)
+            except Exception as ex:
+                errors.append(ex)
+                raise
+
+        self.canvas._draw_merged_images = draw_merged_recorded
+
+        self._update_images(0)
+        test.gui_loop(0.1)
+
+        stop = threading.Event()
+
+        def updater():
+            i = 1
+            try:
+                while not stop.is_set():
+                    self._update_images(i)
+                    i += 1
+            except Exception as ex:
+                errors.append(ex)
+
+        t = threading.Thread(target=updater, daemon=True)
+        t.start()
+        try:
+            end = time.time() + 3
+            while time.time() < end:
+                try:
+                    self.canvas.update_drawing()
+                except Exception:
+                    pass  # recorded in errors
+                test.gui_loop(0.001)
+        finally:
+            stop.set()
+            t.join(5)
+            self.canvas._draw_merged_images = orig_draw_merged
+        test.gui_loop(0.1)
+
+        self.assertEqual([], errors)
 
 
 if __name__ == "__main__":
