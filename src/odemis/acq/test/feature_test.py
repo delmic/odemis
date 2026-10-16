@@ -47,6 +47,7 @@ from odemis.acq.feature import (
 from odemis.acq.milling import DEFAULT_MILLING_TASKS_PATH
 from odemis.acq.move import Posture
 from odemis.acq.stream import StaticFluoStream
+from odemis.util.dataio import open_acquisition
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -129,6 +130,7 @@ class TestFeatureEncoderDecoder(unittest.TestCase):
         reference_image = model.DataArray(numpy.zeros(shape=(1024, 1536)), metadata={})
         milling_tasks = load_milling_tasks(DEFAULT_MILLING_TASKS_PATH)
         milling_feature_offset = (12e-6, -8e-6)
+        feature.set_posture_position(Posture.MILLING, dict(feature.stage_position.value))
 
         # randomly remove some milling tasks (to simulate user choice)
         task_name = random.choice(list(milling_tasks.keys()))
@@ -145,7 +147,8 @@ class TestFeatureEncoderDecoder(unittest.TestCase):
 
         self.assertEqual(feature.path, self.path)
         self.assertEqual(feature.reference_image.shape, reference_image.shape)
-        self.assertEqual(feature.get_posture_position(Posture.MILLING), stage_position)
+        self.assertEqual(feature.get_posture_position(Posture.MILLING), feature.stage_position.value)
+        self.assertEqual(feature.get_milling_reference_position(), stage_position)
         self.assertEqual(feature.milling_feature_offset.value, milling_feature_offset)
         for task in feature.milling_tasks.values():
             for pattern in task.patterns:
@@ -161,6 +164,7 @@ class TestFeatureEncoderDecoder(unittest.TestCase):
 
         filename = os.path.join(feature.path, f"{feature.name.value}-{REFERENCE_IMAGE_FILENAME}")
         self.assertTrue(os.path.exists(filename))
+        self.assertEqual(open_acquisition(filename)[0].metadata[model.MD_STAGE_POSITION_RAW], stage_position)
 
 
 class TestCollectFlag(unittest.TestCase):

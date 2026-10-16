@@ -52,7 +52,7 @@ LEGACY_POSTURE_REGISTRY = {
 }
 
 PROJECT_NAME = "project.json"
-PROJECT_VERSION = "1.0"
+PROJECT_VERSION = "1.1"
 LEGACY_PROJECT_NAME = "features.json"
 IMG_FILENAME = "filename"
 IMG_IN_FILE_IDS = "in_file_indices"
@@ -159,6 +159,7 @@ def load_project(project_dir: os.PathLike) -> dict:
     :return: the loaded project in a structured manner (features and overviews)
     """
     project_dir = Path(project_dir)
+    project_version = Version("0.0")
     try:
         # Read features
         project = read_project_file(project_dir / PROJECT_NAME)
@@ -191,6 +192,7 @@ def load_project(project_dir: os.PathLike) -> dict:
 
     # Recover absolute image paths for features
     for feature in features:
+        feature.setdefault("legacy_milling_position", project_version < Version("1.1"))
         feature["images"] = deserialize_images(feature["images"], project_dir)
 
     # The feature directory (containing the milling data) is always named after the feature, so it is not stored in
@@ -253,6 +255,10 @@ def serialize_project_data(main_data: "CryoMainGUIData") -> Dict:
         }
         if feature.milling_feature_offset.value is not None:
             feature_item['milling_feature_offset'] = feature.milling_feature_offset.value
+        if feature.legacy_milling_position:
+            feature_item['legacy_milling_position'] = True
+        if feature.reference_position_from_legacy:
+            feature_item['milling_reference_position'] = feature.get_milling_reference_position()
         feature_list.append(feature_item)
 
     overview_list = serialize_images(overviews, project_dir)

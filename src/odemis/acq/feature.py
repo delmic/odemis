@@ -334,9 +334,10 @@ class CryoFeature(object):
         self.stage_position = model.VigilantAttribute(stage_position, unit="m") # stage-bare, in the first posture found # TODO: drop
         self.fm_focus_position = model.VigilantAttribute(fm_focus_position, unit="m")
         self.posture_positions: Dict[str, Dict[str, float]] = {} # positions for each posture
+        self.legacy_milling_position = False
+        self.reference_position_from_legacy = False
         # Position of the feature within the saved FIB reference image, in meters
-        # relative to the image center. The milling posture position remains the
-        # stage position at the center of that image, used by automated milling.
+        # relative to the image center.
         self.milling_feature_offset = model.TupleVA(None, unit="m")
         self.milling_alignment_area = model.TupleContinuous(
             DEFAULT_MILLING_ALIGNMENT_AREA,
@@ -414,6 +415,18 @@ class CryoFeature(object):
         """
         return self.posture_positions.get(posture.value, None)
 
+    def get_milling_reference_position(self) -> Optional[Dict[str, float]]:
+        """Read the acquisition pose from the image, falling back to legacy storage."""
+        if self.reference_image is None:
+            return None
+        position = self.reference_image.metadata.get(model.MD_STAGE_POSITION_RAW)
+        if position is None and self.legacy_milling_position:
+            position = self.get_posture_position(Posture.MILLING)
+            if position is not None:
+                self.reference_image.metadata[model.MD_STAGE_POSITION_RAW] = dict(position)
+                self.reference_position_from_legacy = True
+        return dict(position) if position is not None else None
+
     def _set_milling_alignment_area(
             self, area: Tuple[float, float, float, float]) -> Tuple[float, float, float, float]:
         """Validate a normalized alignment area before storing it.
@@ -460,7 +473,7 @@ class CryoFeature(object):
                                ) -> None:
         """Assign the milling task data to the feature and save the reference image.
         This information is required for the automated milling process.
-        :param stage_position: the stage position of the feature for milling
+        :param stage_position: Raw stage pose at the reference image center.
         :param path: the path to save the feature data
         :param reference_image: the reference image of the feature (FIB)
         :param milling_tasks: the milling tasks for the feature (optional)
@@ -479,23 +492,28 @@ class CryoFeature(object):
         self.path = path
         os.makedirs(self.path, exist_ok=True)
 
-        # assign the reference image
-        self.reference_image = reference_image
+        # Preserve the acquisition pose in the image, including the Stage extra
+        # settings used by the OME-TIFF reader to recover raw stage coordinates.
+        metadata = copy.deepcopy(reference_image.metadata)
+        position = dict(metadata.get(model.MD_STAGE_POSITION_RAW, stage_position))
+        metadata[model.MD_STAGE_POSITION_RAW] = position
+        metadata.setdefault(model.MD_EXTRA_SETTINGS, {}).setdefault("Stage", {})["position"] = (position, "m")
+        self.reference_image = model.DataArray(reference_image, metadata=metadata)
 
         # save the reference image to disk (NOTE: we want to overwrite the existing file)
         filename = os.path.join(self.path, f"{self.name.value}-{REFERENCE_IMAGE_FILENAME}")
         exporter = find_fittest_converter(filename)
-        exporter.export(filename, reference_image)
+        exporter.export(filename, self.reference_image)
         self.milling_alignment_area.value = alignment_area
 
-        # save the milling position (it can be updated by the user)
-        self.set_posture_position(posture=Posture.MILLING, position=stage_position)
+        self.legacy_milling_position = False
+        self.reference_position_from_legacy = False
 
         # set the feature status to ready to mill
         self.status.value = FEATURE_READY_TO_MILL
 
         logging.info(f"Milling tasks: {self.milling_tasks}, path: {self.path}, Reference image: {filename}")
-        logging.info(f"Stage position for milling: {self.get_posture_position(Posture.MILLING)}")
+        logging.info(f"Reference acquisition position: {self.get_milling_reference_position()}")
         logging.info(f"Feature {self.name.value} is ready to mill.")
 
 
@@ -525,6 +543,7 @@ def feature_decoder(feature_raw: Dict) -> CryoFeature:
     feature.correlation_data = FIBFMCorrelationData.from_dict(correlation_data) if correlation_data else None
     feature.status.value = feature_raw['status']
     feature.posture_positions = posture_positions
+    feature.legacy_milling_position = feature_raw.get('legacy_milling_position', True)
     feature.milling_tasks = {}
     for name, data in milling_task_json.items():
         task = MillingTaskSettings.from_dict(data)
@@ -569,6 +588,12 @@ def feature_decoder(feature_raw: Dict) -> CryoFeature:
                 )
         else:
             logging.warning(f"Reference image for feature {feature.name.value} not found in {filename}")
+    # Only images without acquisition metadata need a project-file fallback.
+    reference_position = feature_raw.get('milling_reference_position')
+    if (reference_position is not None and feature.reference_image is not None
+            and model.MD_STAGE_POSITION_RAW not in feature.reference_image.metadata):
+        feature.reference_image.metadata[model.MD_STAGE_POSITION_RAW] = dict(reference_position)
+        feature.reference_position_from_legacy = True
     return feature
 
 
@@ -585,6 +610,21 @@ def get_feature_position_at_posture(pm: MicroscopePostureManager,
     if posture == Posture.UNKNOWN:
         raise ValueError("Cannot compute position for UNKNOWN posture")
 
+    # Older projects stored the reference center in the MILLING marker slot.
+    # Migrate once, without changing manually positioned milling patterns.
+    if feature.legacy_milling_position and feature.reference_image is not None:
+        reference_position = feature.get_milling_reference_position()
+        if reference_position is not None:
+            reference_posture = pm.get_current_posture(reference_position)
+            feature.legacy_milling_position = False
+            feature.posture_positions.pop(Posture.MILLING.value, None)
+            if reference_posture == Posture.MILLING:
+                offset = feature.milling_feature_offset.value
+                if offset is not None and model.MD_POS in feature.reference_image.metadata:
+                    set_feature_position_from_milling_offset(pm, feature, offset)
+                else:
+                    feature.set_posture_position(Posture.MILLING, reference_position)
+
     position = feature.get_posture_position(posture)
 
     # if the position doesn't exist at that posture, create it
@@ -598,6 +638,61 @@ def get_feature_position_at_posture(pm: MicroscopePostureManager,
             raise
 
     return position
+
+
+def get_feature_sample_position(pm: MicroscopePostureManager,
+                                feature: CryoFeature,
+                                posture: Posture) -> Dict[str, float]:
+    """Resolve the feature marker position in sample-stage coordinates.
+
+    :param pm: Posture manager used to convert stage coordinates.
+    :param feature: Feature whose marker position is requested.
+    :param posture: Posture in which to resolve the marker position.
+    :return: Sample-stage position, containing at least x and y in meters.
+    """
+    position = get_feature_position_at_posture(pm, feature, posture)
+    return pm.to_sample_stage_from_stage_position(position, posture=posture)
+
+
+def get_feature_navigation_position(pm: MicroscopePostureManager,
+                                    feature: CryoFeature,
+                                    posture: Posture) -> Dict[str, float]:
+    """Return a matching reference pose or the marker pose, preserving the posture.
+
+    :param pm: Posture manager used to resolve a missing marker position.
+    :param feature: Feature to navigate to.
+    :param posture: Current navigation posture; FM always targets its own marker.
+    :return: Destination in raw stage coordinates.
+    """
+    if posture in (Posture.MILLING, Posture.TRENCHING) and feature.reference_image is not None:
+        reference_position = feature.get_milling_reference_position()
+        if reference_position is not None and pm.get_current_posture(reference_position) == posture:
+            return reference_position
+    return get_feature_position_at_posture(pm, feature, posture)
+
+
+def set_feature_position_from_milling_offset(pm: MicroscopePostureManager,
+                                            feature: CryoFeature,
+                                            offset: Tuple[float, float]) -> None:
+    """Update the feature marker from an offset in its saved FIB reference image.
+
+    Preserve the reference-center sample Z while applying the projected XY.
+
+    :param pm: Posture manager used to convert reference coordinates.
+    :param feature: Feature with a saved reference image and acquisition pose.
+    :param offset: Marker offset in meters from the reference image center.
+    """
+    reference_position = feature.get_milling_reference_position()
+    if reference_position is None or feature.reference_image is None:
+        raise ValueError("Cannot position a feature without a reference acquisition pose.")
+    posture = pm.get_current_posture(reference_position)
+    sample_pos = pm.to_sample_stage_from_stage_position(reference_position, posture=posture)
+    image_pos = feature.reference_image.metadata[model.MD_POS]
+    sample_pos.update(x=image_pos[0] + offset[0], y=image_pos[1] + offset[1])
+    position = pm.from_sample_stage_to_stage_position(sample_pos, posture=posture)
+    feature.stage_position.value = position
+    feature.set_posture_position(posture, position)
+
 
 def load_feature_streams_from_disk(feature: "CryoFeature") -> None:
     """
