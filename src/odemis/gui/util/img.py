@@ -27,15 +27,18 @@ import logging
 import math
 import numbers
 import numpy
+from typing import Dict, List, Union
 from odemis import model
 from odemis.acq.stream import RGBProjection, RGBSpatialProjection, \
-    SinglePointTemporalProjection, SinglePointAngularProjection, DataProjection
+    SinglePointTemporalProjection, SinglePointAngularProjection, \
+    DataProjection, Stream
 from odemis.gui import BLEND_SCREEN, BLEND_DEFAULT
 from odemis.gui.comp.overlay.base import Label
 from odemis.model import DataArrayShadow
 from odemis.model import TINT_FIT_TO_RGB, TINT_RGB_AS_IS
 from odemis.util import intersect, fluo, img, units
 from odemis.util import spectrum
+from odemis.util.filename import make_compliant_string
 import threading
 import time
 from typing import Tuple, Optional
@@ -2415,6 +2418,38 @@ class FakeCanvas(object):
         font_size = self.buffer_size[0] * LARGE_FONT
         """Pass the fake canvas to the draw function of the overlay"""
         overlay.draw(self.ctx, canvas=self, font_size=font_size)
+
+
+def images_2d_to_export_data(streams: List[Union[DataProjection, Stream]]) -> Union[model.DataArray, Dict[str, model.DataArray]]:
+    """
+    Creates the non-rendered representation of each stream of a 2D view for export
+    as CSV. The raw data of each stream is used, so the values and the shape are the same
+    as the acquired data (rather than the image rendered in the viewport).
+
+    :param streams: the streams to be exported.
+    :returns: A single 2D image if there is only one stream, otherwise one 2D image per stream
+              keyed by "<index>_<description>".
+    :raises LookupError: if there is no stream to export.
+    """
+    native = []
+    for s in streams:
+        da = s.raw[0]
+        if isinstance(da, DataArrayShadow):
+            da = da.getData()
+        native.append(da)
+
+    if not native:
+        raise LookupError("No stream data available")
+    if len(native) == 1:
+        return native[0]
+
+    # The description is used in the file names, so keep only file-name safe characters
+    exported_data = {}
+    for i, da in enumerate(native):
+        desc = da.metadata.get(model.MD_DESCRIPTION, "stream")
+        safe_desc = make_compliant_string(desc.replace(" ", "_"), r"[^A-Za-z0-9_\-]")
+        exported_data[f"{i}_{safe_desc or 'stream'}"] = da
+    return exported_data
 
 
 def images_to_export_data(streams, view_hfw, view_pos,

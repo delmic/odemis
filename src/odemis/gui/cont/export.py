@@ -21,15 +21,19 @@ This file is part of Odemis.
 """
 
 from collections import OrderedDict
+from typing import Union, Dict
 import logging
+from odemis import model
 from odemis.util import dataio as udataio
 from odemis.dataio import get_converter
 from odemis.gui.comp import popup
 from odemis.gui.conf import get_acqui_conf
+from odemis.gui.model.stream_view import StreamView
 from odemis.gui.util import call_in_wx_main, formats_to_wildcards
 from odemis.gui.util.img import ar_to_export_data, spectrum_to_export_data, \
     images_to_export_data, line_to_export_data, temporal_spectrum_to_export_data, \
-    chronogram_to_export_data, angular_spectrum_to_export_data, theta_to_export_data
+    chronogram_to_export_data, angular_spectrum_to_export_data, theta_to_export_data, \
+    images_2d_to_export_data
 from odemis.util.dataio import splitext
 import os
 import time
@@ -41,7 +45,8 @@ PP_PREFIX = "Post-processing"
 
 # Dict str -> (tuple of str, tuple of str):
 #   export type -> possible exporters for PR, possible exporters for PP
-EXPORTERS = {"spatial": (("PNG", "TIFF"), ("Serialized TIFF",)),
+EXPORTERS = {"spatial-2d": (("PNG", "TIFF"), ("Serialized TIFF", "CSV")),
+             "spatial": (("PNG", "TIFF"), ("Serialized TIFF",)),
              "AR": (("PNG", "TIFF"), ("CSV",)),
              "spectrum": (("PNG", "TIFF"), ("CSV",)),
              "spectrum-line": (("PNG", "TIFF"), ("CSV",)),
@@ -182,7 +187,7 @@ class ExportController(object):
 
         :param filepath: (str) full path to the destination file
         :param export_format: (str) the format name
-        :param export_type: (str) spatial, AR, spectrum or spectrum-line
+        :param export_type: (str) spatial-2d, spatial, AR, spectrum or spectrum-line
         """
         try:
             exporter = get_converter(export_format)
@@ -190,7 +195,7 @@ class ExportController(object):
             self._conf.export_raw = raw
             self._conf.last_export_path = os.path.dirname(filepath)
 
-            exported_data = self.export(export_type, raw)
+            exported_data = self.export(export_type, raw, export_format)
 
             # batch export
             # TODO: for now we do not create a new folder where all files are saved
@@ -263,7 +268,7 @@ class ExportController(object):
     def get_export_type(self, view):
         """
         Based on the given view gives the corresponding export type
-        return (string): spatial, AR, spectrum or spectrum-line
+        return (string): spatial-2d, spatial, AR, spectrum or spectrum-line
         """
         view_name = view.name.value
         # TODO: just use another dict
@@ -281,20 +286,38 @@ class ExportController(object):
             export_type = 'angle'
         elif view_name == 'Chronograph':
             export_type = 'spectrum-time'
+        elif self._is_2d_view(view):
+            export_type = 'spatial-2d'
         else:
             export_type = 'spatial'
         return export_type
 
-    def export(self, export_type, raw=False):
+    @staticmethod
+    def _is_2d_view(view: StreamView) -> bool:
+        """
+        return (bool): True if all streams in the view are 2D images (dims YX with ndim 2).
+        """
+        projections = view.stream_tree.getProjections()
+        if not projections:
+            return False
+        for s in projections:
+            raw = s.raw[0]
+            dims = raw.metadata.get(model.MD_DIMS, "CTZYX"[-raw.ndim:])
+            ndim = raw.ndim
+            if dims != "YX" or ndim != 2:
+                return False
+        return True
+
+    def export(self, export_type: str, raw: bool = False, export_format: str = "") -> Union[model.DataArray, Dict[str, model.DataArray]]:
         """
         Returns the data to be exported with respect to the settings and options.
 
-        :param export_type (string): spatial, AR, spectrum, spectrum-temporal,
+        :param export_type (string): spatial-2d, spatial, AR, spectrum, spectrum-temporal,
             spectrum-time, or spectrum-line, spectrum-angular
         :param raw (boolean): raw data format if True
-        :param interpolate_data (boolean): apply interpolation on data if True
+        :param export_format (string): the format name, e.g. "CSV"
 
-        returns DataArray or list of DataArray: the data to be exported, either
+        returns DataArray or Dict[str, DataArray]: the data to be exported, either
           an RGB image or raw data.
         raises:
             LookupError: if no data found to export
@@ -316,6 +339,8 @@ class ExportController(object):
             exported_data = chronogram_to_export_data(streams[0], raw, vp)
         elif export_type == 'angle':
             exported_data = theta_to_export_data(streams[0], raw, vp)
+        elif export_type == 'spatial-2d' and export_format == "CSV":
+            exported_data = images_2d_to_export_data(streams)
         else:
             view_px = tuple(vp.canvas.ClientSize)
             view_mpp = fview.mpp.value
@@ -346,7 +371,7 @@ class ExportController(object):
         batch_export (bool): If True, indicates that multiple files will be created (using the filename as a prefix).
         return (string or None): the new filename (or the None if the user cancelled)
                 (string): the format name
-                (string): spatial, AR, spectrum or spectrum-line
+                (string): spatial-2d, spatial, AR, spectrum or spectrum-line
         """
         # Find the available formats (and corresponding extensions) according
         # to the export type
@@ -440,7 +465,7 @@ class ExportController(object):
     def get_export_formats(self, export_type):
         """
         Find the available file formats for the given export_type
-        export_type (string): spatial, AR, spectrum or spectrum-line
+        export_type (string): spatial-2d, spatial, AR, spectrum or spectrum-line
         return (dict string -> (string, list of strings)):
              name of each format -> nice name of the format, list of extensions.
         """
