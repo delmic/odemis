@@ -40,6 +40,7 @@ def export(filename: str, data: model.DataArray):
         - If the given data is AR data then just dump the theta/phi array
         - If the given data is temporal spectrum data then dump the time/wavelength array
         - If the given data is EK data then dump the angle/wavelength array
+        - If the given data is 2D image data (YX) then dump the matrix of values, one row per line
     filename (str): filename of the file to create (including path).
     data (model.DataArray): the data to export.
        Metadata is taken directly from the DA object.
@@ -93,8 +94,24 @@ def export(filename: str, data: model.DataArray):
         logging.debug("Exporting angular spectrum data to CSV")
         _export_angular_spectrum_data(data, filename)
 
+    # Export 2D image data (e.g. SEM, CL intensity), as a plain matrix of values
+    elif dims == "YX" and data.ndim == 2:
+        logging.debug("Exporting 2D image data to CSV")
+        _export_image_data(data, filename)
+
     else:
         raise ValueError(f"Unknown acquisition type {acq_type} of data (dims = {dims}) to be exported as CSV")
+
+
+def _export_image_data(data: model.DataArray, filename: str):
+    """
+    Export a 2D image (YX) to a CSV file: one row per image row, one column per image column.
+    :param data (model.DataArray): the 2D data to export.
+    :param filename (str): filename of the file to create (including path).
+    """
+    with open(filename, 'w', newline='') as fd:
+        csv_writer = csv.writer(fd)
+        csv_writer.writerows(data)
 
 
 def _export_spectrum_data(data: model.DataArray, filename: str):
