@@ -31,6 +31,7 @@ odemis-start install/linux/usr/share/odemis/sim/sparc2-mirror-alignment-sim.odm.
 import argparse
 import csv
 import logging
+import math
 import sys
 import time
 from pathlib import Path
@@ -220,7 +221,11 @@ def run_timelapse(
                 first_sem_img = sem_img
                 shift_x_m, shift_y_m = 0.0, 0.0
             else:
-                shift_x_m, shift_y_m = compute_shift_m(first_sem_img, sem_img)
+                try:
+                    shift_x_m, shift_y_m = compute_shift_m(first_sem_img, sem_img)
+                except Exception:
+                    logging.exception("Error while computing drift, skipping")
+                    shift_x_m, shift_y_m = math.nan, math.nan
 
             # Write CSV row.
             writer.writerow([time.time(), shift_x_m, shift_y_m])
