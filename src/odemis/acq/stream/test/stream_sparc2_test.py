@@ -120,6 +120,46 @@ class SPARC2TestCase(BaseSPARCTestCase):
         pcmd = spec_md[model.MD_EBEAM_CURRENT_TIME]
         self.assertGreater(len(pcmd), 5 * 6 / 2)
 
+    def test_acq_spec_large_area(self):
+        """
+        Test Spectrometer acquisition with lens 2 moved via .largeArea
+        """
+        l2 = model.getComponent(role="lens-switch")
+        sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
+        specs = stream.SpectrumSettingsStream("test spec", self.spec, self.spec.data, self.ebeam,
+                                              detvas={"exposureTime"}, l2=l2)
+        sps = stream.SEMSpectrumMDStream("test sem-spec", [sems, specs])
+        pos_on = specs._l2_position(True)
+        pos_off = specs._l2_position(False)
+        self.assertNotEqual(pos_on, pos_off)
+
+        specs.roi.value = (0.15, 0.6, 0.8, 0.8)
+        specs.detExposureTime.value = 0.1  # s
+        specs.repetition.value = (3, 4)
+
+        for large_area, exp_l2_pos in ((True, pos_on), (False, pos_off)):
+            specs.largeArea.value = large_area
+            f = sps.acquire()
+            data, exp = f.result(1 + 1.5 * sps.estimateAcquisitionTime())
+            self.assertIsNone(exp)
+            self.assertEqual(len(data), len(sps.raw))
+            self.assertAlmostEqual(l2.position.value["x"], exp_l2_pos)
+
+        # Toggling the checkbox quickly should cancel the previous move (not queue them),
+        # and end up at the last requested position.
+        specs.is_active.value = True
+        try:
+            for large_area in (True, False, True, False, True):
+                specs.largeArea.value = large_area
+            f_last = specs._l2_future
+            f_last.result(60)
+            self.assertAlmostEqual(l2.position.value["x"], pos_on)
+            specs.largeArea.value = False
+            specs._l2_future.result(60)
+            self.assertAlmostEqual(l2.position.value["x"], pos_off)
+        finally:
+            specs.is_active.value = False
+
     def test_acq_cl_leech(self):
         """
         Test acquisition for SEM MD CL intensity + 2 leeches

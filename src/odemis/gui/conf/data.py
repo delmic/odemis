@@ -1269,6 +1269,11 @@ STREAM_SETTINGS_CONFIG = {
         )),
     stream.MonochromatorSettingsStream:
         OrderedDict((
+            ("largeArea", {
+                "control_type": odemis.gui.CONTROL_CHECK,
+                "label": "Large area",
+                "tooltip": "Use lens 2, to collect light from a larger area (~150 µm), at the cost of less signal.",
+            }),
             ("wavelength", {
                 "tooltip": "Center wavelength of the spectrograph",
                 "control_type": odemis.gui.CONTROL_FLT,
