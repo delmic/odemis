@@ -888,6 +888,93 @@ class NotchPatternParameters(CompositeRectanglePatternParameters):
         ]
 
 
+
+class CrossPatternParameters(CompositeRectanglePatternParameters):
+    """Represents a symmetric cross pattern made of two rotated rectangles in opposite direction"""
+
+    def __init__(
+        self,
+        width: float,
+        height: float,
+        depth: float,
+        rotation: float = 0,
+        center: Tuple[float, float] = (0, 0),
+        name: str = "Cross",
+        spot_size_correction: float = 0.0,
+    ) -> None:
+        """Initialize the cross pattern parameters."""
+        self.name = model.StringVA(name)
+        self.width = model.FloatContinuous(width, unit="m", range=(1e-9, 900e-6))
+        self.height = model.FloatContinuous(height, unit="m", range=(1e-9, 900e-6))
+        self.depth = model.FloatContinuous(depth, unit="m", range=(1e-9, 100e-6))
+        self.rotation = model.FloatContinuous(rotation, unit="rad", range=(0, 2 * math.pi))
+        self.center = model.TupleContinuous(center, unit="m", range=((-1e3, -1e3), (1e3, 1e3)), cls=(int, float))
+        self.spot_size_correction = model.FloatContinuous(spot_size_correction, unit="m", range=(0, 900e-6))
+
+    def to_dict(self) -> dict:
+        """Convert the parameters to a json object."""
+        return {
+            "name": self.name.value,
+            "width": self.width.value,
+            "height": self.height.value,
+            "depth": self.depth.value,
+            "rotation": self.rotation.value,
+            "center_x": self.center.value[0],
+            "center_y": self.center.value[1],
+            "spot_size_correction": self.spot_size_correction.value,
+            "pattern": "cross",
+        }
+
+    @staticmethod
+    def from_dict(data: dict) -> 'CrossPatternParameters':
+        """Create a CrossPatternParameters object from a json object."""
+        return CrossPatternParameters(
+            width=data["width"],
+            height=data["height"],
+            depth=data["depth"],
+            rotation=data.get("rotation", 0),
+            center=(data.get("center_x", 0), data.get("center_y", 0)),
+            name=data.get("name", "Cross"),
+            spot_size_correction=data.get("spot_size_correction", 0.0),
+        )
+
+    def __repr__(self) -> str:
+        """Return a json-like representation of this pattern."""
+        return f"{self.to_dict()}"
+
+    def generate(self) -> List[MillingPatternParameters]:
+        """Generate two symmetric rectangle arms rotated by 90 degrees."""
+        name = self.name.value
+        width = self.width.value
+        height = self.height.value
+        depth = self.depth.value
+        rotation = self.rotation.value
+        center = self.center.value
+        spot_size_correction = self.spot_size_correction.value
+
+        return [
+            RectanglePatternParameters(
+                name=f"{name} (Arm A)",
+                width=width,
+                height=height,
+                depth=depth,
+                rotation=rotation,
+                center=center,
+                scan_direction="TopToBottom",
+                spot_size_correction=spot_size_correction,
+            ),
+            RectanglePatternParameters(
+                name=f"{name} (Arm B)",
+                width=width,
+                height=height,
+                depth=depth,
+                rotation=(rotation + (math.pi / 2)) % (2 * math.pi),
+                center=center,
+                scan_direction="TopToBottom",
+                spot_size_correction=spot_size_correction,
+            ),
+        ]
+
 # dictionary to map pattern names to pattern classes
 PATTERN_NAME_TO_CLASS = {
     "rectangle": RectanglePatternParameters,
@@ -897,4 +984,5 @@ PATTERN_NAME_TO_CLASS = {
     "ruler": RulerPatternParameters,
     "correlation": CorrelationPatternParameters,
     "notch": NotchPatternParameters,
+    "cross": CrossPatternParameters,
 }

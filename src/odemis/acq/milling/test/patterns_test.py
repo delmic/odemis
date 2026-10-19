@@ -18,11 +18,13 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
 import logging
+import math
 import unittest
 import numpy
 from odemis.acq.milling.patterns import (
     CorrelationPatternParameters,
     NotchPatternParameters,
+    CrossPatternParameters,
     PATTERN_NAME_TO_CLASS,
     RectanglePatternParameters,
     TrenchPatternParameters,
@@ -552,6 +554,87 @@ class WaffleTrenchPatternParametersTestCase(unittest.TestCase):
         self.assertEqual(
             WaffleTrenchPatternParameters.from_dict(pattern.to_dict()).to_dict(),
             pattern.to_dict())
+
+
+class CrossPatternParametersTestCase(unittest.TestCase):
+    """Test cross pattern geometry and serialization."""
+
+    def setUp(self) -> None:
+        """Sets up the test case for testing cross-pattern parameters."""
+        self.name = "FiducialCross-1"
+        self.width = 2e-6
+        self.height = 20e-6
+        self.depth = 1e-6
+        self.rotation = math.pi / 4
+        self.center = (0.0, 0.0)
+        self.spot_size_correction = 20e-9
+
+        self.pattern = CrossPatternParameters(
+            name=self.name,
+            width=self.width,
+            height=self.height,
+            depth=self.depth,
+            rotation=self.rotation,
+            center=self.center,
+            spot_size_correction=self.spot_size_correction,
+        )
+
+    def test_assignment(self) -> None:
+        """Tests assignment of cross-pattern parameters"""
+        self.assertEqual(self.pattern.name.value, self.name)
+        self.assertEqual(self.pattern.width.value, self.width)
+        self.assertEqual(self.pattern.height.value, self.height)
+        self.assertEqual(self.pattern.depth.value, self.depth)
+        self.assertEqual(self.pattern.rotation.value, self.rotation)
+        self.assertEqual(self.pattern.center.value, self.center)
+        self.assertEqual(self.pattern.spot_size_correction.value, self.spot_size_correction)
+        with self.assertRaises(IndexError):
+            self.pattern.spot_size_correction.value = -1e-9
+
+    def test_dict(self) -> None:
+        """Tests serialization and deserialization of cross-pattern parameters"""
+        cross_pattern_dict = self.pattern.to_dict()
+        self.assertEqual(cross_pattern_dict["name"], self.name)
+        self.assertEqual(cross_pattern_dict["width"], self.width)
+        self.assertEqual(cross_pattern_dict["height"], self.height)
+        self.assertEqual(cross_pattern_dict["depth"], self.depth)
+        self.assertEqual(cross_pattern_dict["rotation"], self.rotation)
+        self.assertEqual(cross_pattern_dict["center_x"], 0)
+        self.assertEqual(cross_pattern_dict["center_y"], 0)
+        self.assertEqual(cross_pattern_dict["spot_size_correction"], self.spot_size_correction)
+        self.assertEqual(cross_pattern_dict["pattern"], "cross")
+
+        cross_pattern_from_dict = CrossPatternParameters.from_dict(cross_pattern_dict)
+        self.assertEqual(cross_pattern_from_dict.name.value, self.name)
+        self.assertEqual(cross_pattern_from_dict.width.value, self.width)
+        self.assertEqual(cross_pattern_from_dict.height.value, self.height)
+        self.assertEqual(cross_pattern_from_dict.depth.value, self.depth)
+        self.assertEqual(cross_pattern_from_dict.rotation.value, self.rotation)
+        self.assertEqual(cross_pattern_from_dict.center.value, self.center)
+        self.assertEqual(cross_pattern_from_dict.spot_size_correction.value, self.spot_size_correction)
+
+    def test_missing_spot_size_correction_defaults_to_zero(self) -> None:
+        """Load older cross data without a spot size correction."""
+        cross_pattern_dict = self.pattern.to_dict()
+        del cross_pattern_dict["spot_size_correction"]
+
+        cross_pattern_from_dict = CrossPatternParameters.from_dict(cross_pattern_dict)
+
+        self.assertEqual(cross_pattern_from_dict.spot_size_correction.value, 0.0)
+
+    def test_generate(self) -> None:
+        """Tests generation of cross-pattern parameters"""
+        patterns = self.pattern.generate()
+        self.assertEqual(len(patterns), 2)
+        self.assertEqual(patterns[0].name.value, f"{self.name} (Arm A)")
+        self.assertAlmostEqual(patterns[0].rotation.value, self.rotation)
+        numpy.testing.assert_array_almost_equal(patterns[0].center.value, self.center)
+        self.assertEqual(patterns[0].spot_size_correction.value, self.spot_size_correction)
+
+        self.assertEqual(patterns[1].name.value, f"{self.name} (Arm B)")
+        self.assertAlmostEqual(patterns[1].rotation.value, (self.rotation + math.pi / 2) % (2 * math.pi))
+        numpy.testing.assert_array_almost_equal(patterns[1].center.value, self.center)
+        self.assertEqual(patterns[1].spot_size_correction.value, self.spot_size_correction)
 
 
 if __name__ == '__main__':
