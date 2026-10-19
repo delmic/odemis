@@ -133,8 +133,7 @@
     },
 }
 
-# On some configuration, there is a dedicated camera for the acquisition of the
-# spectra, otherwise 'Camera' is used.
+# dedicated camera for the acquisition of the spectra, on the second spectrograph
 "External Camera": {
     class: andorcam2.AndorCam2,
     role: sp-ccd,
@@ -184,7 +183,7 @@
     init: {
         axes_map: {"z": "focus"},
     },
-    affects: ["Camera", "Integrated Spectrometer", "External Camera", "External Spectrometer"],
+    affects: ["Camera", "Integrated Spectrometer"],
 }
 
 # Provide the filter wheel of the spectrograph as a separate component
@@ -344,11 +343,11 @@
     init: {
         axis_name: "flip-out",
         positions: {
-            0: ["Spec Camera 2", "Ext Spectrometer 2"],
-            1.5707963267948966: ["Spec Camera 3", "Ext Spectrometer 3"],
+            0: ["External Camera", "External Spectrometer"],
+            1.5707963267948966: [],
         },
     },
-    affects: ["Spec Camera 2", "Ext Spectrometer 2", "Spec Camera 3", "Ext Spectrometer 3"],
+    affects: ["External Camera", "External Spectrometer"],
 }
 
 # Control the slit position to either fully-open or small (dependent on the spectrometer slit-in)
@@ -363,7 +362,7 @@
             0.0012: "off", # opening based on the small slit
         },
     },
-    affects: ["Camera", "Integrated Spectrometer", "External Camera", "External Spectrometer"],
+    affects: ["Camera", "Integrated Spectrometer"],
 }
 
 # Tilt Mirror in bay 1, selects between ATM (internal spectrograph) and FSLT (external spectrograph)
@@ -440,6 +439,6 @@
         # Default position of the lens (can be improved by user)
         FAV_POS_ACTIVE: {"z": 0.0509299496}, # m
     },
-    affects: ["External Camera", "External Spectrometer", "Streak Readout CCD"],
+    affects: ["External Camera", "External Spectrometer"],
 }
 
