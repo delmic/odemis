@@ -123,7 +123,8 @@ SPARC2_MODES = {
                  # 'spec-selector' will depend on the affects
                 }),
             'spectral': (r"spectrometer.*",
-                {'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
+                {# 'lens-switch' is moved by the stream, depending on its .largeArea
+                 'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  'slit-in-big': {'x': 'off'},  # closed
                  # The grating is left as-is, but in practice, the GUI takes care
                  # of picking a grating (non mirror) by default, using a "local axis"
@@ -170,7 +171,7 @@ SPARC2_MODES = {
                                    'z': "MD:" + model.MD_FAV_POS_ACTIVE},
                  }),
             'monochromator': ("monochromator",
-                {'lens-switch': {'x': ("MD:" + model.MD_FAV_POS_DEACTIVE, 'off')},
+                {# 'lens-switch' is moved by the stream, depending on its .largeArea
                  'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  'slit-in-big': {'x': 'off'},  # closed
                  # 'cl-det-selector': {'x': 'off'},
