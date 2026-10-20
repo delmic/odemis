@@ -239,7 +239,9 @@ class FastEMOverviewAcquiController(object):
             self.overview_acq_data[scintillator_num][DWELL_TIME_SINGLE_BEAM] = float(
                 ctrl.GetValue()
             )
-        self.update_acquisition_time()
+        # when paused keep the "Acquisition paused" message, as the estimate would cover the full scintillator
+        if not self._main_data_model.is_acquisition_paused.value:
+            self.update_acquisition_time()
 
     def _on_focussed_view(self, view):
         """
@@ -487,7 +489,7 @@ class FastEMOverviewAcquiController(object):
         self._main_data_model.sed.contrast.value = float(self._contrast_ctrl.GetValue())
         self._main_data_model.ebeam.dwellTime.value = float(self._dwell_time_ctrl.GetValue())
 
-    def on_pause_resume(self, evt: wx.CommandEvent | None) -> None:
+    def on_pause_resume(self, evt: Optional[wx.CommandEvent]) -> None:
         """
         Called during acquisition when pressing the pause/resume button.
         """

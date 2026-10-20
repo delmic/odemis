@@ -545,6 +545,8 @@ class FastEMSetupTab(Tab):
         self.overview_acq_controller.overview_acq_panel.Enable(enable)
         self._enable_setup_buttons(enable)
         self._disable_stage_move(not enable)
+        # Keep the calibration checkboxes (which enable btn_calib) disabled while the acquisition is paused
+        self.calibration_controller.calibration_panel.Enable(enable and not is_paused)
 
         if is_paused and not self.tab_data.is_calibrating.value:
             self.btn_optical_autofocus.Enable(True)
