@@ -531,7 +531,6 @@ class FastEMOverviewAcquiController(object):
         schedules a GUI update via wx.CallAfter.
         """
         if self.acq_future and self.acq_future.pause():
-            self._is_paused = True
             wx.CallAfter(self._on_paused)
         else:
             wx.CallAfter(self._on_pause_failed)
@@ -539,12 +538,12 @@ class FastEMOverviewAcquiController(object):
     @call_in_wx_main
     def _on_pause_failed(self):
         """Reset GUI if pausing failed (e.g., the acquisition finished in the meantime)."""
+        if not self.acq_future or self.acq_future.done():
+            return  # reset_acquisition_gui will handle the full reset
         self.btn_pause_resume.Enable()
         self.btn_pause_resume.SetLabel(LABEL_PAUSE)
         self.btn_cancel.Enable()
         self._main_tab_data.is_acquisition_paused.value = False
-        if not self.acq_future or self.acq_future.done():
-            return  # reset_acquisition_gui will handle the full reset
         self._set_status_message("Acquisition running.")
 
     @call_in_wx_main
@@ -553,8 +552,9 @@ class FastEMOverviewAcquiController(object):
         The progress bar and label are automatically frozen while the future
         reports itself as paused (see ProgressiveFutureConnector).
         """
-        if not self._is_paused:
-            return  # Resumed or cancelled in the meantime; nothing to do.
+        if not self.acq_future or self.acq_future.done():
+            return  # Resumed, cancelled, or finished in the meantime; nothing to do.
+        self._is_paused = True
         self._main_tab_data.is_acquisition_paused.value = True
         self.btn_pause_resume.SetLabel(LABEL_RESUME)
         self.btn_pause_resume.Enable()
