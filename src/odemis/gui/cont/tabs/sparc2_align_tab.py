@@ -1017,11 +1017,8 @@ class Sparc2AlignTab(Tab):
          otherwise on two lines.
         """
         btns = list(self._alignbtn_to_mode.keys())
-        gb_sizer = btns[0].Parent.GetSizer().GetChildren()[0].GetSizer()
-        # Update button sizes when content changed. When changing text after initial rendering, the size property
-        # reflects the old text. We need a Layout() call to get the button sizes for the updated text. In the end
-        # everything is positioned and we don't necessarily need another Layout() call.
-        gb_sizer.Layout()
+        gb_sizer = self.panel.gb_sizer_btns
+
         # In the case of one button, don't show the button at all
         if len(btns) == 1:
             btns[0].Show(False)  # No other choice => no need to choose
@@ -1031,7 +1028,7 @@ class Sparc2AlignTab(Tab):
             width = 2
         # In all other cases, try to see if they fit on three columns to preserve vertical space.
         else:
-            btn_sizes = [b.Size[0] for b in btns]
+            btn_sizes = [b.GetEffectiveMinSize()[0] for b in btns]
             # The final button size is not available on the button at this point (only after placing them into the
             # grid). We still can apply the layouting logic to determine final size. When having more than one row, the
             # size of the largest button in the column is applied to all the buttons in that column. Check if 3 columns
@@ -1047,7 +1044,9 @@ class Sparc2AlignTab(Tab):
         # Position each button at the next position in the grid
         for i, btn in enumerate(btns):
             pos = (i // width, i % width)
-            gb_sizer.SetItemPosition(btn, pos)
+            gb_sizer.Add(btn, pos=pos, flag=wx.EXPAND)
+
+        self.panel.Layout()
 
     def _setFullFoV(self, stream, binning=(1, 1)):
         """

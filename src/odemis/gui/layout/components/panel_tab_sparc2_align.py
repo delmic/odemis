@@ -51,24 +51,18 @@ from odemis.gui.layout.util.fonts import set_font
 from odemis.gui.layout.util.sizers import hbox, vbox
 from odemis.gui.layout.util.widgets import create_text_button
 
-# (attribute name, label, icon file name, active icon file name, cellpos column)
-_MODE_BUTTONS: Tuple[Tuple[str, str, str, str, int], ...] = (
-    ("btn_align_lens", "LENS", "ico_lens.png", "ico_lens_green.png", 0),
-    ("btn_align_mirror", LABEL_MIRROR, "ico_mirror.png", "ico_mirror_green.png", 1),
-    ("btn_align_centering", "CENTERING", "ico_ang.png", "ico_ang_green.png", 2),
-    ("btn_align_lens2", "EK LENS", "ico_lens_ek.png", "ico_lens_green_ek.png", 3),
-    ("btn_align_ek", "EK CENTERING", "ico_ang_ek.png", "ico_ang_green_ek.png", 4),
-    ("btn_align_streakcam", "STREAK", "ico_fib.png", "ico_fib_green.png", 5),
-    ("btn_align_fiber", "FIBER", "ico_fib.png", "ico_fib_green.png", 6),
-    ("btn_align_light_in", "LIGHT-IN", "ico_fib.png", "ico_fib_green.png", 7),
-    ("btn_align_light_in_ar", "LIGHT-IN AR", "ico_fib.png", "ico_fib_green.png", 8),
-    (
-        "btn_align_tunnel_lens",
-        "TUNNEL",
-        "ico_freespacetunnel.png",
-        "ico_freespacetunnel_green.png",
-        9,
-    ),
+# (attribute name, label, icon file name, active icon file name)
+_MODE_BUTTONS: Tuple[Tuple[str, str, str, str], ...] = (
+    ("btn_align_lens", "LENS", "ico_lens.png", "ico_lens_green.png"),
+    ("btn_align_mirror", LABEL_MIRROR, "ico_mirror.png", "ico_mirror_green.png"),
+    ("btn_align_centering", "CENTERING", "ico_ang.png", "ico_ang_green.png"),
+    ("btn_align_lens2", "EK LENS", "ico_lens_ek.png", "ico_lens_green_ek.png"),
+    ("btn_align_ek", "EK CENTERING", "ico_ang_ek.png", "ico_ang_green_ek.png"),
+    ("btn_align_streakcam", "STREAK", "ico_fib.png", "ico_fib_green.png"),
+    ("btn_align_fiber", "FIBER", "ico_fib.png", "ico_fib_green.png"),
+    ("btn_align_light_in", "LIGHT-IN", "ico_fib.png", "ico_fib_green.png"),
+    ("btn_align_light_in_ar", "LIGHT-IN AR", "ico_fib.png", "ico_fib_green.png"),
+    ("btn_align_tunnel_lens", "TUNNEL", "ico_freespacetunnel.png", "ico_freespacetunnel_green.png"),
 )
 
 
@@ -206,14 +200,16 @@ class PnlTabSparc2Align(wx.Panel):
         panel.SetForegroundColour(self._theme.text_primary)
         panel.SetBackgroundColour(self._theme.panel_background)
 
+        # GridBagSizer used to hold the buttons. Which buttons to place dependents on the
+        # microscope configuration, so they are added later by Sparc2AlignTab.
         with vbox() as sizer:
-            grid = wx.GridBagSizer(vgap=10, hgap=10)
-            grid.SetMinSize(parent.GetMinSize())
-            for attribute, label, icon, icon_on, column in _MODE_BUTTONS:
-                button = self._mode_button(panel, label, icon, icon_on)
-                setattr(self, attribute, button)
-                grid.Add(button, pos=(0, column), flag=wx.EXPAND)
-            sizer.Add(grid, flag=wx.ALL, border=self._theme.spacing_standard)
+            self.gb_sizer_btns = wx.GridBagSizer(vgap=10, hgap=10)
+            self.gb_sizer_btns.SetMinSize(parent.GetMinSize())
+            sizer.Add(self.gb_sizer_btns, flag=wx.ALL, border=self._theme.spacing_standard)
+
+        for attribute, label, icon, icon_on in _MODE_BUTTONS:
+            button = self._mode_button(panel, label, icon, icon_on)
+            setattr(self, attribute, button)
 
         panel.SetSizer(sizer)
         return panel
