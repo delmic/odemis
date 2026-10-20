@@ -23,6 +23,7 @@ see http://www.gnu.org/licenses/.
 """
 import functools
 import logging
+from concurrent.futures import Future
 
 from odemis import model
 from odemis.gui.model import TabName
@@ -32,7 +33,7 @@ from odemis.gui.main import OdemisGUIApp
 from odemis.gui.plugin import Plugin
 
 class TCPhotoDetectorLiveStream(MonochromatorSettingsStream):
-    def _prepare_opm(self) -> model.Future:
+    def _prepare_opm(self) -> Future:
         """
         Prepare the optical path manager for the stream, by setting the optical path to the
         time-correlator and the photo-detector.
