@@ -142,7 +142,7 @@ class FastEMSetupTab(Tab):
         # Disable/enable setup control buttons based on whether the system is acquiring or calibrating
         self.tab_data.main.is_acquiring.subscribe(self._toggle_controls)
         self.tab_data.is_calibrating.subscribe(self._toggle_controls)
-        self.main_tab_data.is_acquisition_paused.subscribe(self._toggle_controls)
+        self.main_tab_data.main.is_acquisition_paused.subscribe(self._toggle_controls)
         self.tab_data.is_calibrating.subscribe(self._disable_stage_move)
 
         # Acquisition controller
@@ -299,7 +299,7 @@ class FastEMSetupTab(Tab):
             self.tab_data.main.ebeam_focus,
             calibrations=[Calibrations.OPTICAL_AUTOFOCUS],
         )
-        self.main_tab_data.is_optical_autofocus_running.value = True
+        self.main_tab_data.main.is_optical_autofocus_running.value = True
         f.add_done_callback(self._on_optical_autofocus_done)  # also handles cancelling and exceptions
         self._update_button_labels(self.btn_optical_autofocus)
         self.tab_data.main.is_optical_autofocus_done.value = False
@@ -310,7 +310,7 @@ class FastEMSetupTab(Tab):
         Called when the optical autofocus calibration is finished (either successfully, cancelled or failed).
         :param future: (ProgressiveFuture) Calibration future object, which can be cancelled.
         """
-        self.main_tab_data.is_optical_autofocus_running.value = False
+        self.main_tab_data.main.is_optical_autofocus_running.value = False
         self.tab_data.is_calibrating.value = False
         self.calibration_controller.calibration_panel.Enable(True)
         self.sem_stream_cont.enable(True)
@@ -335,13 +335,13 @@ class FastEMSetupTab(Tab):
         finally:
             self._update_button_labels(self.btn_optical_autofocus)
             # Resume SettingEntry related control updates of the stream
-            if self.main_tab_data.is_acquisition_paused.value:
+            if self.main_tab_data.main.is_acquisition_paused.value:
                 self.sem_stream_cont.pause()
             else:
                 self.sem_stream_cont.resume()
             if (
                 self.stream_should_update
-                and not self.main_tab_data.is_acquisition_paused.value
+                and not self.main_tab_data.main.is_acquisition_paused.value
             ):
                 self.tab_data.semStream.should_update.value = True
             self._toggle_controls(False)
@@ -538,7 +538,7 @@ class FastEMSetupTab(Tab):
         :param active: (bool) Whether the system is currently acquiring/calibrating or not acquiring/calibrating.
         """
         is_acquiring = self.tab_data.main.is_acquiring.value
-        is_paused = self.main_tab_data.is_acquisition_paused.value
+        is_paused = self.main_tab_data.main.is_acquisition_paused.value
         enable = not is_acquiring and not self.tab_data.is_calibrating.value
         self.active_scintillator_ctrl.Enable(enable)
 
