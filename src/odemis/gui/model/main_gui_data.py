@@ -693,6 +693,11 @@ class FastEMMainGUIData(MainGUIData):
         if self.stage is None:
             raise KeyError("No stage found in the microscope.")
 
+        # Indicates that a FAST-EM acquisition is paused and hardware interaction is safe.
+        self.is_acquisition_paused = model.BooleanVA(False)
+        # Indicates that optical autofocus is using the hardware during an acquisition pause.
+        self.is_optical_autofocus_running = model.BooleanVA(False)
+
         # Calibration sequence
         if microscope.name.lower().endswith("sim"):
             calib_1_calibrations = [Calibrations.OPTICAL_AUTOFOCUS,
