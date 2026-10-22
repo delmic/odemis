@@ -2523,7 +2523,7 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
 
         # Define values that are used more than once
         rx_sem = sem_pos_active["rx"]
-        rx_mill = self.calculate_stage_tilt(posture=Posture.MILLING)
+        rx_mill = pos["rx"]  # Since we are already in milling, just take current rx
 
         z_ct = calibrated_values["z_ct"]
         b_y = calibrated_values["b_y"]
