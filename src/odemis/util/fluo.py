@@ -17,6 +17,7 @@ You should have received a copy of the GNU General Public License along with Ode
 
 # various functions to help with computations related to fluorescence microscopy
 
+from __future__ import annotations
 from collections.abc import Iterable
 from typing import Sequence, Tuple, Union
 
