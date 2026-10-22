@@ -26,7 +26,7 @@ import os
 import threading
 import time
 from concurrent import futures
-from concurrent.futures._base import CANCELLED, FINISHED, RUNNING, CancelledError
+from concurrent.futures import CancelledError
 from typing import List, Optional, Tuple, Union
 
 from odemis import model
@@ -61,7 +61,6 @@ try:
         FibsemMillingStage,
         MillingAlignment,
         estimate_total_milling_time,
-        mill_stages,
     )
     from fibsem.milling.patterning.patterns2 import (
         BasePattern,
@@ -514,7 +513,42 @@ class FibsemOSMillingTaskManager:
         """Estimate the total milling time for the currently configured stages (seconds)."""
         return estimate_total_milling_time(self.milling_stages)
 
-    def _run(self):
+    def _run_stage(self, stage: 'FibsemMillingStage') -> None:
+        """Execute a milling stage and clean up through the shared fibsemOS API.
+
+        :param stage: Milling stage with its reference image and alignment settings.
+        """
+        channel = stage.milling.milling_channel
+        initial_shift = self.microscope.get("shift", beam_type=channel)
+        imaging_beam = self.microscope.system.ion.beam
+        failed = False
+        try:
+            # fibsemOS 0.5.0a0 removed mill_stages. This API is shared with 0.4.1a1.
+            stage.strategy.run(microscope=self.microscope, stage=stage, asynch=False)
+        except BaseException:
+            failed = True
+            raise
+        finally:
+            # Preserve the former mill_stages cleanup: stop after failure, clear
+            # patterns, restore configured imaging conditions and reset beam shift.
+            # Attempt every action without replacing an existing milling error.
+            cleanup_error = None
+            cleanup = [self.microscope.stop_milling] if failed else []
+            cleanup.append(lambda: self.microscope.finish_milling(
+                imaging_current=imaging_beam.beam_current, imaging_voltage=imaging_beam.voltage))
+            if initial_shift is not None:
+                cleanup.append(lambda: self.microscope.set("shift", value=initial_shift, beam_type=channel))
+            for action in cleanup:
+                try:
+                    action()
+                except Exception as exc:
+                    logging.exception("Failed to clean up milling stage %s.", stage.name)
+                    if cleanup_error is None:
+                        cleanup_error = exc
+            if cleanup_error is not None and not failed:
+                raise cleanup_error
+
+    def _run(self) -> None:
         """Internal worker that performs the milling stages sequentially."""
         future = self._future
         if future is None:
@@ -536,7 +570,10 @@ class FibsemOSMillingTaskManager:
 
                 ref_img = _crop_to_reduced_area(ref_img, stage.alignment.rect)
 
-                mill_stages(self.microscope, [stage], ref_img)
+                # fibsemOS 0.4.1a0 introduced stage.reference_image for strategy alignment.
+                stage.reference_image = ref_img
+                stage.imaging.path = self.path
+                self._run_stage(stage)
 
         finally:
             with self._lock:
