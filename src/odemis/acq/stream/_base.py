@@ -36,8 +36,7 @@ from odemis.model import (MD_POS, MD_PIXEL_SIZE, MD_ROTATION, MD_ACQ_DATE,
                           MD_POL_NEGDIAG, MD_POL_RHC, MD_POL_LHC, MD_POL_S0, MD_POL_S1, MD_POL_S2, MD_POL_S3,
                           MD_POL_DS0, MD_POL_DS1, MD_POL_DS2, MD_POL_DS3, MD_POL_EPHI, MD_POL_ETHETA, MD_POL_EX,
                           MD_POL_EY, MD_POL_EZ, MD_POL_DOP, MD_POL_DOLP, MD_POL_DOCP, MD_POL_UP, MD_POL_DS1N,
-                          MD_POL_DS2N, MD_POL_DS3N, MD_POL_S1N, MD_POL_S2N, MD_POL_S3N, TINT_FIT_TO_RGB, TINT_RGB_AS_IS,
-                          UNDEFINED_ROI)
+                          MD_POL_DS2N, MD_POL_DS3N, MD_POL_S1N, MD_POL_S2N, MD_POL_S3N, TINT_FIT_TO_RGB, TINT_RGB_AS_IS)
 from odemis.util import img
 # TODO: move to odemis.acq (once it doesn't depend on odemis.acq.stream)
 # Contains the base of the streams. Can be imported from other stream modules.
@@ -88,7 +87,7 @@ POL_MOVE_TIME = 6  # [s] extra time to move polarimetry hardware (value is very 
 # Emission value depends on selected excitation
 # Tint can automatically change if excitation and emission are changed
 # Therefore, the below VAs are changed first in the below order and then the rest of stream VAs
-SETTINGS_ORDER = ["excitation", "power", "emission"]
+SETTINGS_ORDER = ["excitation", "power", "emission", "roi", "repetition", "pixelSize"]
 # The below VAs are not important for loading the settings of a specific stream
 NON_SETTINGS_VA = ['acquisitionType', 'auto_bc', 'background', 'histogram', 'image', 'intensityRange', 'is_active',
                    'should_update', 'single_frame_acquisition', 'status', 'integrationCounts']
