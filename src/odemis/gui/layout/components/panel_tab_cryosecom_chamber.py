@@ -275,7 +275,8 @@ class PnlTabCryosecomChamber(wx.Panel):
         :param parent: Parent window.
         :returns: Position button grid.
         """
-        grid = wx.GridBagSizer(vgap=5, hgap=20)
+        grid = wx.GridBagSizer(vgap=0, hgap=20)
+        grid.SetEmptyCellSize(wx.Size(0, 0))
         specs = (
             ("btn_switch_sem_imaging", LABEL_SEM_IMAGING, "ico_sem", (0, 0)),
             ("btn_switch_fm_imaging", "FM IMAGING", "ico_meteorimaging", (0, 1)),
