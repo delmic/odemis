@@ -285,11 +285,6 @@ class MillingTaskController:
         self._panel = tab_panel
         self._tab = tab
 
-        if hasattr(self._tab, "_feature_panel_controller"):
-            from odemis.gui.cont.features import CryoFeatureController
-            self.feature_controller: CryoFeatureController = self._tab._feature_panel_controller
-
-        # self.stream = tab.fib_stream  # fib stream
         self.acq_cont = tab._acquired_stream_controller
         self.viewport = tab_panel.pnl_secom_grid.viewports[3]  # fib acquired viewport
         self.canvas = self.viewport.canvas  # fib canvas
@@ -348,18 +343,12 @@ class MillingTaskController:
 
         # check pattern validity
         self.valid_patterns = model.BooleanVA(False)
-        # self._tab_data.main.stage.position.subscribe(
-        #     self._all_valid_patterns, init=True
-        # )
         self._tab_data.streams.subscribe(self._update_mill_btn, init=True)
         self.valid_patterns.subscribe(self._update_mill_btn, init=True)
 
         # bind milling events
         self._panel.btn_run_milling.Bind(wx.EVT_BUTTON, self._run_milling)
         self._panel.btn_milling_cancel.Bind(wx.EVT_BUTTON, self._cancel_milling_series)
-
-        # hide the milling button because we are using it for a workflow
-        # self._panel.btn_run_milling.Hide()
 
     def _on_current_feature_changes(self, feature: Optional[CryoFeature]):
         """
