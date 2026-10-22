@@ -779,7 +779,7 @@ class CryoAcquiController(object):
         is already taking place or based on if the current stage posture fm imaging (enabled) or fib-view fm (disabled).
         """
         pm = self._tab_data.main.posture_manager
-        at_fib_view_fm = pm.at_fib_view_fm_posture(pm.stage.position.value)
+        at_fib_view_fm = pm.get_current_posture() == Posture.FIB_VIEW_FM
         enabled = not self._tab_data.main.is_acquiring.value and not at_fib_view_fm
         self._panel.btn_acquire_overview.Enable(enabled)
         # Only show a tooltip when at FIB-view FM. The other option, while acquiring, is quite obvious.
