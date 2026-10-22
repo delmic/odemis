@@ -965,9 +965,6 @@ class BitmapCanvas(BufferedCanvas):
                 if isinstance(im, tuple):
                     first_tile = im[0][0]
                     md = first_tile.metadata
-                    tiles_merged_shape = util.img.getTilesSize(im)
-                    # the center of the image composed of the tiles
-                    center = util.img.getCenterOfTiles(im, tiles_merged_shape)
                 else:
                     md = im.metadata
 
@@ -1014,7 +1011,7 @@ class BitmapCanvas(BufferedCanvas):
                     self._draw_tiles(
                         ctx,
                         im,
-                        center,
+                        md['dc_center'],
                         merge_ratio,
                         im_scale=md['dc_scale'],
                         rotation=md['dc_rotation'],
@@ -1027,12 +1024,12 @@ class BitmapCanvas(BufferedCanvas):
                     self._draw_image(
                         ctx,
                         im,
-                        im.metadata['dc_center'],
+                        md['dc_center'],
                         merge_ratio,
-                        im_scale=im.metadata['dc_scale'],
-                        rotation=im.metadata['dc_rotation'],
-                        shear=im.metadata['dc_shear'],
-                        flip=im.metadata['dc_flip'],
+                        im_scale=md['dc_scale'],
+                        rotation=md['dc_rotation'],
+                        shear=md['dc_shear'],
+                        flip=md['dc_flip'],
                         blend_mode=blend_mode,
                         interpolate_data=interpolate_data
                     )
