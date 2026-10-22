@@ -675,6 +675,7 @@ class Scanner(model.Emitter):
         # Field of view in Tescan is set in mm
         self.magnification = model.VigilantAttribute(mag, unit="", readonly=True)
 
+        fov_range = self._extend_range_to_value("horizontalFoV", fov_range, fov)
         self.horizontalFoV = model.FloatContinuous(fov, range=fov_range, unit="m",
                                                    setter=self._setHorizontalFOV)
         self.horizontalFoV.subscribe(self._onHorizontalFOV)  # to update RO VAs and metadata
@@ -737,6 +738,7 @@ class Scanner(model.Emitter):
 
             pc = self._device_handler.GetBeamCurrent() * 1e-12  # Convert from pA to A
             # For limits of current, values from the Tescan UI are used, since the API did not specify any.
+            current_range = self._extend_range_to_value("probeCurrent", current_range, pc)
             self.probeCurrent = model.FloatContinuous(pc, current_range, unit="A",
                                                         setter=self._setPC)
             self.probeCurrent.subscribe(self._onPC)
@@ -877,6 +879,22 @@ class Scanner(model.Emitter):
         if prev_fov != new_fov:
             self.horizontalFoV._value = new_fov
             self.horizontalFoV.notify(new_fov)
+
+    @staticmethod
+    def _extend_range_to_value(name: str, rng: Tuple[float, float], value: float) -> Tuple[float, float]:
+        """
+        Ensure the value fits within the range, extending the range if needed.
+        :param name: name of the VA, for the log message
+        :param rng: (min, max) range
+        :param value: current value read from the hardware
+        :returns: the range, extended to include the value if it was outside
+        """
+        rmin, rmax = rng
+        if not rmin <= value <= rmax:
+            logging.warning("Initial value of %s (%s) is outside of the range %s->%s, extending the range",
+                            name, value, rmin, rmax)
+            rng = (min(rmin, value), max(rmax, value))
+        return rng
 
     def _setHorizontalFOV(self, value):
         # The requested value can deviate from the actual value, for instance when requesting above the maximum.
