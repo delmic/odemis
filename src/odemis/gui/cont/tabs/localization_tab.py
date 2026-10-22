@@ -440,12 +440,9 @@ class LocalizationTab(Tab):
             self.main_data.posture_manager.current_posture.unsubscribe(self._on_current_posture)
         else:
             self.main_data.posture_manager.current_posture.subscribe(self._on_current_posture, init=True)
-    # role -> tooltip message
-    DISABLED_TAB_TOOLTIP = {
-        "meteor": "Localization can only be performed in FM mode",
-    }
 
-    def _on_current_posture(self, posture:Posture) -> None:
+    @call_in_wx_main
+    def _on_current_posture(self, posture: Posture) -> None:
         """
         Called when the posture is changed and perform the following actions:
         - enable the tab if posture is fm imaging, slm imaging or fib-view fm, disable otherwise
@@ -456,7 +453,7 @@ class LocalizationTab(Tab):
             self,
             self.main_data.posture_manager,
             self._allowed_targets,
-            tooltip=self.DISABLED_TAB_TOOLTIP.get(self.main_data.role)
+            tooltip="Localization can only be performed in FM mode",
         )
         self._acquisition_controller._update_overview_acquisition_button()
         # Update the current posture read-only indicator if needed
