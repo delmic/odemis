@@ -27,7 +27,6 @@ import logging
 import math
 import os
 import threading
-import time
 from collections import OrderedDict
 from typing import Optional
 
@@ -1481,6 +1480,18 @@ class SparcStreamsController(StreamBarController):
                             cname, default.name)
         return default
 
+    def _get_lens2(self, detector: model.HwComponent) -> Optional[model.Actuator]:
+        """
+        :param detector: the detector which would use the large area mode
+        :return: lens 2 if it can be used for the detector, otherwise None
+        """
+        main_data = self._main_data_model
+        l2 = main_data.lens_switch
+        # Only the "x" axis lens 2 (SPARCv2) is supported, and it must be on the optical path of the detector
+        if l2 and "x" in l2.axes and main_data.opm.affects(l2.name, detector.name):
+            return l2
+        return None
+
     def _find_spectrometer(self, detector):
         """
         Find a spectrometer which wraps the given detector
@@ -1794,12 +1805,16 @@ class SparcStreamsController(StreamBarController):
                 axes["filter"] = ("band", fw)
                 break
 
+        # Large area mode needs lens 2 to affect this spectrometer (otherwise it's on another optical path)
+        l2 = self._get_lens2(detector)
+
         spec_stream = acqstream.SpectrumSettingsStream(
             self.get_unique_stream_name(name),
             detector,
             detector.data,
             main_data.ebeam,
             main_data.light,
+            l2=l2,
             sstage=main_data.scan_stage,
             opm=main_data.opm,
             axis_map=axes,
@@ -1956,11 +1971,14 @@ class SparcStreamsController(StreamBarController):
 
         axes = self._filter_axes(axes)
 
+        l2 = self._get_lens2(main_data.monochromator)
+
         monoch_stream = acqstream.MonochromatorSettingsStream(
             self.get_unique_stream_name("Monochromator"),
             main_data.monochromator,
             main_data.monochromator.data,
             main_data.ebeam,
+            l2=l2,
             sstage=main_data.scan_stage,
             opm=main_data.opm,
             axis_map=axes,
