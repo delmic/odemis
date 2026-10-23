@@ -1,16 +1,12 @@
-Odemis Data Collection Framework — Setup Guide
+Odemis Data Collection Framework
 ===============================================
 
 **Audience:** Software and support engineers setting up data collection on an
 Odemis installation or on a developer workstation.
 
-.. note::
-   All commands are Bash. Enter them line by line unless stated otherwise.
-
 This guide covers:
 
 - Prerequisites
-- Installing the boto3 package
 - Creating and installing the credentials key file
 - Setting up the local queue directory (``dc_queue``)
 - Verifying the configuration file
@@ -24,35 +20,10 @@ Prerequisites
 -------------
 
 - Ubuntu 22.04 LTS or later
-- Odemis installed from the Debian package or a source checkout
 - AWS S3 credentials (``access_key`` + ``secret_key``) for the target bucket
   (typically upload-only IAM keys).
   Obtain these from a Delmic software engineer; they are **not** stored in this
   repository.
-- Write access to ``/usr/share/odemis/`` (for the key file)
-
-
-Installing the boto3 Package
------------------------------
-
-``boto3`` is the AWS SDK for Python used to upload data to S3.
-
-When installed via the Odemis Debian package it is listed as a dependency and
-will be pulled in automatically:
-
-.. code-block:: bash
-
-   sudo apt update
-   sudo apt install python3-boto3
-
-To verify the installation:
-
-.. code-block:: bash
-
-   python3 -c "import boto3; print(boto3.__version__)"
-
-If the command prints a version string (e.g. ``1.28.0``) the package is ready.
-If it raises ``ImportError``, re-run the ``apt install`` command above.
 
 
 Installing the Credentials Key File
@@ -66,13 +37,18 @@ The file must contain exactly the following two keys:
 
    { "access_key": "<AWS_ACCESS_KEY_ID>", "secret_key": "<AWS_SECRET_ACCESS_KEY>" }
 
-Obtain the actual key values from a Delmic software engineer. These keys are
-typically scoped to upload-only access (no read/retrieve), so internal sharing
+Obtain the actual key values from a Delmic software engineer. These keys have
+upload-only access (no read/retrieve), so internal sharing
 over standard channels is lower risk than full-access AWS credentials.
 
-Do **not** commit these keys to git repositories (especially public remotes).
+Although these keys can be seen as public, do **not** commit these keys to git repositories
+(especially public remotes).
 Public repository scrapers continuously harvest AWS key patterns, and committing
 keys can also trigger GitHub secret-scanning/security warnings.
+
+Note that the same key file is used for both production and test-buckets, for data collection.
+For fetching the data back for analysis, a different key file is needed. These keys are per user,
+and should be treated as private.
 
 
 Production Setup
@@ -89,52 +65,18 @@ key pair, then run the following commands line by line:
    EOF
 
 
-Setting up the Local Queue Directory (dc_queue)
+Local Queue Directory (dc_queue)
 -------------------------------------------------
 
-.. note::
-   This section applies to the **test / developer setup** only. Skip it for a
-   production installation.
-
 The framework stages serialised ZIP archives in a local directory before
-uploading them. The default path is:
+uploading them. The path is ``~/.local/share/odemis/dc_queue``.
 
-.. code-block:: text
-
-   ~/.local/share/odemis/dc_queue
-
-This directory is created automatically by the framework at runtime if it does
-not exist, as long as the parent ``~/.local/share/odemis/`` is writable by the
-process.
-
-For a standard Odemis installation ``~/.local/share/odemis/`` is already
-created by the package post-install script. If that is not the case, create it
-manually:
-
-.. code-block:: bash
-
-   sudo mkdir -p ~/.local/share/odemis/dc_queue
-   sudo chown $USER:$USER ~/.local/share/odemis/dc_queue
-   sudo chmod 750 ~/.local/share/odemis/dc_queue
-
-
-Queue Disk Limit
-~~~~~~~~~~~~~~~~
 
 The framework automatically enforces a soft limit of 10 % of the partition's
 total disk space on ``~/.local/share/odemis/dc_queue``. When the limit is
 exceeded, the oldest ZIP files are deleted with a ``WARNING`` log entry.
 
-- **Production:** ``~/.local/share/odemis/`` is normally on the main OS
-  partition. No special configuration is required.
-- **Test / developer workstation:** the queue directory may be redirected to a
-  temporary location by instantiating ``_BackgroundWorker`` with a custom
-  ``queue_dir`` argument (used in unit tests). For manual testing with the real
-  Odemis GUI, the default path is always used.
-
-
-Inspecting Queued Files
-~~~~~~~~~~~~~~~~~~~~~~~
+Inspecting queued files:
 
 .. code-block:: bash
 
@@ -145,34 +87,29 @@ Files follow the naming convention::
    <event_name>-<YYYYMMDDTHHmmss>-<uuid8>.zip
 
 Any file ending in ``.tmp`` is an incomplete write left over from a crash; the
-framework removes such files on startup. You can delete them manually if Odemis
-is not running:
-
-.. code-block:: bash
-
-   rm -f ~/.local/share/odemis/dc_queue/*.tmp
+framework removes such files on startup.
 
 
-Verifying the Configuration File
+Setting the configuration file
 ----------------------------------
 
-The per-user consent state is stored in:
+The per-organisation data sharing acceptance is stored in:
 
 .. code-block:: text
 
-   ~/.config/odemis/datacollector.config
+   ~/.config/odemis/data_sharing.config
 
-This file is created automatically the first time the user interacts with the
-consent dialog from the menu. Its permissions are always set to ``0600``
-(owner read/write only) by the framework.
+This file is created automatically, with ``acquisition_analytics = false``, if
+it doesn't exist when Odemis starts. Afterwards, Odemis never modifies it. It
+is read only once, at start-up, so it must be edited before Odemis is
+started.
 
-A typical file after opt-in looks like:
+A typical file looks like:
 
 .. code-block:: ini
 
    [general]
-   # Data sharing consent (true / false).
-   consent = true
+   acquisition_analytics = true
 
 
 .. _test-bucket-mode:
@@ -219,17 +156,19 @@ The framework logs the following ``INFO`` message when test mode is active::
 Managing Consent
 ----------------
 
-The data collection consent dialog is accessed via the Odemis menu. Users have
-three options:
+The default consent is defined by ``acquisition_analytics`` in the
+configuration file (see above), and is reported by ``get_consent_default()``.
+``get_consent()`` reports the consent currently in use.
 
-- **Opt In:** Enable data collection permanently.
-- **Opt Out:** Disable data collection permanently.
-- **Consent for One Day:** Enable data collection temporarily for one day only.
-  After the specified day, consent automatically expires to disabled.
+In the Odemis GUI (METEOR and MIMAS), the menu *Help > Data sharing* shows the
+current status (Enabled, Disabled, Enabled for the session, or Disabled for the
+session). The entry *Change...* opens a window allowing to either keep the
+default or to override it for the session. The override is only kept in memory
+(``set_temporary_consent()``): it ends when Odemis is closed, and the
+configuration file is never changed.
 
-When temporary consent is active and less than one day remains, the collection
-sampling rate increases to 100% to prioritize data collection. Otherwise, a
-default 10% sampling rate applies.
+The default sampling rate is 10%. When the consent is enabled for the session
+(whereas the default is disabled), the sampling rate increases to 100%.
 
 When consent is active, collected data is staged in the queue directory and
 uploaded to S3 in the background. When consent is disabled, no data is collected
@@ -247,16 +186,6 @@ upload calls are mocked.
    # From the repository root
    env TEST_NOHW=1 python3 src/odemis/util/test/datacollector_test.py
 
-To run a specific test class or method:
-
-.. code-block:: bash
-
-   env TEST_NOHW=1 python3 src/odemis/util/test/datacollector_test.py \
-       DataCollectorTest.test_record_returns_fast
-
-   env TEST_NOHW=1 python3 src/odemis/util/test/datacollector_test.py \
-       TestSerialize.test_metadata_json_envelope_fields
-
 
 Real S3 Integration Tests
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -264,7 +193,6 @@ Real S3 Integration Tests
 The class ``TestRealS3Integration`` uploads to the test bucket and cleans up
 after itself. It requires:
 
-- ``boto3`` installed
 - ``/usr/share/odemis/datacollector.key`` present with test bucket credentials
 - ``TEST_DATACOLLECTION=1`` is **not** needed here — the test class hard-codes
   the test bucket directly
