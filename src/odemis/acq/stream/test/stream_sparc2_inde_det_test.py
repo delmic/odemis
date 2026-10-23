@@ -59,11 +59,11 @@ class SPARC2TestCaseIndependentDetector(BaseSPARCTestCase):
 
         # Changing the RoI + repetition updates (increases) the pixel size, which leads to a smaller
         # resolution of the full FoV (used during live stream)
-        ebics.roi.value = (0.15, 0.6, 0.8, 0.8)
+        ebics.roi.value = (0.45, 0.3, 0.8, 0.8)
         ebics.repetition.value = (15, 26)
 
         # set GUI VAs
-        ebics.emtDwellTime.value = 0.5e-3  # s
+        ebics.emtDwellTime.value = 0.05e-3  # s
 
         # update stream (live)
         ebics.should_update.value = True
