@@ -96,6 +96,34 @@ class TestTUCam(VirtualTestCam, unittest.TestCase):
         self.assertEqual(self.camera.resolution.value, (198, 96))
 
 
+class TestTUCamSelect(unittest.TestCase):
+    """
+    Test selecting the camera by serial number (on the simulator).
+    """
+    def _open(self, device):
+        kwargs = KWARGS_SIM.copy()
+        kwargs["device"] = device
+        return tucsen.TUCam(**kwargs)
+
+    def test_default_first(self):
+        cam = self._open("fake")
+        try:
+            self.assertIn("FAKE123456", cam.hwVersion)
+        finally:
+            cam.terminate()
+
+    def test_select_second(self):
+        cam = self._open("fake:FAKE654321")
+        try:
+            self.assertIn("FAKE654321", cam.hwVersion)
+        finally:
+            cam.terminate()
+
+    def test_unknown_sn(self):
+        with self.assertRaises(model.HwError):
+            self._open("fake:NOTEXIST")
+
+
 class TestTUCamMaxRes(unittest.TestCase):
     """
     Test the max_res argument of TUCam.
