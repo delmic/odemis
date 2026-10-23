@@ -21,7 +21,10 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 import logging
 import math
+import threading
 import unittest
+from concurrent import futures
+from types import SimpleNamespace
 from unittest import mock
 
 import numpy
@@ -492,6 +495,76 @@ class TestCompositeSpotSizeCorrection(unittest.TestCase):
         self.ruler.spot_size_correction.value = 16e-9
         with self.assertRaises(ValueError):
             convert_milling_tasks_to_milling_stages([self.task])
+
+
+class TestMillingAPICompatibility(unittest.TestCase):
+    """Check reference image delivery and stage cleanup without hardware."""
+
+    def setUp(self):
+        beam = SimpleNamespace(beam_current=20e-12, voltage=30e3)
+        self.microscope = SimpleNamespace(
+            system=SimpleNamespace(ion=SimpleNamespace(beam=beam)),
+            get=mock.Mock(return_value=(1e-6, 2e-6)), set=mock.Mock(),
+            stop_milling=mock.Mock(), finish_milling=mock.Mock())
+        self.rect = SimpleNamespace(left=0.25, top=0.25, width=0.5, height=0.5)
+        self.stage = SimpleNamespace(name="Test stage", alignment=SimpleNamespace(rect=self.rect),
+                                     milling=SimpleNamespace(milling_channel="ION"), imaging=SimpleNamespace())
+        self.feature = CryoFeature(name="f1", stage_position={}, fm_focus_position={})
+        self.feature.reference_image = model.DataArray(numpy.arange(48).reshape(6, 8))
+        self.ref_image = SimpleNamespace(data=self.feature.reference_image.copy(),
+                                        metadata=SimpleNamespace(image_settings=SimpleNamespace()))
+        self.manager = fibsemos.FibsemOSMillingTaskManager.__new__(fibsemos.FibsemOSMillingTaskManager)
+        self.manager.microscope = self.microscope
+        self.manager._lock = threading.Lock()
+        self.manager._active = True
+        self.manager._cancel_requested = False
+        self.manager._future = futures.Future()
+        self.manager.milling_stages = [self.stage]
+        self.manager.feature = self.feature
+        self.manager.path = "/tmp/milling"
+
+    def _run_strategy(self, microscope: object, stage: object, asynch: bool = False) -> None:
+        """Emulate the strategy signature shared by supported fibsemOS versions.
+
+        :param microscope: Microscope supplied to the strategy.
+        :param stage: Stage holding the prepared reference image.
+        :param asynch: Whether the strategy should return before milling completes.
+        """
+        self.assertIs(stage.reference_image, self.ref_image)
+        self.assertFalse(asynch)
+
+    def _run_with_api(self, error: Exception = None) -> None:
+        """Run the manager with an external strategy and converter.
+
+        :param error: Optional error raised by the milling strategy.
+        """
+        strategy = mock.create_autospec(self._run_strategy, side_effect=error or self._run_strategy)
+        self.stage.strategy = SimpleNamespace(run=strategy)
+        with mock.patch.object(fibsemos, "from_odemis_image", return_value=self.ref_image, create=True):
+            self.manager._run()
+
+    def test_strategy_receives_cropped_reference(self):
+        self._run_with_api()
+        numpy.testing.assert_array_equal(self.stage.reference_image.data, self.feature.reference_image[1:4, 2:6])
+        self.assertEqual(self.stage.imaging.path, "/tmp/milling")
+        self.microscope.finish_milling.assert_called_once_with(imaging_current=20e-12, imaging_voltage=30e3)
+        self.microscope.set.assert_called_once_with("shift", value=(1e-6, 2e-6), beam_type="ION")
+        self.assertFalse(self.manager._active)
+
+    def test_cleanup_failure_preserves_milling_error(self):
+        self.microscope.finish_milling.side_effect = RuntimeError("Cleanup failed")
+        with self.assertRaisesRegex(TypeError, "Milling failed"):
+            self._run_with_api(TypeError("Milling failed"))
+        self.microscope.stop_milling.assert_called_once_with()
+        self.microscope.set.assert_called_once_with("shift", value=(1e-6, 2e-6), beam_type="ION")
+        self.assertFalse(self.manager._active)
+
+    def test_cleanup_failure_is_reported(self):
+        self.microscope.finish_milling.side_effect = RuntimeError("Cleanup failed")
+        with self.assertRaisesRegex(RuntimeError, "Cleanup failed"):
+            self._run_with_api()
+        self.microscope.set.assert_called_once_with("shift", value=(1e-6, 2e-6), beam_type="ION")
+        self.assertFalse(self.manager._active)
 
 
 class TestResolveFeatureReferenceImage(unittest.TestCase):
