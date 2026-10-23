@@ -161,6 +161,11 @@ class FibsemTab(Tab):
         fib_stream_cont = self._streambar_controller.addStream(self.fib_stream, add_to_view=True)
         fib_stream_cont.stream_panel.show_remove_btn(False)
 
+        # The streams were just inserted in front of tab_data_model.streams in the order
+        # they were added (ie, FIB ends up first), regardless of which viewport is
+        # focused. Re-sync the "current" stream with the already focused viewport.
+        self._update_current_stream(self.tab_data_model.focussedView.value)
+
         self._feature_panel_controller = CryoFeatureController(tab_data, panel, self,
                                                                mode=guimod.AcquiMode.FIBSEM)
 
@@ -218,6 +223,7 @@ class FibsemTab(Tab):
 
         self.tab_data_model.is_sem_active_view = view == self.panel.vp_secom_tl.view
         self.tab_data_model.is_fib_active_view = view == self.panel.vp_secom_tr.view
+        self._update_current_stream(view)
         if hasattr(self, "_acquisition_controller"):
             txt = "ACQUIRE"
             if self.tab_data_model.is_sem_active_view:
@@ -231,6 +237,26 @@ class FibsemTab(Tab):
         self.panel.fp_acquisitions.Show(live)
         self.panel.fp_automation.Show(not live and LICENCE_MILLING_ENABLED)
         self.panel.fp_acquired.Show(not live)
+
+    def _update_current_stream(self, view) -> None:
+        """
+        Update the current live stream based on the focused view and update
+        the ordering of the streams in the tab data model so that the focussed stream is first.
+        :param view: the current focused view
+        """
+        if not hasattr(self, "sem_stream") or not hasattr(self, "fib_stream"):
+            return
+
+        if view == self.panel.vp_secom_tl.view:
+            stream = self.sem_stream
+        elif view == self.panel.vp_secom_tr.view:
+            stream = self.fib_stream
+        else:
+            return
+
+        streams = self.tab_data_model.streams.value
+        if streams[0] is not stream:
+            self.tab_data_model.streams.value = [stream] + [s for s in streams if s is not stream]
 
     @property
     def settingsbar_controller(self):
