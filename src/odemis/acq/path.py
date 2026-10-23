@@ -26,8 +26,9 @@ import math
 import queue
 import re
 import time
+from concurrent.futures import Future
 from concurrent.futures.thread import ThreadPoolExecutor
-from typing import Dict, Tuple
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 
 from odemis import model, util
 from odemis.acq import move, stream
@@ -374,11 +375,19 @@ class OneTaskExecutor(ThreadPoolExecutor):
     last one is executed.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
+        """Initialize the executor with a single worker."""
         super(OneTaskExecutor, self).__init__(max_workers=1)
 
     # Override ThreadPoolExecutor.submit()
-    def submit(self, fn, *args, **kwargs):
+    def submit(self, fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Future:
+        """Submit a task, discarding tasks that have not started yet.
+
+        :param fn: Function to execute.
+        :param args: Positional arguments for the function.
+        :param kwargs: Keyword arguments for the function.
+        :returns: A future representing the submitted task.
+        """
         # Cancels all the previous tasks which didn't start yet
         # Note: in practice, there should be only one task at most queued.
         while True:
@@ -393,10 +402,12 @@ class OneTaskExecutor(ThreadPoolExecutor):
 
 
 # TODO: Could be moved to util
-def affectsGraph(microscope):
+def affectsGraph(microscope: model.Microscope) -> Dict[str, Set[str]]:
     """
     Creates a graph based on the affects lists of the microscope components.
-    returns (dict str->(set of str))
+
+    :param microscope: Microscope whose component relationships form the graph.
+    :returns: A mapping from component names to the names of affected components.
     """
     graph = {}
     for comp in model.getComponents():
@@ -410,16 +421,19 @@ class OpticalPathManager:
     the optical path of a SPARC system to the right position/configuration with
     respect to the mode given.
     """
-    def __init__(self, microscope):
+    def __init__(self, microscope: model.Microscope) -> None:
         """
-        microscope (Microscope): the whole microscope component, thus it can
-            handle all the components needed
+        Manage the optical paths and components of a microscope.
+
+        :param microscope: Microscope component that provides access to the
+            components needed for path management.
         """
         self.microscope = microscope
         self._graph = affectsGraph(self.microscope)
         self._chamber_view_own_focus = False
 
         # Use subset for modes guessed
+        self._modes: Dict[str, Tuple[str, Any]]
         if microscope.role == "sparc2":
             self._modes = copy.deepcopy(SPARC2_MODES)
         elif microscope.role in ("sparc-simplex", "sparc"):
@@ -443,8 +457,8 @@ class OpticalPathManager:
                 self._actuators.append(comp)
 
         # last known axes position (before going to an alignment mode)
-        self._stored = {}  # (str, str) -> pos: (comp role, axis name) -> position
-        self._last_mode = None  # previous mode that was set
+        self._stored: Dict[Tuple[str, str], Any] = {}  # {(component role, axis name): position}
+        self._last_mode: Optional[str] = None  # previous mode that was set
 
         # Removes modes which are not supported by the current microscope
         for m, (det, conf) in list(self._modes.items()):
@@ -497,7 +511,8 @@ class OpticalPathManager:
         # will take care of executing setPath asynchronously
         self._executor = OneTaskExecutor()
 
-    def __del__(self):
+    def __del__(self) -> None:
+        """Shut down the executor and restore the focus when needed."""
         logging.debug("Ending path manager")
 
         # Restore the spectrometer focus, so that on next start, this value will
@@ -517,13 +532,15 @@ class OpticalPathManager:
         except AttributeError:
             pass  # Not created
 
-    def _getComponent(self, role):
+    def _getComponent(self, role: str) -> model.Component:
         """
-        same as model.getComponent, but optimised by caching the result.
-        Uses regex to match the name to a list of cached components
+        Return a cached component whose role matches the requested expression.
+        Same as model.getComponent, but optimised by caching the result.
 
-        return Component
-        raise LookupError: if matching component not found
+
+        :param role: Role or regular expression matching a component role.
+        :returns: The matching component.
+        :raises LookupError: If no matching component is found.
         """
         # if we have not returned raise an exception
         for comp in self._cached_components:
@@ -532,11 +549,12 @@ class OpticalPathManager:
         # if not found...
         raise LookupError("No component with the role %s" % (role,))
 
-    def setAcqQuality(self, quality):
+    def setAcqQuality(self, quality: int) -> None:
         """
         Update the acquisition quality expected. Depending on the quality,
         some hardware settings will be adjusted.
-        quality (ACQ_QUALITY): the acquisition quality
+
+        :param quality: Acquisition quality to use, one of ACQ_QUALITY_FAST or ACQ_QUALITY_BEST.
         """
         assert quality in (ACQ_QUALITY_FAST, ACQ_QUALITY_BEST)
 
@@ -556,30 +574,41 @@ class OpticalPathManager:
 
             # Don't turn off the fan if BEST: first wait for setPath()
 
-    def setPath(self, mode, detector=None):
+    def setPath(self, mode: Union[stream.Stream, str],
+                detector: Optional[model.Component] = None) -> Future:
         """
         Given a particular mode it sets all the necessary components of the
         optical path (found through the microscope component) to the
         corresponding positions.
-        path (stream.Stream or str): The stream or the optical path mode
-        detector (Component or None): The detector which will be targeted on this
-          path. This can only be set if the path is a str (optical mode). That
+
+        :param mode: Either a stream, whose optical path mode is
+          inferred from its detector, or a mode name selecting a predefined
+          optical path. Mode names depend on the microscope and are specified in
+          the constants at the top of this file *_MODES.
+          Modes requiring a detector that is not present on the microscope are
+          unavailable. An unrecognized stream does not cause an optical-path
+          change.
+        :param detector: The detector which will be targeted on this
+          path. This can only be set if mode is a str (optical mode). That
           is useful in case the mode can be used with multiple detectors (eg,
-          fiber-align on a SPARC with multiple spectrometers). When path is a
+          fiber-align on a SPARC with multiple spectrometers). When mode is a
           Stream, the Stream.detector is always used.
-        return (Future): a Future allowing to follow the status of the path
+        :returns: A Future allowing to follow the status of the path
           update.
-        raises (via the future):
-            ValueError if the given mode does not exist
-            IOError if a detector is missing
+        :raises ValueError: Via the returned future, if the given mode does not
+            exist or a detector is specified with a stream.
+        :raises IOError: Via the returned future, if a detector is missing.
         """
         f = self._executor.submit(self._doSetPath, mode, detector)
 
         return f
 
-    def _doSetPath(self, path, detector):
+    def _doSetPath(self, path: Union[stream.Stream, str], detector: Optional[model.Component]) -> None:
         """
-        Actual implementation of setPath()
+        Apply the requested optical path.
+
+        :param path: Stream or mode name whose path should be applied.
+        :param detector: Detector targeted by the path, if provided.
         """
         if isinstance(path, stream.Stream):
             if detector is not None:
@@ -827,13 +856,14 @@ class OpticalPathManager:
                 except IOError as e:
                     logging.warning("Actuator move failed giving the error %s", e)
 
-    def selectorsToPath(self, target):
+    def selectorsToPath(self, target: str) -> List[Tuple[Future, model.Actuator, Dict[str, Any]]]:
         """
         Sets the selectors so the optical path leads to the target component
         (usually a detector).
-        target (str): component name
-        return (list of tuple (futures, Component, dict)): for each move: the
-          future, the component, and the new position requested
+
+        :param target: Name of the target component.
+        :returns: A list of moves, each containing its future, component, and
+            requested position.
         """
         fmoves = []
         for comp in self._actuators:
@@ -865,12 +895,14 @@ class OpticalPathManager:
 
         return fmoves
 
-    def _compute_role_to_mode(self, modes: Dict[str, Tuple]) -> Tuple[Tuple[str, str]]:
+    def _compute_role_to_mode(
+            self, modes: Dict[str, Tuple[Any, ...]]) -> Tuple[Tuple[str, str], ...]:
         """
-        Based on the information from a set of modes, computes the role (regex) -> mode name,
-        As needed by .guessMode()
+        Compute role-expression and mode-name pairs from a set of modes.
 
-        returns: a series of roles (regex)/mode name
+        :param modes: Mapping of mode names to their detector role and
+            configuration.
+        :returns: Role-expression and mode-name pairs used by guessMode.
         """
         role_2_mode = []
         for mode_name, (role, _) in modes.items():
@@ -881,15 +913,15 @@ class OpticalPathManager:
 
         return tuple(role_2_mode)
 
-    def guessMode(self, guess_stream):
+    def guessMode(self, guess_stream: stream.Stream) -> str:
         """
         Given a stream and by checking its components (e.g. role of detector)
         guesses and returns the corresponding optical path mode.
-        guess_stream (object): The given optical stream
-        returns (str): Mode estimated
-        raises:
-                LookupError if no mode can be inferred for the given stream
-                IOError if given object is not a stream
+
+        :param guess_stream: Optical stream whose mode should be inferred.
+        :returns: Estimated optical path mode.
+        :raises LookupError: If no mode can be inferred for the stream.
+        :raises IOError: If the given object is not a stream.
         """
         if not isinstance(guess_stream, stream.Stream):
             raise IOError("Given object is not a stream")
@@ -915,14 +947,14 @@ class OpticalPathManager:
         # In case no mode was found yet
         raise LookupError("No mode can be inferred for the given stream")
 
-    def getStreamDetector(self, path_stream):
+    def getStreamDetector(self, path_stream: stream.Stream) -> Any:
         """
         Given a stream find the optical detector.
-        path_stream (Stream): The given stream
-        returns (HwComponent): detector
-        raises:
-                ValueError if given object is not a stream
-                LookupError: if stream has no detector
+
+        :param path_stream: Stream whose optical detector should be found.
+        :returns: Optical detector used by the stream.
+        :raises ValueError: If the given object is not a stream.
+        :raises LookupError: If the stream has no detector.
         """
         if not isinstance(path_stream, stream.Stream):
             raise ValueError("Given object is not a stream")
@@ -955,9 +987,13 @@ class OpticalPathManager:
 
         raise LookupError("Failed to find a detector on stream %s" % (path_stream.name.value,))
 
-    def findNonMirror(self, choices):
+    def findNonMirror(self, choices: Dict[Any, Any]) -> Any:
         """
-        Given a dict of choices finds the one with value different than "mirror"
+        Find the first choice whose value is not mirror.
+
+        :param choices: Mapping of choice keys to choice values.
+        :returns: Key for the first non-mirror choice.
+        :raises ValueError: If every choice is mirror.
         """
         for key, value in choices.items():
             if value != "mirror":
@@ -965,9 +1001,14 @@ class OpticalPathManager:
         else:
             raise ValueError("Cannot find grating value in given choices")
 
-    def mdToValue(self, comp, md_name):
+    def mdToValue(self, comp: model.Component, md_name: str) -> Any:
         """
-        Just retrieves the "md_name" metadata from component "comp"
+        Retrieve named metadata (md_name) from a component (comp).
+
+        :param comp: Component providing the metadata.
+        :param md_name: Name of the metadata entry to retrieve.
+        :returns: Value of the requested metadata entry.
+        :raises KeyError: If the metadata entry does not exist.
         """
         md = comp.getMetadata()
         try:
@@ -977,10 +1018,13 @@ class OpticalPathManager:
 
     def _in_affected(self, target: str, affected: set[str]) -> bool:
         """
-        Returns True if the component "target" is listed directly or indirectly in the affected set.
-        :param target: name of the component to check
-        :param affected: set of affected component names
-        :return: True if target is affected, False otherwise
+        Check whether a component is affected by any component of a set.
+
+        :param target: Name of the component to check.
+        :param affected: Names of the components which may affect the target.
+        :returns: True if the target is affected, directly or indirectly, by at
+            least one component of the set (including if it is in the set),
+            False otherwise.
         """
         for comp in affected:
             if self.affects(comp, target):
@@ -989,10 +1033,12 @@ class OpticalPathManager:
 
     def affects(self, affecting: str, affected: str) -> bool:
         """
-        Returns True if "affecting" component affects (directly or indirectly) the "affected" component
-        :param affecting: component name
-        :param affected: component name
-        :return: True if affecting affects the affected (including when affecting == affected), False otherwise
+        Check whether a component affects another one, directly or indirectly.
+
+        :param affecting: Name of the component that may have an effect.
+        :param affected: Name of the component that may be affected.
+        :returns: True if the affecting component affects the affected one
+            (including when both are the same component), False otherwise.
         """
         path = self.findPath(affecting, affected)
         if path is None:
@@ -1000,9 +1046,15 @@ class OpticalPathManager:
         else:
             return True
 
-    def findPath(self, node1, node2, path=None):
+    def findPath(self, node1: str, node2: str, path: Optional[List[str]] = None) -> Optional[List[str]]:
         """
-        Find any path between node1 and node2 (may not be shortest)
+        Find any path between two nodes; it may not be the shortest path.
+
+        :param node1: Name of the starting node.
+        :param node2: Name of the destination node.
+        :param path: Nodes already visited during the search.
+        :returns: Nodes in a path from node1 to node2, or None if no path
+            exists.
         """
         if path is None:
             path = []
@@ -1018,10 +1070,12 @@ class OpticalPathManager:
                     return new_path
         return None
 
-    def _setCCDFan(self, enable):
+    def _setCCDFan(self, enable: bool) -> None:
         """
-        Turn on/off the fan of the CCD
-        enable (boolean): True to turn on/restore the fan, and False to turn if off
+        Turn the CCD fan on or off.
+
+        :param enable: True to turn on or restore the fan, False to turn it
+            off.
         """
         if not self._has_fan_speed:
             return
@@ -1071,14 +1125,15 @@ class OpticalPathManager:
                     logging.warning("Failed to change targetTemperature when disabling fan",
                                     exc_info=True)
 
-    def _waitTemperatureReached(self, comp, timeout=None):
+    def _waitTemperatureReached(self, comp: model.Component, timeout: Optional[float] = None) -> None:
         """
         Wait until the current temperature of the component has reached the
-          target temperature (within some margin).
-        comp (Component)
-        timeout (0<float or None): maximum time to wait (in s)
-        raises:
-            TimeoutError: if time-out reached
+        target temperature within some margin.
+
+        :param comp: Component whose temperature should be checked.
+        :param timeout: Maximum time to wait in seconds, or None to wait
+            indefinitely.
+        :raises TimeoutError: If the time limit is reached.
         """
         tstart = time.time()
         while timeout is None or time.time() < tstart + timeout:

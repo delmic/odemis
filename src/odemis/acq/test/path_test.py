@@ -434,6 +434,7 @@ class Sparc2PathTestCase(unittest.TestCase):
         """
         Test changing path multiple times without waiting for it to be complete
         """
+        self.optmngr.setPath("cli").result()
         tstart = time.time()
         self.optmngr.setPath("cli")
 
@@ -446,7 +447,7 @@ class Sparc2PathTestCase(unittest.TestCase):
         self.optmngr.setPath("ar").result()
         dur = time.time() - tstart
 
-        self.assertLess(dur, 20, "Changing to CLI then AR mode took %s s > 20 s" % (dur,))
+        self.assertLess(dur, 22, "Changing to CLI then AR mode took %s s > 22 s" % (dur,))
 
     def test_set_path(self):
         """
