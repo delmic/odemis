@@ -372,6 +372,21 @@ class MillingTaskPanelTestCase(test.GuiTestCase):
                 self.assertEqual(event.GetSkipped(), clicked not in selected)
                 self.assertEqual(self.controller.draw_milling_tasks.call_count, int(clicked in selected))
 
+    def test_ctrl_a_toggles_all_pattern_selections_without_changing_checks(self) -> None:
+        """Select all from a partial selection, then clear it on another Ctrl+A."""
+        task_list = self._create_task_list(("Microexpansion",))
+        checked = task_list.GetCheckedStrings()
+        self.controller._active_spot_size_pattern = self.tasks["Microexpansion"].patterns[0]
+        event = wx.KeyEvent(wx.wxEVT_KEY_DOWN)
+        event.SetKeyCode(ord("A"))
+        event.SetControlDown(True)
+
+        for expected in (list(range(task_list.GetCount())), []):
+            self.controller._on_milling_task_key_down(event)
+            self.assertEqual(list(task_list.GetSelections()), expected)
+            self.assertEqual(task_list.GetCheckedStrings(), checked)
+        self.assertIsNone(self.controller._active_spot_size_pattern)
+
     def test_space_checks_or_unchecks_selected_rows(self) -> None:
         """Toggle all selected rows and synchronize the visible parameter panels."""
         names = ("Microexpansion", "Rough Milling 01")
@@ -472,6 +487,11 @@ class MillingTaskPanelTestCase(test.GuiTestCase):
 
         self.assertIs(feature_overlay.tab_data.main.currentFeature.value, feature)
         event.Skip.assert_not_called()
+
+        navigation_listener = Mock()
+        feature_overlay.tab_data.main.currentFeature.subscribe(navigation_listener)
+        feature_overlay.on_left_down(event)
+        navigation_listener.assert_called_once_with(feature)
 
         feature_overlay._detect_point_inside_feature.return_value = None
         empty_space_event = Mock()
@@ -1441,6 +1461,7 @@ class MillingValidationTestCase(unittest.TestCase):
         self.feature_list.IsChecked.return_value = True
         self.controller._panel = SimpleNamespace(
             workflow_features_chk_list=self.feature_list,
+            workflow_task_chk_list=SimpleNamespace(GetCheckedItems=lambda: (0, 1)),
             txt_automated_milling_status=Mock(),
         )
 
@@ -1519,6 +1540,17 @@ class MillingValidationTestCase(unittest.TestCase):
         self.controller._update_milling_validation_message()
         self.controller._update_mill_btn()
         self._assert_overlap_state(False)
+
+    def test_empty_automated_queue_disables_only_automated_milling(self) -> None:
+        """Clearing the feature queue leaves manual milling available."""
+        self._prepare_overlap_validation({model.MD_POS: (0, 0), model.MD_PIXEL_SIZE: (1e-6, 1e-6)})
+        self.feature.milling_alignment_area.value = (0.05, 0.05, 0.4, 0.45)
+        self.feature_list.IsChecked.return_value = False
+
+        self.controller._update_mill_btn()
+
+        self.controller._panel.btn_run_milling.Enable.assert_called_with(True)
+        self.controller._panel.btn_run_automated_milling.Enable.assert_called_with(False)
 
     def test_touching_alignment_boundary_is_not_overlap(self) -> None:
         """Allow a pattern to touch the area without entering its interior."""
