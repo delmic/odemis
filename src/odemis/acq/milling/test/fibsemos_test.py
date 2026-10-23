@@ -426,6 +426,38 @@ class TestConvertMillingTasksToMillingStages(unittest.TestCase):
 
 
 @unittest.skipUnless(fibsemos.FIBSEMOS_INSTALLED, "fibsemOS is not installed")
+class TestReferenceImagePatternConversion(unittest.TestCase):
+    """Match sent milling rectangles to their displayed sample coordinates."""
+
+    def test_patterns_are_rotated_into_image_axes(self):
+        """Rotate off-center patterns, their orientations, and composite offsets."""
+        rectangle = RectanglePatternParameters(
+            width=10e-6, height=4e-6, depth=1e-6, center=(3e-6, -5e-6), rotation=math.pi / 6)
+        composite = WaffleTrenchPatternParameters(
+            top_width=22e-6, top_height=37e-6, bottom_width=20e-6, bottom_height=17e-6,
+            depth=1e-6, spacing=3e-6, center=(3e-6, -5e-6))
+        cases = (
+            (rectangle, math.pi, [(-3e-6, 5e-6, 7 * math.pi / 6)]),
+            (rectangle, math.pi / 2, [(-5e-6, -3e-6, 2 * math.pi / 3)]),
+            (composite, math.pi / 2, [(15e-6, -3e-6, math.pi / 2),
+                                     (-15e-6, -3e-6, math.pi / 2)]),
+        )
+        milling = MillingSettings(current=60e-12, voltage=30000, field_of_view=150e-6)
+        for pattern, rotation, expected in cases:
+            with self.subTest(pattern=type(pattern).__name__, rotation=rotation):
+                task = MillingTaskSettings(name="Milling", milling=milling, patterns=[pattern])
+
+                stages = convert_milling_tasks_to_milling_stages([task], image_rotation=rotation)
+
+                self.assertEqual(len(stages), 1)
+                shapes = stages[0].define_patterns()
+                self.assertEqual(len(shapes), len(expected))
+                numpy.testing.assert_allclose(
+                    [(shape.centre_x, shape.centre_y, shape.rotation) for shape in shapes],
+                    expected, rtol=0, atol=1e-15)
+
+
+@unittest.skipUnless(fibsemos.FIBSEMOS_INSTALLED, "fibsemOS is not installed")
 class TestCompositeSpotSizeCorrection(unittest.TestCase):
     """Test composite-pattern spot size correction during fibsemOS conversion."""
 
