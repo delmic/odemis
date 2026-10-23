@@ -431,8 +431,9 @@ class AutomatedMillingManager(object):
         self._future.msg = f"{feature.name.value}: Moving to Milling Position"
         self._future.set_progress()
 
-        # milling position
-        stage_position = feature.get_posture_position(Posture.MILLING)
+        stage_position = feature.get_milling_reference_position()
+        if stage_position is None:
+            raise ValueError(f"Feature {feature.name.value} has no reference acquisition position.")
 
         # move to position
         self._future.running_subf = self.stage.moveAbs(stage_position)
