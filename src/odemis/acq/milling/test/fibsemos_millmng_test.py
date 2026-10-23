@@ -2,7 +2,9 @@
 """
 Created on Feb 2025
 
-Copyright © Delmic
+@author: Alexéy Ilyushkin
+
+Copyright © 2025-2026 Alexéy Ilyushkin, Delmic
 
 This file is part of Odemis.
 
@@ -27,6 +29,7 @@ import numpy
 from odemis import model
 from odemis.acq.milling import fibsemos, DEFAULT_MILLING_TASKS_PATH
 from odemis.acq.milling.tasks import load_milling_tasks
+from odemis.acq.milling.system_state import capture_system_state
 from odemis.acq.feature import CryoFeature
 from odemis.acq.move import Posture
 from odemis.util import testing
@@ -65,7 +68,11 @@ class TestFibsemOSMillingManager(unittest.TestCase):
             stage_position={"x": 0.0, "y": 0.0, "z": 0.0, "rx": 0.0, "rz": 0.0},
             fm_focus_position={Posture.FM_IMAGING: {"z": 0.0}},
         )
-        cls.feature.reference_image = model.DataArray(numpy.zeros(shape=(1024, 1536)), metadata={})
+        cls.feature.system_state = capture_system_state()
+        hfw = cls.feature.system_state["ion-beam"]["horizontalFoV"][0]
+        cls.feature.reference_image = model.DataArray(numpy.zeros(shape=(1024, 1536)), metadata={
+            model.MD_PIXEL_SIZE: (hfw / 1536, hfw / 1536), model.MD_DESCRIPTION: "FIB",
+        })
 
     def test_estimate_total_milling_time(self):
         """Test the estimate_total_milling_time function"""

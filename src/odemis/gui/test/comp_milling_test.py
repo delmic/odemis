@@ -26,7 +26,7 @@ from shapely.geometry import Polygon
 import odemis.gui.comp.miccanvas as miccanvas
 import odemis.gui.test as test
 from odemis import model
-from odemis.acq.feature import MIN_MILLING_ALIGNMENT_AREA_PIXELS
+from odemis.acq.feature import CryoFeature, MIN_MILLING_ALIGNMENT_AREA_PIXELS
 from odemis.acq.milling import DEFAULT_MILLING_TASKS_PATH
 from odemis.acq.milling.patterns import RectanglePatternParameters
 from odemis.acq.milling.tasks import load_milling_tasks
@@ -48,6 +48,7 @@ from odemis.gui.comp.overlay.milling import (
 from odemis.gui.comp.overlay.rectangle import MillingRectangleOverlay, RectangleOverlay
 from odemis.gui.comp.text import IntegerTextCtrl, UnitFloatCtrl
 from odemis.gui.cont.milling import (
+    AutomatedMillingController,
     MILLING_THEME_COLORS,
     MOVE_DELTA_X_LONG,
     PATTERN_DRAG_HINT_THRESHOLD,
@@ -1611,6 +1612,24 @@ class MillingValidationTestCase(unittest.TestCase):
             "Acquire a higher-resolution reference image for Feature 1.")
         self.controller._panel.btn_run_milling.Enable.assert_called_with(False)
         self.controller._panel.btn_run_automated_milling.Enable.assert_called_with(False)
+
+    def test_legacy_features_require_new_references_before_automation(self):
+        """Name only checked features and stop before accessing any microscope hardware."""
+        features = [CryoFeature(name, {}, {}) for name in ("Legacy 1", "Unchecked", "Legacy 2", "Recorded")]
+        features[-1].system_state = {"ion-beam": {"probeCurrent": [20e-12, "A"]}}
+        self.controller._tab_data.main.features.value = features
+        self.feature_list.IsChecked.side_effect = lambda index: index != 1
+        automation = AutomatedMillingController.__new__(AutomatedMillingController)
+        automation._tab_data = self.controller._tab_data
+        automation._panel = self.controller._panel
+        with patch("odemis.gui.cont.milling.fibsemos.FIBSEMOS_INSTALLED", True), \
+             patch("odemis.gui.cont.milling.wx.MessageBox") as message:
+            automation._run_automated_milling(None)
+        text = message.call_args.args[0]
+        self.assertIn("Legacy 1, Legacy 2", text)
+        self.assertIn("SAVE POSITION", text)
+        self.assertNotIn("Unchecked", text)
+        self.assertNotIn("Recorded", text)
 
     def test_valid_correction_is_accepted(self) -> None:
         """Accept a correction smaller than every graduation dimension."""
