@@ -29,6 +29,7 @@ from odemis.gui.model import TabName, CHAMBER_VACUUM, CHAMBER_UNKNOWN
 from odemis.gui.model.dye import DyeDatabase
 from odemis.gui.model.main_gui_data import MainGUIData
 from odemis.gui.util import call_in_wx_main
+from odemis.gui.win.data_sharing_dialog import DataSharingDialog
 from odemis.util.datacollector import DataCollector
 from odemis.util import driver
 import os
@@ -141,11 +142,11 @@ class MenuController(object):
             menu_dev = main_frame.menu_item_edit_meteor_calibration.GetMenu()
             menu_dev.Delete(main_frame.menu_item_edit_meteor_calibration)
 
-        # /Help/Share Data with Delmic
+        # /Help/Data sharing
         if main_data.role in ["meteor", "mimas"]:
-            self.consent_item = main_frame.menu_item_data_sharing
-            self.consent_item.Check(self._data_collector.get_consent() is True)
-            main_frame.Bind(wx.EVT_MENU, self._on_toggle_data_sharing, id=self.consent_item.GetId())
+            self._update_data_sharing_status()
+            main_frame.Bind(wx.EVT_MENU, self._on_change_data_sharing,
+                            id=main_frame.menu_item_data_sharing_change.GetId())
         else:
             menu = main_frame.menu_item_data_sharing.GetMenu()
             menu.Remove(main_frame.menu_item_data_sharing)
@@ -178,40 +179,32 @@ class MenuController(object):
             menu.Remove(main_frame.menu_item_show_correlation)
             main_frame.menu_item_show_correlation.Destroy()
 
+    def _get_data_sharing_status(self) -> str:
+        """
+        :returns: the status of the acquisition analytics, as shown in the menu
+        """
+        current = self._data_collector.get_consent()
+        default = self._data_collector.get_consent_default()
+        state = "Enabled" if current else "Disabled"
+        return state if current == default else state + " for the session"
+
+    def _update_data_sharing_status(self) -> None:
+        """Update the label of the data sharing status menu item."""
+        self._main_frame.menu_item_data_sharing_status.SetItemLabel(
+            "Acquisition analytics: " + self._get_data_sharing_status())
+
     @call_in_wx_main
-    def _on_toggle_data_sharing(self, evt):
-        """Show consent dialog when the data-sharing menu item is clicked."""
+    def _on_change_data_sharing(self, evt) -> None:
+        """Show the data sharing dialog when the "Change..." menu item is clicked."""
         try:
-            message = ("Allow Odemis to send selected acquisition data to Delmic, "
-            "including example images and interaction logs (e.g., alignment steps, point-of-interest placements). "
-            "A random sample (eg, 10%) of workflow data may be included. This data is used solely to improve "
-            "Odemis algorithms and user experience. Data is stored securely on EU servers, accessible "
-            "only to designated Delmic analysts, and never shared with third parties.\n\n"
-            "By opting in, you confirm you have the authority to make this decision for your institution"
-            " and that sharing this data is permitted under your institution's data policies.\n\n"
-            "\"Enable for one day\" enables sharing for 24 hours with 100% collection, "
-            "then automatically disables it.")
-
-            dlg = wx.MessageDialog(
-                self._main_frame,
-                message=message,
-                caption="Share data with Delmic",
-                style=wx.YES_NO | wx.CANCEL | wx.ICON_QUESTION
-            )
-            dlg.SetYesNoCancelLabels(yes="Opt in", no="Opt out", cancel="Enable for one day")
-            response = dlg.ShowModal()
+            dlg = DataSharingDialog(self._main_frame, self._data_collector, self._main_data.role)
+            dlg.ShowModal()
             dlg.Destroy()
-
-            if response == wx.ID_YES:
-                self._data_collector.set_consent(True)
-            elif response == wx.ID_NO:
-                self._data_collector.set_consent(False)
-            elif response == wx.ID_CANCEL:
-                self._data_collector.set_temporary_consent(days=1)
-            # Sync the Help menu checkbox to reflect the persisted choice.
-            self.consent_item.Check(self._data_collector.get_consent() is True)
+            # The sampling probability depends on the consent
+            self._main_data.data_collection_probability.value = self._data_collector.probability
+            self._update_data_sharing_status()
         except Exception:
-            logging.exception("Failed to run data-collection consent prompt.")
+            logging.exception("Failed to run the data sharing dialog.")
 
     def _on_update(self, evt):
         import odemis.gui.util.updater as updater
