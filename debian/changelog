@@ -1,3 +1,118 @@
+odemis (3.9.0-1) focal; urgency=medium
+
+  * New version: 3.9
+  * Main new changes and features:
+    - METEOR: Faster opening of projects, by opening streams on-demand
+    - METEOR Advanced: support milling on Tescan
+    - METEOR Advanced: new FIB view FM posture
+    - METEOR Advanced: new Trenching posture on Tescan
+    - METEOR Advanced: milling patterns can be moved horizontally
+    - METEOR Advanced: add trench, ruler, and correlation patterns
+    - METEOR Advanced: 3D correlation "refine Z" option can also optimise in X&Y
+    - METEOR Advanced: improved 3D correlation algorithm output
+    - METEOR Advanced: the saved milling posture is kept relative to the reference FIB image
+    - METEOR Advanced: make drift correction area for milling adjustable
+    - METEOR: introduce "acquisition analysis" data sharing with Delmic (disabled by default)
+    - SPARC: CL acquisition recipes, to import/export the settings of streams from/to file
+    - SPARC: automatic grating centering and improved grating offset calibration
+    - SPARC: support photon-counting acquisition on Hamamatsu streak camera
+    - SPARC: Support for parabolic mirror auto-alignment on newest mirror stages
+    - FASTEM: pause and resume of the overview image acquisition
+    - FASTEM: tiled acquisition retries when the stage fails to move to the next tile
+    - GUI: App icons updated with the new Delmic logo
+  * Depraction note:
+    - Ubuntu 20.04 is deprecated. Next version will not support it.
+  * Other improvements and bug fixes:
+    - METEOR: Deleted streams are not shown again when re-opening a project
+    - METEOR: Better handling of renamed features when re-opening a project
+    - METEOR: Ensure the displayed posture in the legend is always correct
+    - METEOR: Large images are automatically converted to pyramidal format on import for faster display
+    - METEOR: When opening a z-stack, it is now centered on the middle Z
+    - METEOR: raw stage position stored in HDF5 files
+    - METEOR Advanced: 3D correlation window shows each fiducial pair in a different colour
+    - METEOR Advanced: 3D correlation window automatically adjust fiducial numbering when one is deleted
+    - METEOR Advanced: feature doesn't need to be at the center of the reference FIB image
+    - METEOR Advanced: scan rotation of SEM and FIB enforced at startup
+    - METEOR Advanced: support latest fibsemOS v0.5.3
+    - SPARC: monochromator stream supports shorter dwell time with new NI-DAQ boards
+    - SPARC: e-beam current and voltage stored in the metadata
+    - SPARC: streak-cam trigger delay can be selected independently from the time range
+    - SPARC: optical path could be incorrect when actuator only indirectly affected the detector
+    - SPARC: support parabolic mirror stage with more than 2 axes
+    - SPARC: in the alignment tab, Tunnel mode, the mirror can also be adjusted
+    - SPARC: support for "light-protector" filter for laser input
+    - FASTEM: fixed overview acquisition time estimation being off
+    - FASTEM: "Turn off e-beam" button shown in the multibeam tab
+    - driver tescan: don't complain at startup if the FoV or probe current is out of range
+    - driver tmcm: if an axis is out of range, it can be moved back within range
+    - driver tucsen: support for switching between gains
+    - driver tucsen: reduced delay when stopping an acquisition
+    - driver andorshrk: option to run a simulator of the KY328
+    - driver andorcam3: try to reset USB connection at init if camera is unresponsive
+    - driver smaract: support for axis-order dependent referencing
+    - driver smaract: support for turning off the encoder when not moving
+    - driver keysight: rise and fall times for square waves can be adjusted
+    - driver piezomotor: power off axes when terminating
+    - driver pwrmccdaq: option to control binary axes via digital outputs
+    - GUI: faster loading by only loading the tabs necessary for the microscope
+    - GUI: stream subscriptions are cancelled when a stream panel is deleted
+    - CLI: actuator referencing command supports multiple axes
+    - New driver "nenovision" to control a stage via analog voltages
+    - New plugin camera_temperature: to monitor and control the camera cooling
+    - New plugin sparc_fov_mag: to specify the magnification by entering the FoV
+    - SPARC: odemis-park-mirror now ask for confirmation before moving the mirror
+    - SPARC: new script to measure the drift of the parabolic mirror over hours
+    - Plugin tileacq: support 0% overlap
+    - Plugin tileacq: allow choosing the weaving and registrar methods for stitching
+    - Plugin tile_acq: Support Monochromator stream too
+    - Plugin secom_user_sim: also support METEOR, with intensive usage
+    - Bug reported: Ensure the components settings are always all logged
+    - Fix odemis-settings.yaml file sometimes emptied after closing Odemis
+    - Preparation for Ubuntu 26.04, and numpy 2.0 compatibility
+  * Improvements and bug fixes already present in the v3.8 branch:
+    - Add support for crop area on Tucsen cameras (max_res)
+    - Fluorescent stream settings were shown partly under the scroll-bar
+    - SPARC: spectrum viewport didn't resize when the GUI window was made narrower
+    - SPARC: laser interlock trigger could in some rare cases cause a GUI crash
+    - METEOR: Better error message in case a z-stack acquisition failed
+    - SPARC: drift correction failed for CL intensity streams on with new NI-DAQ board
+    - METEOR: importing a SEM tileset acquired with scan rotation showed each tile rotated
+    - GUI: on Ubuntu 24.04, vertical spacing between some settings was too high
+    - Autoscript driver: support for controlling the external scan mode (SPARC)
+    - TMCM driver: support for the TMCM-6214 board
+    - Introduce MODEL_OPTIONS variable to odemis.conf
+    - Update channel selector: also update the microscope manual
+    - Bug reporter: list of components was sometimes incomplete
+    - METEOR Advanced: deleting the latest created fiducial could fail.
+    - METEOR Advanced: Adjusting the FIB/SEM coincidence point using Alt+right
+      click now only moves Z, and not X.
+    - xt_client driver: don't complain the move didn't reach the requested
+      position when the rotation is different by 360°.
+    - Tucsen cameras don't support resolution with an odd number of pixels so
+      automatically adjust to an even number.
+    - Bug reporter: avoid storing twice the same microscope file.
+    - TMCM driver: handle more gracefully rare cases when the device would
+      temporarily not reply (METEOR/SPARC)
+    - METEOR: automatically detect best position to reference the filter wheel
+    - METEOR: on TFSv3 revert default SEM<>FM movement as, on some systems, the
+      safer movement was detected as "unsafe" by the SEM. The safer movement has
+      to be explicitly enabled via the z_low configuration.
+    - METEOR Advanced: allow user to provide default milling tasks
+    - METEOR Advanced: milling pattern adjusted position was lost when switching feature
+    - METEOR Advanced: MicroExpansion task is now listed first, as it's the first one milled
+    - METEOR overlay cryofeature: clarify the current posture in
+      "recalculate position" message box
+    - METEOR: avoid occasional warnings when switching to FM on TFS Hydra
+    - METEOR: "filename" text box can use more space to show the filename
+    - METEOR: On TFSv1 (legacy) configuration the features could be shown at a
+      wrong position
+    - SPARC: don't prevent acquisition when laser interlock for gun exciter is open
+    - SPARC: Alignment tab fails to get enabled when engaging the mirror
+    - FASTEM: in some cases the calibration changes were not stored when closing Odemis
+    - Backend: improve reliability when terminating, to stop faster
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Fri, 30 Oct 2026 10:12:09 +0100
+
 odemis (3.8.0-1) focal; urgency=medium
 
   * New version: 3.8
