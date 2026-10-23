@@ -22,6 +22,7 @@ This file is part of Odemis.
 """
 import logging
 import math
+import random
 import threading
 from abc import ABCMeta, abstractmethod
 from collections.abc import Mapping
@@ -50,6 +51,7 @@ from odemis.gui.model import (
     TabName,
 )
 from odemis.model import FloatContinuous, StringVA, hasVA
+from odemis.util.datacollector import get_data_collector
 from odemis.gui.layout import theme
 
 # The circumference of a CircleScintillator is divided into 72 arcs.
@@ -270,8 +272,10 @@ class MainGUIData(object):
         # Indicates whether the microscope is milling
         self.is_milling = model.BooleanVA(False)
 
-        # Controls if the acquired features should be collected by the DataCollector
-        self.collect_features = False
+        # Probability (0->1) that the acquired data is collected by the DataCollector.
+        # Updated by the GUI whenever the data sharing settings are changed.
+        self.data_collection_probability = model.FloatContinuous(
+            get_data_collector().probability, (0.0, 1.0))
 
         # The microscope object will be probed for common detectors, actuators, emitters etc.
         if microscope:
@@ -540,6 +544,11 @@ class CryoMainGUIData(MainGUIData):
     def __init__(self, microscope):
         super().__init__(microscope)
 
+        # Whether the features created from now on should be collected by the DataCollector.
+        # It's randomly picked based on data_collection_probability.
+        self.collect_features = False
+        self.data_collection_probability.subscribe(self._on_data_collection_probability, init=True)
+
         # Controls the stage movement based on the imaging mode
         self.posture_manager = MicroscopePostureManager(microscope)
         if hasattr(self.posture_manager, "sample_stage"):
@@ -577,6 +586,24 @@ class CryoMainGUIData(MainGUIData):
         self.sample_radius = self.SAMPLE_RADIUS_TEM_GRID
         # Bounding-box of the "useful area" relative to the center of a grid
         self.sample_rel_bbox = self.SAMPLE_USABLE_BBOX_TEM_GRID
+
+
+    def _on_data_collection_probability(self, probability: float) -> None:
+        """
+        Called when data_collection_probability changes.
+        :param probability: the new probability to collect the data.
+        """
+        self.reroll_collect_features()
+
+    def reroll_collect_features(self) -> None:
+        """
+        Randomly decide whether the features created from now on should be collected
+        by the DataCollector, based on data_collection_probability.
+        Already existing features are not affected.
+        """
+        probability = self.data_collection_probability.value
+        self.collect_features = (random.random() < probability)
+        logging.debug("collect_features=%s (probability = %g)", self.collect_features, probability)
 
 
 class ScintillatorShape(metaclass=ABCMeta):

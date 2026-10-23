@@ -32,8 +32,8 @@ import time
 import unittest
 import uuid
 import zipfile
-from datetime import date, datetime, timedelta
 from pathlib import Path
+from typing import Optional
 from unittest.mock import patch
 
 import numpy
@@ -53,168 +53,128 @@ from odemis.util.datacollector import (
 )
 
 
+def _make_config(tmp_dir: Path, enabled: Optional[bool] = None, content: Optional[str] = None) -> DataCollectorConfig:
+    """
+    Return a DataCollectorConfig using a file in tmp_dir.
+    :param tmp_dir: Directory containing the config file.
+    :param enabled: If not None, the config file is first created with this acquisition_analytics value.
+    :param content: If not None, the config file is first created with this raw content.
+    """
+    cfg = DataCollectorConfig.__new__(DataCollectorConfig)
+    cfg.file_path = Path(tmp_dir) / DataCollectorConfig.file_name
+    if enabled is not None:
+        content = f"[general]\nacquisition_analytics = {'true' if enabled else 'false'}\n"
+    if content is not None:
+        cfg.file_path.write_text(content, encoding="utf-8")
+    cfg._cp = configparser.ConfigParser(interpolation=None)
+    cfg._read()
+    return cfg
+
+
 class TestDataCollectorConfig(unittest.TestCase):
-    """Tests for DataCollectorConfig read/write behaviour."""
+    """Tests for DataCollectorConfig reading behaviour."""
 
     def setUp(self) -> None:
-        self._tmp_conf_dir = tempfile.mkdtemp(prefix="dc_conf_")
+        self._tmp_conf_dir = Path(tempfile.mkdtemp(prefix="dc_conf_"))
 
     def tearDown(self) -> None:
-        shutil.rmtree(self._tmp_conf_dir, ignore_errors=True)
+        shutil.rmtree(str(self._tmp_conf_dir), ignore_errors=True)
 
-    def _make_config(self) -> DataCollectorConfig:
-        """Return a DataCollectorConfig pointed at the temp directory."""
-        cfg = DataCollectorConfig.__new__(DataCollectorConfig)
-        cfg.file_path = Path(self._tmp_conf_dir) / "datacollector.config"
-        import threading
-        cfg._cp = configparser.ConfigParser(interpolation=None)
-        cfg._lock = threading.Lock()
-        cfg._read()
-        return cfg
-
-    def test_consent_round_trip(self) -> None:
-        """Setting consent to True/False persists to disk and re-reads correctly."""
-        cfg = self._make_config()
-        cfg.consent = True
-        cfg2 = self._make_config()
-        self.assertTrue(cfg2.consent)
-        cfg.consent = False
-        cfg3 = self._make_config()
-        self.assertFalse(cfg3.consent)
-
-    def test_clear_consent_round_trip(self) -> None:
-        """Cleared consent writes a file that reloads as None (not a ValueError)."""
-        cfg = self._make_config()
-        cfg.consent = True
-        cfg.clear_consent()
-        cfg2 = self._make_config()
-        self.assertIsNone(cfg2.consent)
-
-    def test_legacy_consent_none_string_reads_as_none(self) -> None:
-        """A config with 'consent = none' (legacy format) must read as None."""
-        cfg = self._make_config()
-        cfg.file_path.parent.mkdir(parents=True, exist_ok=True)
-        cfg.file_path.write_text("[general]\nconsent = none\n", encoding="utf-8")
-        cfg._cp.read(str(cfg.file_path))
-        self.assertIsNone(cfg.consent)
-
-    def test_config_file_permissions(self) -> None:
-        """Config file should be written with mode 0o600 (security requirement)."""
-        cfg = self._make_config()
-        cfg.consent = True
+    def test_missing_file_is_created_disabled(self) -> None:
+        """A missing config file is created, with acquisition_analytics = false."""
+        cfg = _make_config(self._tmp_conf_dir)
+        self.assertTrue(cfg.file_path.exists())
+        self.assertFalse(cfg.acquisition_analytics)
+        self.assertFalse(_make_config(self._tmp_conf_dir).acquisition_analytics)
         mode = stat.S_IMODE(os.stat(str(cfg.file_path)).st_mode)
         self.assertEqual(mode, 0o600)
 
-    def test_set_consent_with_expiry_stores_fields(self) -> None:
-        """set_consent_with_expiry should enable consent and set consent_date."""
-        cfg = self._make_config()
-        expiry = date.today() + timedelta(days=1)
-        cfg.set_consent_with_expiry(expiry)
+    def test_read_value_and_file_untouched(self) -> None:
+        """The value is read from the file, and the file is never modified."""
+        cfg = _make_config(self._tmp_conf_dir, enabled=True)
+        content = cfg.file_path.read_text(encoding="utf-8")
+        self.assertTrue(cfg.acquisition_analytics)
+        self.assertEqual(cfg.file_path.read_text(encoding="utf-8"), content)
 
-        self.assertTrue(cfg.consent)
-        stored_date = cfg.consent_date
-        self.assertIsNotNone(stored_date)
-        self.assertEqual(stored_date, expiry)
+    def test_malformed_file_is_disabled(self) -> None:
+        """A malformed value or file is read as False."""
+        cfg = _make_config(self._tmp_conf_dir, content="[general]\nacquisition_analytics = maybe\n")
+        self.assertFalse(cfg.acquisition_analytics)
+        cfg = _make_config(self._tmp_conf_dir, content="not an ini file\n")
+        self.assertFalse(cfg.acquisition_analytics)
 
 
 class TestTemporaryConsentAndProbability(unittest.TestCase):
-    """Tests for set_temporary_consent and record() expiry/probability logic."""
+    """Tests for get_consent, set_temporary_consent and the probability logic."""
 
     def setUp(self) -> None:
         self._tmp_dir = Path(tempfile.mkdtemp(prefix="dc_tmp_consent_"))
         self._queue_dir = self._tmp_dir / "queue"
         self._queue_dir.mkdir(parents=True, exist_ok=True)
 
-        cfg = DataCollectorConfig.__new__(DataCollectorConfig)
-        cfg.file_path = self._tmp_dir / "datacollector.config"
-        import threading
-        cfg._cp = configparser.ConfigParser(interpolation=None)
-        cfg._lock = threading.Lock()
-        cfg._read()
-        self._cfg = cfg
-
-        self._dc = DataCollector.__new__(DataCollector)
-        self._dc._config = cfg
-        self._dc._worker = _BackgroundWorker(cfg, queue_dir=self._queue_dir)
-        self._dc._init_ok = True
-        import threading as _threading
-        self._dc._init_lock = _threading.Lock()
-
     def tearDown(self) -> None:
         shutil.rmtree(str(self._tmp_dir), ignore_errors=True)
 
-    def test_probability_zero_without_consent(self) -> None:
-        """Probability must be zero when consent is undecided or declined."""
-        self._dc._refresh_probability()
-        self.assertEqual(self._dc.probability, 0.0)
+    def _make_dc(self, enabled: bool) -> DataCollector:
+        """Return a DataCollector whose config file has the given acquisition_analytics value."""
+        cfg = _make_config(self._tmp_dir, enabled=enabled)
+        dc = DataCollector()
+        dc._config = cfg
+        dc._worker = _BackgroundWorker(cfg, queue_dir=self._queue_dir)
+        dc._init_ok = True
+        dc._refresh_probability()
+        return dc
 
-        self._cfg.consent = False
-        self._dc._refresh_probability()
-        self.assertEqual(self._dc.probability, 0.0)
+    def test_default_disabled(self) -> None:
+        """With the file disabled, no consent and no collection."""
+        dc = self._make_dc(False)
+        self.assertFalse(dc.get_consent())
+        self.assertFalse(dc.get_consent_default())
+        self.assertEqual(dc.probability, 0.0)
 
-    def test_set_temporary_consent_enables_consent_with_expiry(self) -> None:
-        """set_temporary_consent(1) should set consent=True and consent_date to next local day."""
-        expected_day = datetime.now().astimezone().date() + timedelta(days=1)
-        self._dc.set_temporary_consent(days=1)
+    def test_default_enabled(self) -> None:
+        """With the file enabled, consent with the default probability."""
+        dc = self._make_dc(True)
+        self.assertTrue(dc.get_consent())
+        self.assertTrue(dc.get_consent_default())
+        self.assertEqual(dc.probability, _DEFAULT_COLLECTION_PROBABILITY)
 
-        self.assertTrue(self._cfg.consent)
-        stored = self._cfg.consent_date
-        self.assertIsNotNone(stored)
-        # Midnight roll-over during the call is possible; allow +1 day tolerance.
-        self.assertIn(stored, {expected_day, expected_day + timedelta(days=1)})
-
-    def test_set_temporary_consent_1day_uses_full_probability(self) -> None:
-        """record() should enqueue all events when consent_date is ~1 day away."""
-        self._dc.set_temporary_consent(days=1)
-
-        enqueue_calls = []
-        self._dc._worker.enqueue = lambda item: enqueue_calls.append(item)
-
-        trials = 20
-        for i in range(trials):
-            self._dc.record("full_event", "1.0", {"i": i})
-
-        self.assertEqual(len(enqueue_calls), trials,
-                         "All events should be enqueued when consent expires within 1 day")
-
-    def test_set_temporary_consent_multiday_sets_default_probability(self) -> None:
-        """Multiday temporary consent should keep default probability and allow enqueueing."""
-        future = date.today() + timedelta(days=30)
-        self._cfg.set_consent_with_expiry(future)
-        self._dc._refresh_probability()
-        self.assertEqual(self._dc.probability, _DEFAULT_COLLECTION_PROBABILITY)
+    def test_temporary_enable(self) -> None:
+        """Enabling for the session gives 100% probability, without touching the file."""
+        dc = self._make_dc(False)
+        content = dc._config.file_path.read_text(encoding="utf-8")
+        dc.set_temporary_consent(True)
+        self.assertTrue(dc.get_consent())
+        self.assertFalse(dc.get_consent_default())
+        self.assertEqual(dc.probability, 1.0)
+        self.assertEqual(dc._config.file_path.read_text(encoding="utf-8"), content)
 
         enqueue_calls = []
-        self._dc._worker.enqueue = lambda item: enqueue_calls.append(item)
+        dc._worker.enqueue = lambda item: enqueue_calls.append(item)
+        for i in range(20):
+            dc.record("full_event", "1.0", {"i": i})
+        self.assertEqual(len(enqueue_calls), 20)
 
-        trials = 20
-        for i in range(trials):
-            self._dc.record("sampled_event", "1.0", {"i": i})
-
-        self.assertEqual(len(enqueue_calls), trials)
-
-    def test_record_auto_expires_consent_and_skips(self) -> None:
-        """record() should set consent=False and skip when consent_date has passed."""
-        expired = datetime.now().astimezone().date() - timedelta(days=1)
-        self._cfg.set_consent_with_expiry(expired)
-
-        enqueue_calls = []
-        self._dc._worker.enqueue = lambda item: enqueue_calls.append(item)
-
-        self._dc.record("expired_event", "1.0", {"x": 1})
-
-        self.assertFalse(self._cfg.consent)
-        self.assertEqual(len(enqueue_calls), 0, "record() should not enqueue after expiry")
-
-    def test_record_no_consent_is_noop(self) -> None:
-        """record() should be a no-op when consent is False."""
-        self._cfg.consent = False
+    def test_temporary_disable(self) -> None:
+        """Disabling for the session stops the collection, but keeps the default."""
+        dc = self._make_dc(True)
+        dc.set_temporary_consent(False)
+        self.assertFalse(dc.get_consent())
+        self.assertTrue(dc.get_consent_default())
+        self.assertEqual(dc.probability, 0.0)
 
         enqueue_calls = []
-        self._dc._worker.enqueue = lambda item: enqueue_calls.append(item)
-
-        self._dc.record("no_consent_event", "1.0", {"x": 1})
+        dc._worker.enqueue = lambda item: enqueue_calls.append(item)
+        dc.record("no_consent_event", "1.0", {"x": 1})
         self.assertEqual(len(enqueue_calls), 0)
+
+    def test_temporary_same_as_default(self) -> None:
+        """Selecting the default value removes the override, so the probability is not raised."""
+        dc = self._make_dc(True)
+        dc.set_temporary_consent(False)
+        dc.set_temporary_consent(True)
+        self.assertTrue(dc.get_consent())
+        self.assertEqual(dc.probability, _DEFAULT_COLLECTION_PROBABILITY)
 
 
 class TestSerialize(unittest.TestCase):
@@ -385,13 +345,7 @@ class TestUploadAndRetry(unittest.TestCase):
         self._queue_dir = self._tmp_dir / "queue"
         self._queue_dir.mkdir(parents=True, exist_ok=True)
 
-        cfg = DataCollectorConfig.__new__(DataCollectorConfig)
-        cfg.file_path = self._tmp_dir / "datacollector.config"
-        import threading
-        cfg._cp = configparser.ConfigParser(interpolation=None)
-        cfg._lock = threading.Lock()
-        cfg._read()
-        cfg.consent = True
+        cfg = _make_config(self._tmp_dir, enabled=True)
         self._cfg = cfg
         self._worker = _BackgroundWorker(cfg, queue_dir=self._queue_dir)
 
@@ -559,13 +513,7 @@ class TestRealS3Integration(unittest.TestCase):
         os.utime(str(old_zip), (now - 60, now - 60))
         os.utime(str(new_zip), (now - 30, now - 30))
 
-        cfg = DataCollectorConfig.__new__(DataCollectorConfig)
-        cfg.file_path = self._tmp_dir / "datacollector.config"
-        import threading
-        cfg._cp = configparser.ConfigParser(interpolation=None)
-        cfg._lock = threading.Lock()
-        cfg._read()
-        cfg.consent = True
+        cfg = _make_config(self._tmp_dir, enabled=True)
         worker = _BackgroundWorker(cfg, queue_dir=self._queue_dir)
 
         uploaded_keys: list[str] = []
@@ -604,16 +552,7 @@ class DataCollectorTest(unittest.TestCase):
         self._queue_dir = self._tmp_dir / "queue"
         self._queue_dir.mkdir(parents=True, exist_ok=True)
 
-        cfg = DataCollectorConfig.__new__(DataCollectorConfig)
-        cfg.file_path = self._tmp_dir / "datacollector.config"
-        import threading
-        cfg._cp = configparser.ConfigParser(interpolation=None)
-        cfg._lock = threading.Lock()
-        cfg._read()
-        cfg.consent = True
-        # Use 100% collection probability so queue-delegation tests are deterministic.
-        expiry = date.today() + timedelta(days=1)
-        cfg.set_consent_with_expiry(expiry)
+        cfg = _make_config(self._tmp_dir, enabled=True)
         self._cfg = cfg
 
         worker = _BackgroundWorker(cfg, queue_dir=self._queue_dir)
@@ -654,19 +593,11 @@ class DataCollectorTest(unittest.TestCase):
 
     def test_noop_when_consent_false(self) -> None:
         """record() does not enqueue work when consent is False."""
-        self._cfg.consent = False
+        self._collector.set_temporary_consent(False)
         q = self._collector._worker._queue
         size_before = q.qsize()
         self._collector.record("no_consent_test", "1.0", {"x": 1})
         self.assertEqual(q.qsize(), size_before, "No item should be enqueued when consent is False")
-
-    def test_noop_when_consent_none(self) -> None:
-        """record() does not enqueue work when consent has not been set."""
-        self._cfg._cp.remove_option("general", "consent")
-        q = self._collector._worker._queue
-        size_before = q.qsize()
-        self._collector.record("no_consent_none_test", "1.0", {"x": 1})
-        self.assertEqual(q.qsize(), size_before, "No item should be enqueued when consent is None")
 
     def test_no_exception_on_bad_payload_value(self) -> None:
         """record() must not raise for unserializable payload values."""
@@ -716,7 +647,7 @@ class DataCollectorTest(unittest.TestCase):
 
     def test_validation_raises_even_when_consent_false(self) -> None:
         """Input validation fires before the consent gate."""
-        self._cfg.consent = False
+        self._collector.set_temporary_consent(False)
         with self.assertRaises(ValueError):
             self._collector.record("", "1.0", {})
 

@@ -29,7 +29,6 @@ import logging
 import math
 import os.path
 from concurrent.futures import CancelledError
-import random
 
 import wx
 
@@ -58,7 +57,6 @@ from odemis.gui.util.wx_adapter import fix_static_text_clipping
 from odemis.gui.win.acquisition import LoadProjectFileDialog, ShowChamberFileDialog
 from odemis.model import InstantaneousFuture
 from odemis.util import almost_equal
-from odemis.util.datacollector import get_data_collector
 from odemis.util.dataio import data_to_static_streams, open_acquisition
 from odemis.util.filename import create_projectname, guess_pattern
 from odemis.util.units import readable_str
@@ -312,16 +310,9 @@ class CryoChamberTab(Tab):
         self.conf.pj_ptn, self.conf.pj_count = guess_pattern(new_dir)
         self.txt_projectpath.Value = os.path.basename(self.conf.pj_last_path)
         self.tab_data_model.main.project_path.value = new_dir
-        # Decide once per project whether features created during this session are
-        # eligible for data collection. Stored as a dynamic attribute — not part
-        # of the formal model — and read by add_new_feature via getattr.
-        probability = get_data_collector().probability
-        self.tab_data_model.main.collect_features = (random.random() < probability)
-        logging.debug(
-            "Project '%s': collect_features=%s",
-            os.path.basename(new_dir),
-            self.tab_data_model.main.collect_features,
-        )
+        # Decide for each new project whether features created from now on are
+        # eligible for data collection (it's also updated whenever the probability changes).
+        self.tab_data_model.main.reroll_collect_features()
         logging.debug("Generated project folder name pattern '%s'", self.conf.pj_ptn)
 
     def _create_new_dir(self):
