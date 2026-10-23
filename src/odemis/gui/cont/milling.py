@@ -38,7 +38,6 @@ from shapely.geometry import Polygon, box
 
 from odemis import model
 from odemis.acq.feature import (
-    FEATURE_ACTIVE,
     FEATURE_DEACTIVE,
     CryoFeature,
     MillingAlignmentAreaTooSmallError,
@@ -693,12 +692,24 @@ class MillingTaskController:
         evt.Skip()
 
     def _on_milling_task_key_down(self, evt: wx.KeyEvent) -> None:
-        """Toggle the checked state of all selected rows when Space is pressed."""
+        """Toggle all row selections with Ctrl+A or their checks with Space."""
+        task_list = self._panel.milling_task_chk_list
+        if evt.GetKeyCode() == ord("A") and evt.ControlDown():
+            select = len(task_list.GetSelections()) != task_list.GetCount()
+            for index in range(task_list.GetCount()):
+                if select:
+                    task_list.SetSelection(index)
+                else:
+                    task_list.Deselect(index)
+            if not select:
+                self._active_spot_size_pattern = None
+            self.draw_milling_tasks()
+            return
+
         if evt.GetKeyCode() != wx.WXK_SPACE:
             evt.Skip()
             return
 
-        task_list = self._panel.milling_task_chk_list
         selections = list(task_list.GetSelections())
         if not selections:
             evt.Skip()
@@ -1396,7 +1407,10 @@ class MillingTaskController:
             and not alignment_area_overlap
         )
         self._panel.btn_run_milling.Enable(milling_enabled)
-        self._panel.btn_run_automated_milling.Enable(milling_enabled)
+        feature_list = self._panel.workflow_features_chk_list
+        has_features = any(feature_list.IsChecked(i) for i in range(feature_list.GetCount()))
+        has_workflow_steps = bool(self._panel.workflow_task_chk_list.GetCheckedItems())
+        self._panel.btn_run_automated_milling.Enable(milling_enabled and has_features and has_workflow_steps)
 
         if not has_tasks:
             txt = "No Tasks Selected..."
@@ -1428,65 +1442,150 @@ class AutomatedMillingController:
 
         # automated milling tasks
         self.task_list = [MillingWorkflowTask.RoughMilling, MillingWorkflowTask.Polishing]
-        pretty_task_names = ["Rough Milling", "Polishing"]
-        self._panel.workflow_task_chk_list.SetItems([task for task in pretty_task_names])
+        self._panel.workflow_task_chk_list.SetItems(["Rough Milling", "Polishing"])
         for i in range(self._panel.workflow_task_chk_list.GetCount()):
             self._panel.workflow_task_chk_list.Check(i)
+        self._panel.workflow_task_chk_list.Bind(wx.EVT_LISTBOX, self._clear_workflow_step_selection)
+        self._panel.workflow_task_chk_list.Bind(wx.EVT_CHECKLISTBOX, self._clear_workflow_step_selection)
 
         self._panel.btn_run_automated_milling.Bind(wx.EVT_BUTTON, self._run_automated_milling)
         self._panel.btn_automated_milling_cancel.Bind(wx.EVT_BUTTON, self._cancel_automated_milling)
 
         # connect features to chklistbox
+        self._features: List[CryoFeature] = []
+        self._selection_revision = 0
+        self._setting_current_feature = False
         self._tab_data.main.features.subscribe(self._update_features, init=True)
+        self._panel.workflow_features_chk_list.Bind(wx.EVT_KEY_DOWN, self._on_feature_key_down)
         self._panel.workflow_features_chk_list.Bind(wx.EVT_CHECKLISTBOX, self._update_checked_features)
         self._panel.workflow_features_chk_list.Bind(wx.EVT_LISTBOX, self._update_selected_feature)
+        self._tab_data.main.currentFeature.subscribe(self._on_current_feature, init=True)
+
+    def _clear_workflow_step_selection(self, evt: wx.CommandEvent) -> None:
+        """Keep workflow steps checkable without retaining a highlighted row."""
+        self._panel.workflow_task_chk_list.SetSelection(wx.NOT_FOUND)
+        self._tab.milling_task_controller._update_mill_btn()
+        evt.Skip()
+
+    def _on_current_feature(self, _: Optional[CryoFeature]) -> None:
+        """Follow external navigation without treating bulk highlighting as navigation."""
+        if not self._setting_current_feature:
+            self._select_current_feature(self._selection_revision)
 
     @call_in_wx_main
-    def _update_selected_feature(self, evt: wx.Event):
+    def _select_current_feature(self, revision: int) -> None:
+        """Apply navigation unless a newer bulk-selection interaction superseded it."""
+        if revision == self._selection_revision:
+            self._restore_active_feature_selection()
 
-        # TODO: disable multi-selection?
-        # get the index of selected item
-        index = self._panel.workflow_features_chk_list.GetSelection()
-        f = self._tab_data.main.features.value[index]
+    def _restore_active_feature_selection(self) -> None:
+        """Show the active feature as the sole selected row, if any features exist."""
+        features = self._tab_data.main.features.value
+        feature = self._tab_data.main.currentFeature.value
+        if feature not in features:
+            feature = features[0] if features else None
+            self._tab_data.main.currentFeature.value = feature
+
+        feature_list = self._panel.workflow_features_chk_list
+        feature_list.SetSelection(wx.NOT_FOUND)
+        if feature in self._features:
+            index = self._features.index(feature)
+            feature_list.SetSelection(index)
+            feature_list.EnsureVisible(index)
+        self._panel.show_milling_selection_hint(False)
+
+    def _on_feature_key_down(self, evt: wx.KeyEvent) -> None:
+        """Toggle bulk row highlighting with Ctrl+A and bulk milling checks with Space."""
+        feature_list = self._panel.workflow_features_chk_list
+        if evt.GetKeyCode() == ord("A") and evt.ControlDown():
+            if len(feature_list.GetSelections()) == feature_list.GetCount():
+                feature_list.SetSelection(wx.NOT_FOUND)
+            else:
+                for index in range(feature_list.GetCount()):
+                    feature_list.SetSelection(index)
+            self._update_selected_feature()
+            return
+
+        if evt.GetKeyCode() != wx.WXK_SPACE:
+            evt.Skip()
+            return
+
+        selections = feature_list.GetSelections()
+        if not selections:
+            evt.Skip()
+            return
+
+        eligible = [i for i in selections if self._features[i].status.value != FEATURE_DEACTIVE]
+        should_check = not all(feature_list.IsChecked(i) for i in eligible)
+        for index in eligible:
+            feature_list.Check(index, should_check)
+        self._update_checked_features()
+
+    def _update_selected_feature(self, evt: Optional[wx.CommandEvent] = None) -> None:
+        """Activate a sole selected feature; multiple rows only define bulk actions."""
+        self._selection_revision += 1
+        selections = self._panel.workflow_features_chk_list.GetSelections()
+        if not selections:
+            self._restore_active_feature_selection()
+            return
+        self._panel.show_milling_selection_hint(len(selections) > 1)
+        if len(selections) > 1:
+            return
+        f = self._features[selections[0]]
         logging.debug(f"Feature {f.name.value} selected.")
-        self._tab_data.main.currentFeature.value = f
+        self._setting_current_feature = True
+        try:
+            self._tab_data.main.currentFeature.value = f
+        finally:
+            self._setting_current_feature = False
 
-    def _update_checked_features(self, evt: wx.Event):
-        index = evt.GetInt()
-        disabled_features_indexes = [i for i, f in enumerate(self._tab_data.main.features.value) if f.status.value in [FEATURE_ACTIVE, FEATURE_DEACTIVE]]
-
-        # Prevent the change
-        if index in disabled_features_indexes:
-            self._panel.workflow_features_chk_list.Check(index, False)
-            f = self._tab_data.main.features.value[index]
-            disabled_txt = f"{f.name.value} is not ready for milling. Please prepare the feature first."
-            wx.MessageBox(disabled_txt, "Info", wx.OK | wx.ICON_INFORMATION)
+    def _update_checked_features(self, evt: Optional[wx.CommandEvent] = None) -> None:
+        """Reject ineligible features and refresh milling validation."""
+        if evt is not None:
+            index = evt.GetInt()
+            feature = self._features[index]
+            if feature.status.value == FEATURE_DEACTIVE:
+                self._panel.workflow_features_chk_list.Check(index, False)
+                disabled_txt = f"{feature.name.value} is not ready for milling. Please prepare the feature first."
+                wx.MessageBox(disabled_txt, "Info", wx.OK | wx.ICON_INFORMATION)
 
         self._tab.milling_task_controller._update_milling_validation_message()
         self._tab.milling_task_controller._update_mill_btn()
 
-    def _update_feature_status(self, feature: CryoFeature):
-
+    def _update_feature_status(self, status: str) -> None:
+        """Refresh feature labels and eligibility without resetting user choices."""
         self._update_features(self._tab_data.main.features.value)
 
     @call_in_wx_main
-    def _update_features(self, features: List[CryoFeature]):
-        """
-        Sync the features with the cklistbox
-        """
+    def _update_features(self, features: List[CryoFeature]) -> None:
+        """Preserve milling checks and highlight the active feature during refreshes."""
+        feature_list = self._panel.workflow_features_chk_list
+        checked = {feature: feature_list.IsChecked(i) for i, feature in enumerate(self._features)}
+        selected = {self._features[i] for i in feature_list.GetSelections()}
+        previous_features = set(self._features)
+        current_features = set(features)
+        for feature in previous_features - current_features:
+            feature.status.unsubscribe(self._update_feature_status)
+        for feature in current_features - previous_features:
+            feature.status.subscribe(self._update_feature_status, init=False)
+        self._features = list(features)
 
-        # clear the list
-        self._panel.workflow_features_chk_list.Clear()
+        feature_list.Clear()
         for i, f in enumerate(features):
             txt = f"{f.name.value} ({f.status.value})"
-            self._panel.workflow_features_chk_list.Append(txt)
-
-            check = False if f.status.value in [FEATURE_ACTIVE, FEATURE_DEACTIVE] else True
-            self._panel.workflow_features_chk_list.Check(i, check)
-
-            # subscribe to the feature status, so we can update the list
-            f.status.subscribe(self._update_feature_status, init=False)
-
+            feature_list.Append(txt)
+            # Active features can be queued before their milling reference is prepared.
+            eligible = f.status.value != FEATURE_DEACTIVE
+            feature_list.Check(i, eligible and checked.get(f, True))
+            if f in selected:
+                feature_list.SetSelection(i)
+        selections = feature_list.GetSelections()
+        current_feature = self._tab_data.main.currentFeature.value
+        if (current_feature not in features or not selections
+                or (len(selections) == 1 and self._features[selections[0]] is not current_feature)):
+            self._restore_active_feature_selection()
+        else:
+            self._panel.show_milling_selection_hint(len(selections) > 1)
         self._tab.milling_task_controller._update_milling_validation_message()
         self._tab.milling_task_controller._update_mill_btn()
 
@@ -1499,7 +1598,8 @@ class AutomatedMillingController:
         # filter the features list, so only the checked ones are used
         features = self._tab_data.main.features.value
         features = [f for i, f in enumerate(features) if self._panel.workflow_features_chk_list.IsChecked(i)]
-        if not features:
+        task_list = [task for i, task in enumerate(self.task_list) if self._panel.workflow_task_chk_list.IsChecked(i)]
+        if not features or not task_list:
             return
         if fibsemos.FIBSEMOS_INSTALLED:
             missing_state = [feature.name.value for feature in features if not feature.system_state]
@@ -1521,7 +1621,6 @@ class AutomatedMillingController:
             feature_dir = get_feature_dir(self.conf.pj_last_path, feature.name.value)
             feature.path = str(feature_dir) if feature_dir else None
 
-        task_list = [t for i, t in enumerate(self.task_list) if self._panel.workflow_task_chk_list.IsChecked(i)]
         logging.info(f"Running automated milling for tasks: {task_list}")
 
         # TODO: add estimated time to the dialog, gui

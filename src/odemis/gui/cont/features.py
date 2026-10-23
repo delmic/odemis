@@ -684,7 +684,7 @@ class CryoFeatureController(object):
             logging.warning("cmb_features selection = -1.")
             return
         selected_feature = self._panel.cmb_features.GetClientData(index)
-        self._tab_data_model.main.currentFeature.value = selected_feature
+        self._tab_data_model.main.currentFeature._set_value(selected_feature, must_notify=True)
 
     def _on_cmb_feature_status_change(self):
         """

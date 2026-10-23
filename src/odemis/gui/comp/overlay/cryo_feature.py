@@ -181,7 +181,7 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
                     focus_pos = feature.get_fm_focus_position(self.pm.current_posture.value, self.tab_data.main.focus)
                     if focus_pos:
                         self.tab_data.main.focus.moveAbs(focus_pos)
-                self.tab_data.main.currentFeature.value = feature
+                self.tab_data.main.currentFeature._set_value(feature, must_notify=True)
             else:
                 # Move to selected point (if normally allowed to move)
                 if CAN_DRAG in self.cnvs.abilities:
@@ -202,7 +202,7 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
             if self._mode == MODE_EDIT_FEATURES:
                 if feature is not None:
                     # Select the feature before moving it.
-                    self.tab_data.main.currentFeature.value = feature
+                    self.tab_data.main.currentFeature._set_value(feature, must_notify=True)
                     self._selected_feature = feature
                     DragMixin._on_left_down(self, evt)
                 else:
@@ -213,7 +213,7 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
                     self._selected_tool_va.value = TOOL_NONE
             else:
                 if feature:
-                    self.tab_data.main.currentFeature.value = feature
+                    self.tab_data.main.currentFeature._set_value(feature, must_notify=True)
                 else:
                     # Only empty space belongs to canvas panning. Passing a
                     # feature click through would show its drag cursor while
