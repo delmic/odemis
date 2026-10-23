@@ -266,7 +266,8 @@ def _convert_rectangle_pattern(p: RectanglePatternParameters) -> 'RectanglePatte
         width=_apply_spot_size_correction(p.width.value, correction, "rectangle width"),
         height=_apply_spot_size_correction(p.height.value, correction, "rectangle height"),
         depth=p.depth.value,
-        rotation=math.degrees(p.rotation.value),
+        # Odemis overlay angles are clockwise; fibsemOS uses counterclockwise angles.
+        rotation=math.degrees(-p.rotation.value % (2 * math.pi)),
         scan_direction=p.scan_direction.value,
         point=Point(x=p.center.value[0], y=p.center.value[1])
     )
