@@ -1324,24 +1324,38 @@ class SecomStreamsController(StreamBarController):
 
     def _onStreamUpdate(self, stream, updated):
         # When a stream starts playing, ensure it's visible in at least one view
-        if updated:
+        if updated and stream is not self._spot_stream:
             fv = self._tab_data_model.focussedView.value
-            if stream not in fv.stream_tree.flat.value and stream is not self._spot_stream:
-                # if the stream is hidden in the current focused view, then unhide
-                # it everywhere
-                for v in self._tab_data_model.views.value:
-                    if isinstance(stream, acqstream.SEMStream) and (not v.is_compatible(acqstream.SEMStream)):
-                        continue
-                    elif isinstance(stream, acqstream.FluoStream) and (not v.is_compatible(acqstream.FluoStream)):
-                        continue
-                    else:
-                        if stream not in v.stream_tree.flat.value:
-                            # make sure we don't display old data
-                            str_img = stream.image.value
-                            if ((str_img is not None) and
-                                (str_img.metadata.get(model.MD_POS, (0, 0)) != self._main_data_model.stage)):
-                                stream.image.value = None
-                            v.addStream(stream)
+            # If the stream is hidden in the current focused view, make it visible
+            if stream not in fv.stream_tree.flat.value:
+                receiving_views = []
+                # 1. Add it to the focused view if it's compatible
+                if isinstance(stream, fv.stream_classes):
+                    receiving_views.append(fv)
+                # 2. If there is a view already showing it, then we are fine
+                elif any(stream in v.stream_tree.flat.value for v in self._tab_data_model.views.value):
+                    pass
+                # 3. If no view is showing it, then add it to all the compatible views
+                else:
+                    for v in self._tab_data_model.views.value:
+                        if isinstance(stream, v.stream_classes):
+                            receiving_views.append(v)
+
+                    # 4. If no compatible view is found, then add it to the focused view anyway
+                    if not receiving_views:
+                        receiving_views.append(fv)
+
+                if receiving_views:
+                    # make sure we don't display old data on views that just received a new stream
+                    raw_md = [md for md in stream.getRawMetadata() if md]
+                    if raw_md:
+                        last_acq_date = raw_md[0].get(model.MD_ACQ_DATE, 0)
+                        if last_acq_date < time.time() - 5.0:
+                            stream.image.value = None
+
+                for v in receiving_views:
+                    v.addStream(stream)
+
         super(SecomStreamsController, self)._onStreamUpdate(stream, updated)
         self._updateMicroscopeStates()
 
