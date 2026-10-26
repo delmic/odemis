@@ -666,7 +666,11 @@ class MillingTaskController:
         logging.debug("Shapes updated: %s", shapes)
 
         # check if any of the points of the shapes are outside the bounding box of the image
-        s_bbox = self.acq_cont.stream.getBoundingBox()
+        feature = self._tab_data.main.currentFeature.value
+        if feature is None or feature.reference_image is None:
+            self.valid_patterns.value = False
+            return
+        s_bbox = img.getBoundingBox(feature.reference_image)
         for shape in shapes:
             valid = all([is_point_in_rect(pt, s_bbox) for pt in shape.points.value])
 

@@ -56,7 +56,7 @@ from odemis.acq.milling.tasks import (
     MillingSettings,
     MillingTaskSettings,
 )
-from odemis.util import executeAsyncTask
+from odemis.util import executeAsyncTask, img
 
 # Check if fibsemOS is available
 try:
@@ -478,6 +478,7 @@ def _convert_composite_pattern_to_milling_stage(
     :param name: Milling stage name.
     :param alignment_area: Normalized (left, top, right, bottom) reference-image coordinates.
     :return: One stage that draws and mills every generated rectangle together.
+    :raises ValueError: The correlation pattern exceeds the allowed field of view.
     """
     rectangles = [_convert_rectangle_pattern(rectangle)
                   for rectangle in pattern.generate()]
@@ -485,15 +486,16 @@ def _convert_composite_pattern_to_milling_stage(
     if isinstance(pattern, CorrelationPatternParameters):
         bounds = pattern.get_bounds()
         required_fov = 2 * max(abs(edge) for edge in bounds)
-        minimum_fov = required_fov * (1 + _MILLING_FOV_MARGIN)
         maximum_fov = task.milling.field_of_view.range[1]
-        if minimum_fov > maximum_fov:
+        if required_fov > maximum_fov:
             raise ValueError(
-                f"Correlation pattern requires a {minimum_fov:g} m milling field including its safety margin, "
+                f"Correlation pattern requires a {required_fov:g} m milling field, "
                 f"which does not fit inside the maximum {maximum_fov:g} m field of view."
             )
-        if minimum_fov >= milling.hfw:
-            milling.hfw = maximum_fov
+        minimum_fov = required_fov * (1 + _MILLING_FOV_MARGIN)
+        # The default task field covers all five markers. A selected marker
+        # must not inherit that oversized DrawBeam write field.
+        milling.hfw = min(max(minimum_fov, task.milling.field_of_view.range[0]), maximum_fov)
     left, top, right, bottom = alignment_area
     alignment = MillingAlignment(
         enabled=task.milling.align.value,
@@ -509,7 +511,8 @@ def _convert_composite_pattern_to_milling_stage(
 
 def convert_milling_tasks_to_milling_stages(
         milling_tasks: List[MillingTaskSettings],
-        alignment_area: Tuple[float, float, float, float] = DEFAULT_MILLING_ALIGNMENT_AREA) -> List['FibsemMillingStage']:
+        alignment_area: Tuple[float, float, float, float] = DEFAULT_MILLING_ALIGNMENT_AREA,
+        reference_size: Optional[Tuple[float, float]] = None) -> List['FibsemMillingStage']:
     """Convert tasks to fibsemOS milling stages.
 
     Each pattern in a selected task produces one stage. All rectangles
@@ -520,8 +523,10 @@ def convert_milling_tasks_to_milling_stages(
     :param alignment_area: Normalized (left, top, right, bottom) coordinates
         in the saved FIB reference image, with values between 0 and 1.
         Defaults to DEFAULT_MILLING_ALIGNMENT_AREA and applies to every stage.
+    :param reference_size: Physical width and height of the saved image, in meters.
     :return: Stages in task and pattern order, or an empty list when no
         selected tasks contain patterns.
+    :raises ValueError: A selected pattern extends outside its saved reference image.
     """
     milling_stages = []
 
@@ -530,15 +535,21 @@ def convert_milling_tasks_to_milling_stages(
             continue
         for pattern in task.patterns:
             name = task.name if len(task.patterns) == 1 else f"{task.name}: {pattern.name.value}"
+            if reference_size is not None:
+                left, bottom, right, top = pattern.get_bounds()
+                if (2 * max(abs(left), abs(right)) > reference_size[0]
+                        or 2 * max(abs(bottom), abs(top)) > reference_size[1]):
+                    raise ValueError(f"Milling pattern {name} extends outside its saved reference image.")
             if isinstance(pattern, CompositeRectanglePatternParameters):
-                milling_stages.append(
-                    _convert_composite_pattern_to_milling_stage(
-                        task, pattern, name, alignment_area))
+                stage = _convert_composite_pattern_to_milling_stage(task, pattern, name, alignment_area)
             else:
                 stage_task = MillingTaskSettings(
                     milling=task.milling, patterns=[pattern], name=name)
-                milling_stages.append(convert_task_to_milling_stage(
-                    stage_task, alignment_area=alignment_area))
+                stage = convert_task_to_milling_stage(stage_task, alignment_area=alignment_area)
+            if reference_size is not None:
+                stage.milling.hfw = min(stage.milling.hfw, reference_size[0])
+            logging.info("Milling pattern %s uses a %g µm write field.", name, stage.milling.hfw * 1e6)
+            milling_stages.append(stage)
 
     return milling_stages
 
@@ -750,7 +761,9 @@ class FibsemOSMillingTaskManager:
         reference_image = _get_reference_image(feature)
         alignment_area = constrain_milling_alignment_area(feature.milling_alignment_area.value, reference_image.shape)
         feature.milling_alignment_area.value = alignment_area
-        milling_stages = convert_milling_tasks_to_milling_stages(tasks, alignment_area=alignment_area)
+        left, bottom, right, top = img.getBoundingBox(reference_image)
+        milling_stages = convert_milling_tasks_to_milling_stages(
+            tasks, alignment_area=alignment_area, reference_size=(right - left, top - bottom))
         estimated_dur = estimate_total_milling_time(milling_stages) + 30
 
         with self._lock:

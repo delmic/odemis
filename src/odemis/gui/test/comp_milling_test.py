@@ -228,6 +228,26 @@ class MillingTaskPanelTestCase(test.GuiTestCase):
         self.assertTrue(fields["width"].IsEditable())
         self.assertEqual((fields["width"].GetValue(), fields["height"].GetValue()), (900e-6, 700e-6))
 
+    def test_pattern_bounds_use_saved_reference_image(self):
+        """Reject a shape outside the saved image even if the active stream is larger."""
+        feature = CryoFeature(name="Feature", stage_position={}, fm_focus_position={})
+        feature.reference_image = model.DataArray(numpy.zeros((8, 8)), metadata={
+            model.MD_PIXEL_SIZE: (56e-6, 56e-6), model.MD_POS: (0, 0)})
+        active_image = model.DataArray(numpy.zeros((8, 8)), metadata={
+            model.MD_PIXEL_SIZE: (112e-6, 112e-6), model.MD_POS: (0, 0)})
+        self.controller.acq_cont = SimpleNamespace(stream=StaticSEMStream("Active image", active_image))
+        self.controller._tab_data = SimpleNamespace(main=SimpleNamespace(
+            currentFeature=model.VigilantAttribute(feature)))
+        self.controller.valid_patterns = model.BooleanVA(True)
+        shape = SimpleNamespace(points=model.ListVA([(300e-6, 0), (310e-6, 0)]))
+        self.controller._on_shapes_update([shape])
+        test.gui_loop()
+        self.assertFalse(self.controller.valid_patterns.value)
+        shape.points.value = [(0, 0), (75e-6, 75e-6)]
+        self.controller._on_shapes_update([shape])
+        test.gui_loop()
+        self.assertTrue(self.controller.valid_patterns.value)
+
     def test_edit_ruler_parameters_updates_pattern_and_preview(self) -> None:
         """Apply ruler control edits and redraw the preview."""
         controls = self.controller.controls["Ruler"]["panel"].ctrl_dict

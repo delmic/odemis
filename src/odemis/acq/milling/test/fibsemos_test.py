@@ -399,7 +399,7 @@ class TestConvertMillingTasksToMillingStages(unittest.TestCase):
             thickness=4e-6, depth=3e-6)
 
         stage = self.assert_composite_pattern_uses_one_stage(pattern)
-        self.assertEqual(stage.milling.hfw, 960e-6)
+        self.assertAlmostEqual(stage.milling.hfw, 909e-6)
         rotated_rectangles = [rectangle for rectangle in stage.pattern.define()
                               if rectangle.rotation]
         self.assertEqual(len(rotated_rectangles), 1)
@@ -407,6 +407,8 @@ class TestConvertMillingTasksToMillingStages(unittest.TestCase):
         self.assertAlmostEqual(rotated_rectangles[0].rotation, 7 * math.pi / 4)
 
         pattern.subpattern.value = "N"
+        stage = self.assert_composite_pattern_uses_one_stage(pattern)
+        self.assertAlmostEqual(stage.milling.hfw, 75.75e-6)
         # A single marker at this position fits; the full layout would not.
         pattern.center.value = (100e-6, 0)
         stage = self.assert_composite_pattern_uses_one_stage(pattern)
@@ -420,6 +422,27 @@ class TestConvertMillingTasksToMillingStages(unittest.TestCase):
             depth=1e-6, spacing=3e-6)
 
         self.assert_composite_pattern_uses_one_stage(pattern)
+
+    def test_write_fields_stay_inside_reference(self):
+        """Limit composite and rotated rectangle patterns to their saved image."""
+        reference_size = (448e-6, 448e-6)
+        patterns = (
+            CorrelationPatternParameters(width=448e-6, height=300e-6, marker_length=75e-6,
+                                         thickness=4e-6, depth=3e-6),
+            RectanglePatternParameters(width=200e-6, height=100e-6, depth=3e-6, rotation=math.pi / 4))
+        for pattern in patterns:
+            with self.subTest(pattern=pattern.name.value):
+                task = MillingTaskSettings(name=pattern.name.value, patterns=[pattern], milling=MillingSettings(
+                    current=60e-9, voltage=30000, field_of_view=960e-6))
+                stage = convert_milling_tasks_to_milling_stages([task], reference_size=reference_size)[0]
+                self.assertAlmostEqual(stage.milling.hfw, 448e-6)
+                pattern.center.value = (300e-6, 0)
+                with self.assertRaisesRegex(ValueError, "outside its saved reference image"):
+                    convert_milling_tasks_to_milling_stages([task], reference_size=reference_size)
+                pattern.center.value = (0, 0)
+                pattern.width.value = 900e-6
+                with self.assertRaisesRegex(ValueError, "outside its saved reference image"):
+                    convert_milling_tasks_to_milling_stages([task], reference_size=reference_size)
 
     def test_cross_pattern_uses_one_milling_stage(self) -> None:
         """Send both cross arms in one milling stage."""
