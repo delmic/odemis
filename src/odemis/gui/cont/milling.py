@@ -1666,6 +1666,18 @@ class AutomatedMillingController:
                     "to acquire a new reference image before starting automated milling.",
                     "New milling references required", wx.OK | wx.ICON_WARNING)
                 return
+            for feature in features:
+                tasks = [task for workflow in task_list
+                         for task in millmng.get_associated_tasks(workflow, feature.milling_tasks)]
+                try:
+                    reference = fibsemos._get_reference_image(feature)
+                    left, bottom, right, top = img.getBoundingBox(reference)
+                    fibsemos.convert_milling_tasks_to_milling_stages(
+                        tasks, reference_size=(right - left, top - bottom))
+                except ValueError as exc:
+                    wx.MessageBox(f"Cannot mill {feature.name.value}: {exc}",
+                                  "Invalid milling pattern", wx.OK | wx.ICON_WARNING)
+                    return
         stage = self._tab_data.main.stage_bare
         sem_stream = self._tab.sem_stream
         fib_stream = self._tab.fib_stream
