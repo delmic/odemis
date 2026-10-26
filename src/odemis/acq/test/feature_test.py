@@ -33,10 +33,12 @@ from odemis.acq.feature import (
     CryoFeature,
     DEFAULT_MILLING_ALIGNMENT_AREA,
     FEATURE_READY_TO_MILL,
+    MIN_MILLING_ALIGNMENT_AREA_DIMENSION,
     MIN_MILLING_ALIGNMENT_AREA_PIXELS,
     MillingAlignmentAreaTooSmallError,
     REFERENCE_IMAGE_FILENAME,
     constrain_milling_alignment_area,
+    constrain_milling_alignment_area_size,
     feature_decoder,
     _stream_overlaps_position,
     collect_feature_data,
@@ -447,15 +449,19 @@ class TestMillingAlignmentPersistence(unittest.TestCase):
 
 
 class TestMillingAlignmentArea(unittest.TestCase):
+    """Check alignment area sizing and reference image boundaries."""
+
     def test_default_area(self):
         feature = CryoFeature("Feature-1", {"x": 0, "y": 0, "z": 0}, {Posture.FM_IMAGING: {"z": 0}})
 
         self.assertEqual(feature.milling_alignment_area.value, DEFAULT_MILLING_ALIGNMENT_AREA)
 
     def test_area_is_clamped_to_minimum_pixel_count_and_image_bounds(self):
+        """Grow a small area to the minimum pixel count while keeping it inside the image."""
         area = constrain_milling_alignment_area((0.9, 0.9, 1.0, 1.0), (1024, 2048))
 
-        expected = (0.8125, 0.75, 1.0, 1.0)
+        minimum_side = MIN_MILLING_ALIGNMENT_AREA_PIXELS ** 0.5
+        expected = (1 - minimum_side / 2048, 1 - minimum_side / 1024, 1.0, 1.0)
         for actual_value, expected_value in zip(area, expected):
             self.assertAlmostEqual(actual_value, expected_value)
 
@@ -484,23 +490,37 @@ class TestMillingAlignmentArea(unittest.TestCase):
         self.assertAlmostEqual(pixel_width * pixel_height, MIN_MILLING_ALIGNMENT_AREA_PIXELS)
         self.assertAlmostEqual(pixel_width, pixel_height)
 
-    def test_minimum_area_accepts_both_extreme_aspect_ratios(self):
-        for area in ((0.0, 0.0, 0.75, 0.5), (0.0, 0.0, 0.5, 0.75)):
+    def test_valid_area_can_grow_in_one_dimension(self):
+        """Keep the other side unchanged when a valid area becomes longer."""
+        for area in ((0.0, 0.0, 0.75, 0.5), (0.0, 0.0, 0.5, 0.75),
+                     (0.0, 0.0, 1.0, 0.5), (0.0, 0.0, 0.5, 1.0)):
             with self.subTest(area=area):
                 self.assertEqual(constrain_milling_alignment_area(area, (512, 512)), area)
 
     def test_area_constrains_narrow_shape_even_with_enough_pixels(self):
+        """Keep each side at least 256 pixels long even when the total area is sufficient."""
         cases = (
-            ((0.0, 0.0, 0.75, 0.125), (0.0, 0.0, 0.75, 0.5)),
-            ((0.0, 0.0, 0.125, 0.75), (0.0, 0.0, 0.5, 0.75)),
+            ((0.0, 0.0, 0.75, 0.125), (0.0, 0.0, 0.75, 0.25)),
+            ((0.0, 0.0, 0.125, 0.75), (0.0, 0.0, 0.25, 0.75)),
         )
         for area, expected in cases:
             with self.subTest(area=area):
                 self.assertEqual(constrain_milling_alignment_area(area, (1024, 1024)), expected)
 
     def test_reference_image_must_contain_minimum_area(self):
-        with self.assertRaises(ValueError):
-            constrain_milling_alignment_area((0.1, 0.2, 0.35, 0.45), (200, 300))
+        """Reject references that cannot satisfy the minimum side lengths or pixel count."""
+        for shape in ((200, 300), (255, 4096), (4096, 255), (256, 383)):
+            with self.subTest(shape=shape):
+                with self.assertRaises(MillingAlignmentAreaTooSmallError):
+                    constrain_milling_alignment_area(DEFAULT_MILLING_ALIGNMENT_AREA, shape)
+
+    def test_minimum_sides_fit_with_restricted_resize_bounds(self):
+        """Allow long areas at image edges while honoring the fixed resize corner."""
+        minimum_side = MIN_MILLING_ALIGNMENT_AREA_DIMENSION / 1024
+        for maximum in ((minimum_side, 0.75), (0.75, minimum_side)):
+            with self.subTest(maximum=maximum):
+                self.assertEqual(constrain_milling_alignment_area_size(
+                    (1.0, 1.0), (1024, 1024), maximum_size=maximum), maximum)
 
     def test_feature_accepts_free_aspect_ratio(self):
         feature = CryoFeature("Feature-1", {"x": 0, "y": 0, "z": 0}, {Posture.FM_IMAGING: {"z": 0}})

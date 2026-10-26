@@ -70,10 +70,11 @@ REFERENCE_IMAGE_FILENAME = "Reference-Alignment-FIB.ome.tiff"
 # Alignment areas are expressed as normalized (left, top, right, bottom)
 # coordinates in the saved FIB reference image.
 DEFAULT_MILLING_ALIGNMENT_AREA = (0.7, 0.375, 0.95, 0.625)
-# Smallest pixel count and widest/tallest shapes that provide reliable fibsemOS alignment.
+# Odemis safeguards for alignment; fibsemOS correlation has no fixed size limit.
+# Keep the pixel count of fibsemOS's smallest standard rectangular imaging preset.
 MIN_MILLING_ALIGNMENT_AREA_PIXELS = 384 * 256
-# Pixel width / height, from portrait 256 x 384 through landscape 384 x 256.
-MILLING_ALIGNMENT_AREA_ASPECT_RATIO_RANGE = (256 / 384, 384 / 256)
+# Keep each side at least as large as its smallest square imaging preset.
+MIN_MILLING_ALIGNMENT_AREA_DIMENSION = 256
 
 
 class MillingAlignmentAreaTooSmallError(ValueError):
@@ -83,18 +84,18 @@ class MillingAlignmentAreaTooSmallError(ValueError):
 def constrain_milling_alignment_area_size(
         size: Tuple[float, float], image_shape: Tuple[int, ...],
         maximum_size: Tuple[float, float] = (1.0, 1.0)) -> Tuple[float, float]:
-    """Constrain normalized area dimensions using pixel count and shape.
+    """Constrain normalized area dimensions using pixel count and minimum side lengths.
 
-    The result contains at least the required number of pixels, has a pixel
-    aspect ratio within the supported range, and does not exceed the supplied
+    The result contains at least the required number of pixels, meets the
+    minimum pixel width and height, and does not exceed the supplied
     normalized maximum dimensions.
 
-    :param size: Normalized ``(width, height)`` to constrain.
+    :param size: Normalized (width, height) to constrain.
     :param image_shape: Reference-image shape whose last two axes are (height, width).
-    :param maximum_size: Largest normalized ``(width, height)`` that can fit.
-    :return: Constrained normalized ``(width, height)``.
+    :param maximum_size: Largest normalized (width, height) that can fit.
+    :returns: Constrained normalized (width, height).
     :raises MillingAlignmentAreaTooSmallError: If the image cannot contain an
-        alignment area that satisfies the pixel-count and aspect-ratio limits.
+        alignment area that satisfies the pixel-count and minimum-side limits.
     :raises ValueError: If the shape or requested dimensions are invalid.
     """
     if len(image_shape) < 2:
@@ -112,37 +113,17 @@ def constrain_milling_alignment_area_size(
 
     maximum_pixel_width = min(maximum_width, 1.0) * image_width
     maximum_pixel_height = min(maximum_height, 1.0) * image_height
-    minimum_ratio, maximum_ratio = MILLING_ALIGNMENT_AREA_ASPECT_RATIO_RANGE
-    maximum_valid_width = maximum_pixel_width
-    maximum_valid_height = maximum_pixel_height
-    if maximum_valid_width / maximum_valid_height > maximum_ratio:
-        maximum_valid_width = maximum_valid_height * maximum_ratio
-    elif maximum_valid_width / maximum_valid_height < minimum_ratio:
-        maximum_valid_height = maximum_valid_width / minimum_ratio
-    if maximum_valid_width * maximum_valid_height < MIN_MILLING_ALIGNMENT_AREA_PIXELS:
+    if (maximum_pixel_width < MIN_MILLING_ALIGNMENT_AREA_DIMENSION
+            or maximum_pixel_height < MIN_MILLING_ALIGNMENT_AREA_DIMENSION
+            or maximum_pixel_width * maximum_pixel_height < MIN_MILLING_ALIGNMENT_AREA_PIXELS):
         raise MillingAlignmentAreaTooSmallError(
             "Reference image is too small for milling alignment. "
             f"The alignment area must contain at least {MIN_MILLING_ALIGNMENT_AREA_PIXELS} pixels "
-            "and have an aspect ratio between 2:3 and 3:2."
+            f"and be at least {MIN_MILLING_ALIGNMENT_AREA_DIMENSION} pixels wide and high."
         )
 
-    pixel_width = min(width * image_width, maximum_pixel_width)
-    pixel_height = min(height * image_height, maximum_pixel_height)
-    ratio = pixel_width / pixel_height
-    if ratio > maximum_ratio:
-        required_height = pixel_width / maximum_ratio
-        if required_height <= maximum_pixel_height:
-            pixel_height = required_height
-        else:
-            pixel_height = maximum_pixel_height
-            pixel_width = pixel_height * maximum_ratio
-    elif ratio < minimum_ratio:
-        required_width = pixel_height * minimum_ratio
-        if required_width <= maximum_pixel_width:
-            pixel_width = required_width
-        else:
-            pixel_width = maximum_pixel_width
-            pixel_height = pixel_width / minimum_ratio
+    pixel_width = min(max(width * image_width, MIN_MILLING_ALIGNMENT_AREA_DIMENSION), maximum_pixel_width)
+    pixel_height = min(max(height * image_height, MIN_MILLING_ALIGNMENT_AREA_DIMENSION), maximum_pixel_height)
 
     pixel_count = pixel_width * pixel_height
     if pixel_count < MIN_MILLING_ALIGNMENT_AREA_PIXELS:
@@ -167,13 +148,13 @@ def constrain_milling_alignment_area(
     """Constrain an alignment area to the saved FIB reference image.
 
     The returned area is normalized, meets the minimum pixel-count and
-    aspect-ratio constraints, and remains inside the image.
+    minimum-side constraints, and remains inside the image.
 
-    :param area: Normalized ``(left, top, right, bottom)`` coordinates.
+    :param area: Normalized (left, top, right, bottom) coordinates.
     :param image_shape: Reference-image shape whose last two axes are (height, width).
-    :return: Constrained normalized ``(left, top, right, bottom)`` coordinates.
+    :returns: Constrained normalized (left, top, right, bottom) coordinates.
     :raises MillingAlignmentAreaTooSmallError: If the image cannot contain an
-        alignment area that satisfies the pixel-count and aspect-ratio limits.
+        alignment area that satisfies the pixel-count and minimum-side limits.
     :raises ValueError: If the area coordinates or image shape are invalid.
     """
     if len(area) != 4:
