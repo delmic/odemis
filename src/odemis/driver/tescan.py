@@ -55,6 +55,8 @@ TESCAN_PXL_LIMIT = 100
 PROBE_CURRENT_RANGE = (10e-12, 100e-9)
 
 DEFAULT_ION_PRESET = ""
+FIB_READY_TIMEOUT = 60.0  # Seconds allowed for FIB optics and automatic procedures to settle.
+FIB_BUSY_FLAGS = (1 << 13) | (1 << 14)  # SharkSEM FIB optics and automatic procedure flags.
 
 MIN_MOVE_SIZE_LIN_MM = 10e-6  # 10e-9 m (delmic) --> 10e-6 mm (tescan)
 MIN_MOVE_SIZE_ROT_DEG = 0.05
@@ -1003,21 +1005,50 @@ class Scanner(model.Emitter):
     def _onDwellTime(self, dwellTime):
         self.updateMetadata({model.MD_DWELL_TIME: dwellTime})
 
-    def _setBeamPreset(self, preset: str) -> str:
+    def _wait_for_fib_ready(self, timeout: float = FIB_READY_TIMEOUT) -> None:
+        """Wait for FIB optics and automatic procedures to become idle.
+
+        :param timeout: Maximum time to wait in seconds.
+        :raises TimeoutError: The FIB remains busy beyond the timeout.
+        :raises HwError: The API does not return a valid busy status.
         """
-        Set the name of the beam preset, which can be any arbitrary string. Sometimes the string contains information
-        about the current and voltage, but it is not enforced by TESCAN.
+        deadline = time.monotonic() + timeout
+        while True:
+            busy = self._device_handler.IsBusy(FIB_BUSY_FLAGS)
+            if busy == 0:
+                return
+            if busy != 1:
+                raise HwError(f"Could not read FIB busy status: {busy!r}")
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise TimeoutError(f"FIB optics or automatic procedure still busy after {timeout:g} seconds")
+            time.sleep(min(0.1, remaining))
+
+    def _setBeamPreset(self, preset: str) -> str:
+        """Activate a FIB preset and wait before restoring scan settings.
+
+        :param preset: Preset name, or an empty value to leave the beam unchanged.
+        :returns: The activated preset name.
+        :raises HwError: Preset activation fails or the busy status is unavailable.
+        :raises TimeoutError: The FIB does not become ready in time.
         """
         # Check if there is a non-empty preset set. Currently, the default at startup is an empty string.
         if preset:
             self._device_handler.ScStopScan()
             with self.parent._acq_progress_lock:
+                self._wait_for_fib_ready()
                 # Store scan rotation, dwell time and fov so we can revert it after.
                 scan_rotation = self._device_handler.GetImageRot()
                 dwell_time = self._device_handler.ScGetSpeed()
 
                 # Set the preset
-                self._device_handler.PresetSetEx(preset)
+                logging.debug("Activating FIB preset %s", preset)
+                result = self._device_handler.PresetSetEx(preset)
+                if result != 0:
+                    raise HwError(f"Could not activate FIB preset {preset!r}: status {result!r}")
+                # SharkSEM requires checking the FIB wait flags after preset activation.
+                # Large changes in current can leave the optics busy after the call returns.
+                self._wait_for_fib_ready()
 
                 # Somehow SharkSEM API resets the scan parameters after changing the preset.
                 # This is undesired for our use case, so restore it.

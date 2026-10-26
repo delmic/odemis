@@ -108,34 +108,40 @@ def validate_system_state(state: dict) -> None:
 def restore_system_state(state: dict) -> None:
     """Restore recorded imaging settings, leaving the sample stage in place.
 
-    Activate beam presets before restoring scan settings. Attempt the remaining
-    settings even if one fails, and report incomplete restoration to the caller.
+    Activate all beam presets before restoring scan settings or focus, regardless
+    of component discovery order. Preset setters wait for the hardware to settle.
+    Attempt the remaining settings even if one fails, and report incomplete
+    restoration to the caller.
 
     :param state: Imaging settings captured immediately before milling, indexed by role.
     :raises RuntimeError: One or more recorded settings could not be restored.
     """
     failures = []
+    settings = []
     for key, component in get_milling_components().items():
         if key == "stage-bare":
             continue
         vas = model.getVAs(component)
-        for field in COMPONENT_FIELDS[key]:
-            entry = state.get(key, {}).get(field)
-            if not entry or entry[0] is None or field not in vas:
-                continue
-            if field != "position" and vas[field].readonly:
-                continue
-            try:
-                value = copy.deepcopy(entry[0])
-                if field == "position":
-                    value = {axis: position for axis, position in value.items() if position is not None}
-                    if not value:
-                        continue
-                    component.moveAbs(value).result()
-                else:
-                    vas[field].value = value
-            except Exception:
-                failures.append(f"{key}.{field}")
-                logging.exception("Failed to restore %s.%s.", key, field)
+        settings.extend((key, component, vas, field) for field in COMPONENT_FIELDS[key])
+    # Focus can be discovered before the beam; preset activation must finish first.
+    settings.sort(key=lambda setting: setting[3] != "beamPreset")
+    for key, component, vas, field in settings:
+        entry = state.get(key, {}).get(field)
+        if not entry or entry[0] is None or field not in vas:
+            continue
+        if field != "position" and vas[field].readonly:
+            continue
+        try:
+            value = copy.deepcopy(entry[0])
+            if field == "position":
+                value = {axis: position for axis, position in value.items() if position is not None}
+                if not value:
+                    continue
+                component.moveAbs(value).result()
+            else:
+                vas[field].value = value
+        except Exception:
+            failures.append(f"{key}.{field}")
+            logging.exception("Failed to restore %s.%s.", key, field)
     if failures:
         raise RuntimeError(f"Could not restore recorded imaging settings: {', '.join(failures)}")

@@ -1040,6 +1040,16 @@ class TestFIB(BaseFIBTest, unittest.TestCase):
                 self.assertEqual(self.scanner.beamPreset.value, reported)
                 activate.assert_not_called()
 
+    def test_preset_waits_for_optics(self):
+        """Wait for the FIB to settle before restoring scan rotation."""
+        device = self.scanner._device_handler
+        preset = next(preset for preset in self.scanner.beamPreset.choices if preset)
+        with mock.patch.object(device, "IsBusy", side_effect=[0, 1, 0]) as busy, \
+             mock.patch.object(device, "PresetSetEx", return_value=0), \
+             mock.patch.object(device, "SetImageRot", side_effect=lambda value: self.assertEqual(busy.call_count, 3)):
+            self.scanner.beamPreset.value = preset
+        self.assertEqual(busy.call_count, 3)
+
     def test_set_presets(self):
         # Change presets (we use hardcoded presets here). If the hardcoded presets are not available on the hardware in
         # the future, make sure to update these here.
