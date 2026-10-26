@@ -515,7 +515,7 @@ class FibsemTab(Tab):
             logging.info("Posture switch was cancelled")
         except Exception:
             logging.exception("Failed to switch posture")
-        self._on_stage_pos(self.pm.stage.position.value)
+        self._on_current_posture(self.pm.current_posture.value)
 
     def terminate(self):
         self.pm.current_posture.unsubscribe(self._on_current_posture)
