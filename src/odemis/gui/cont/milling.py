@@ -500,9 +500,15 @@ class MillingTaskController:
             for param in panel.pattern_parameters:
                 value = getattr(parameters, param)
                 event = wx.EVT_CHECKBOX if isinstance(value, model.BooleanVA) else wx.EVT_COMMAND_ENTER
+                if isinstance(value, model.StringEnumerated):
+                    event = wx.EVT_COMBOBOX
+                update_control = None
+                if isinstance(parameters, CorrelationPatternParameters) and param in ("width", "height"):
+                    update_control = self._update_correlation_dimensions
                 _va_connector = VigilantAttributeConnector(
                     value,
                     panel.ctrl_dict[param],
+                    va_2_ctrl=update_control,
                     events=event,
                 )
                 self.controls[task_name][f"{param}_connector"] = _va_connector
@@ -1250,12 +1256,12 @@ class MillingTaskController:
                 elif uses_shared_label and show_labels:
                     x, y = pos_to_absolute(
                         pattern.center.value, feature.reference_image)
+                    label_position = (x, y + pattern.height.value / 2)
                     if isinstance(pattern, CorrelationPatternParameters):
-                        size = units.readable_str(
-                            (pattern.width.value, pattern.height.value), "m", sig=3
-                        )
-                        # Cairo cannot provide font fallback for the uncommon glyphs in the full task name.
+                        left, bottom, right, top = pattern.get_bounds()
+                        size = units.readable_str((right - left, top - bottom), "m", sig=3)
                         label = f"Correlation · {size}"
+                        label_position = pos_to_absolute(((left + right) / 2, top), feature.reference_image)
                     elif isinstance(pattern, NotchPatternParameters):
                         size = units.readable_str(
                             (pattern.width.value, pattern.height.value), "m", sig=3
@@ -1277,7 +1283,7 @@ class MillingTaskController:
                         label = f"{task_name} · {height}"
                     self.rectangles_overlay.add_pattern_label(
                         label,
-                        (x, y + pattern.height.value / 2),
+                        label_position,
                     )
 
         # validate the patterns
@@ -1370,12 +1376,37 @@ class MillingTaskController:
         self._panel.txt_milling_est_time.SetLabel(txt)
         self._panel.txt_automated_milling_est_time.SetLabel(txt)
 
+    @call_in_wx_main
+    def _update_correlation_dimensions(self, _: Any = None) -> None:
+        """Display selected marker dimensions while preserving the complete layout.
+
+        :param _: Ignored value supplied by a dimension subscription.
+        """
+        for task_name, controls in self.controls.items():
+            if not controls["panel"]:
+                continue
+            pattern = self.milling_tasks[task_name].patterns[0]
+            if not isinstance(pattern, CorrelationPatternParameters):
+                continue
+            display_all = pattern.subpattern.value == "All"
+            left, bottom, right, top = pattern.get_bounds()
+            for parameter, size in (("width", right - left), ("height", top - bottom)):
+                control = controls["panel"].ctrl_dict[parameter]
+                value = getattr(pattern, parameter).value if display_all else size
+                control.ChangeValue(value)
+                control.SetEditable(display_all)
+                tooltip = pattern.PARAMETER_TOOLTIPS[parameter]
+                if not display_all:
+                    tooltip = "Size of the selected marker. Adjust Marker length and Thickness to change it."
+                control.SetToolTip(tooltip)
+
     def _on_patterns(self, dat):
         """
         Updates milling time and availability of the mill button when there's an update on the patterns
         """
 
         logging.warning(f"Pattern updated: {dat}")
+        self._update_correlation_dimensions()
         self.draw_milling_tasks()
         self._update_milling_validation_message()
         self._update_mill_btn()

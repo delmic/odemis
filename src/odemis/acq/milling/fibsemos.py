@@ -479,11 +479,8 @@ def _convert_composite_pattern_to_milling_stage(
                   for rectangle in pattern.generate()]
     milling = convert_milling_settings(task.milling)
     if isinstance(pattern, CorrelationPatternParameters):
-        center_x, center_y = pattern.center.value
-        required_fov = 2 * max(
-            abs(center_x) + pattern.width.value / 2,
-            abs(center_y) + pattern.height.value / 2,
-        )
+        bounds = pattern.get_bounds()
+        required_fov = 2 * max(abs(edge) for edge in bounds)
         minimum_fov = required_fov * (1 + _MILLING_FOV_MARGIN)
         maximum_fov = task.milling.field_of_view.range[1]
         if minimum_fov > maximum_fov:

@@ -513,21 +513,26 @@ class RulerPatternParameters(CompositeRectanglePatternParameters):
 
 
 class CorrelationPatternParameters(CompositeRectanglePatternParameters):
-    """Five large fiducial glyphs for correlating optical and FIB-SEM images."""
+    """Five fiducial glyphs that can be milled together or individually."""
 
     PARAMETER_TOOLTIPS = {
         "width": "Overall width of the five-marker correlation pattern.",
         "height": "Overall height of the five-marker correlation pattern.",
         "marker_length": "Length of each bar forming a marker.",
         "thickness": "Thickness of each bar forming a marker.",
+        "subpattern": "Marker to display and mill. Individual markers are centered without resizing.",
     }
     _DIMENSIONS = ("width", "height", "marker_length", "thickness")
+    _SUBPATTERNS = {
+        "All": "All", "N": "N", "Π": "Pi", "+": "Cross",
+        "⅂": "Upper-right L", "Ʇ": "Upward-tail T",
+    }
 
     def __init__(self, width: float, height: float, marker_length: float,
                  thickness: float, depth: float,
                  center: Tuple[float, float] = (0, 0),
                  name: str = "Correlation (NΠ+⅂Ʇ)",
-                 spot_size_correction: float = 0.0) -> None:
+                 spot_size_correction: float = 0.0, subpattern: str = "All") -> None:
         """Initialize a correlation pattern.
 
         :param width: Overall distance from the left to right pattern edge.
@@ -535,9 +540,10 @@ class CorrelationPatternParameters(CompositeRectanglePatternParameters):
         :param marker_length: Length of each bar forming a fiducial glyph.
         :param thickness: Thickness of every bar.
         :param depth: Milling depth of every bar.
-        :param center: Center of the complete pattern.
+        :param center: Center of the displayed pattern.
         :param name: Pattern name.
         :param spot_size_correction: Beam spot size correction.
+        :param subpattern: Glyph to display and mill, or All for the complete layout.
         """
         self.name = model.StringVA(name)
         self.width = model.FloatContinuous(
@@ -555,6 +561,9 @@ class CorrelationPatternParameters(CompositeRectanglePatternParameters):
             center, unit="m", range=((-1e3, -1e3), (1e3, 1e3)), cls=(int, float))
         self.spot_size_correction = model.FloatContinuous(
             spot_size_correction, unit="m", range=(0, 900e-6))
+        # Accept descriptive names from projects saved before symbols were used.
+        subpattern = {name: symbol for symbol, name in self._SUBPATTERNS.items()}.get(subpattern, subpattern)
+        self.subpattern = model.StringEnumerated(subpattern, choices=self._SUBPATTERNS)
         self._check_geometry(width, height, marker_length, thickness)
 
     @staticmethod
@@ -597,7 +606,10 @@ class CorrelationPatternParameters(CompositeRectanglePatternParameters):
         return self._set_dimension("thickness", value)
 
     def to_dict(self) -> dict:
-        """Serialize the correlation pattern parameters."""
+        """Serialize the correlation pattern parameters.
+
+        :returns: Pattern dimensions, position, and selected subpattern.
+        """
         return {
             "name": self.name.value,
             "width": self.width.value,
@@ -608,12 +620,17 @@ class CorrelationPatternParameters(CompositeRectanglePatternParameters):
             "center_x": self.center.value[0],
             "center_y": self.center.value[1],
             "spot_size_correction": self.spot_size_correction.value,
+            "subpattern": self.subpattern.value,
             "pattern": "correlation",
         }
 
     @staticmethod
     def from_dict(data: dict) -> 'CorrelationPatternParameters':
-        """Create correlation pattern parameters from serialized data."""
+        """Create correlation pattern parameters from serialized data.
+
+        :param data: Saved pattern parameters, including an optional subpattern.
+        :returns: Restored pattern, showing all glyphs for older saved data.
+        """
         return CorrelationPatternParameters(
             width=data["width"],
             height=data["height"],
@@ -622,15 +639,37 @@ class CorrelationPatternParameters(CompositeRectanglePatternParameters):
             depth=data["depth"],
             center=(data.get("center_x", 0), data.get("center_y", 0)),
             name=data.get("name", "Correlation (NΠ+⅂Ʇ)"),
-            spot_size_correction=data.get("spot_size_correction", 0.0))
+            spot_size_correction=data.get("spot_size_correction", 0.0),
+            subpattern=data.get("subpattern", "All"))
+
+    def get_bounds(self) -> Tuple[float, float, float, float]:
+        """Return the bounds of the displayed glyphs, including rotated bars.
+
+        :returns: Left, bottom, right, and top coordinates relative to the reference image.
+        """
+        bounds = []
+        for rectangle in self.generate():
+            x, y = rectangle.center.value
+            cosine = abs(math.cos(rectangle.rotation.value))
+            sine = abs(math.sin(rectangle.rotation.value))
+            half_width = (rectangle.width.value * cosine + rectangle.height.value * sine) / 2
+            half_height = (rectangle.width.value * sine + rectangle.height.value * cosine) / 2
+            bounds.append((x - half_width, y - half_height, x + half_width, y + half_height))
+        return (min(bound[0] for bound in bounds), min(bound[1] for bound in bounds),
+                max(bound[2] for bound in bounds), max(bound[3] for bound in bounds))
 
     def generate(self) -> List[MillingPatternParameters]:
-        """Generate the pi, N, cross, upper-right L, and upward-tail T glyphs."""
+        """Generate the complete layout or one centered glyph at its original size.
+
+        :returns: Rectangles forming the selected glyphs.
+        """
         length = self.marker_length.value
         thickness = self.thickness.value
         half_length = length / 2
         edge_offset_x = (self.width.value - length) / 2
         edge_offset_y = (self.height.value - length) / 2
+        if self.subpattern.value != "All":
+            edge_offset_x = edge_offset_y = 0
         center_x, center_y = self.center.value
 
         horizontal_top = (length, thickness, 0, half_length - thickness / 2, 0)
@@ -658,6 +697,8 @@ class CorrelationPatternParameters(CompositeRectanglePatternParameters):
 
         rectangles = []
         for glyph_name, glyph_x, glyph_y, bars in glyphs:
+            if self.subpattern.value != "All" and glyph_name != self._SUBPATTERNS[self.subpattern.value]:
+                continue
             for index, (width, height, offset_x, offset_y, rotation) in enumerate(
                     bars, start=1):
                 rectangles.append(RectanglePatternParameters(

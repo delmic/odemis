@@ -423,6 +423,37 @@ class CorrelationPatternParametersTestCase(unittest.TestCase):
         self.assertEqual(restored.to_dict(), pattern.to_dict())
         self.assertEqual([rectangle.to_dict() for rectangle in restored.generate()],
                          [rectangle.to_dict() for rectangle in rectangles])
+        pattern.subpattern.value = "Π"
+        saved = pattern.to_dict()
+        self.assertEqual(CorrelationPatternParameters.from_dict(saved).to_dict(), saved)
+        saved["subpattern"] = "Pi"
+        self.assertEqual(CorrelationPatternParameters.from_dict(saved).subpattern.value, "Π")
+        del saved["subpattern"]
+        self.assertEqual(len(CorrelationPatternParameters.from_dict(saved).generate()), 12)
+
+    def test_individual_glyphs_are_centered_without_resizing(self):
+        """Selecting a glyph centers it without changing its bar dimensions."""
+        pattern = CorrelationPatternParameters(
+            width=900e-6, height=700e-6, marker_length=75e-6,
+            thickness=4e-6, depth=3e-6, center=(10e-6, -20e-6))
+        complete = pattern.generate()
+        for symbol, name in (("Π", "Pi"), ("N", "N"), ("+", "Cross"),
+                             ("⅂", "Upper-right L"), ("Ʇ", "Upward-tail T")):
+            with self.subTest(subpattern=symbol):
+                pattern.subpattern.value = symbol
+                selected = pattern.generate()
+                original = [bar for bar in complete if f"({name} " in bar.name.value]
+                self.assertEqual(
+                    [(bar.width.value, bar.height.value, bar.rotation.value) for bar in selected],
+                    [(bar.width.value, bar.height.value, bar.rotation.value) for bar in original])
+                left, bottom, right, top = pattern.get_bounds()
+                self.assertAlmostEqual((left + right) / 2, pattern.center.value[0], delta=1e-18)
+                self.assertAlmostEqual((bottom + top) / 2, pattern.center.value[1], delta=1e-18)
+                expected_width = 75e-6 / math.sqrt(2) + 4e-6 if symbol == "N" else 75e-6
+                self.assertAlmostEqual(right - left, expected_width, delta=1e-18)
+                self.assertAlmostEqual(top - bottom, 75e-6, delta=1e-18)
+        pattern.subpattern.value = "All"
+        self.assertEqual([bar.to_dict() for bar in pattern.generate()], [bar.to_dict() for bar in complete])
 
     def test_invalid_geometry(self) -> None:
         """Reject overlapping glyphs and bars with no internal clearance."""

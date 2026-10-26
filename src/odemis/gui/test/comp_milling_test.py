@@ -186,7 +186,7 @@ class MillingTaskPanelTestCase(test.GuiTestCase):
         self.assertEqual(
             set(correlation_panel.pattern_parameters),
             {"width", "height", "marker_length", "thickness", "depth",
-             "spot_size_correction"})
+             "spot_size_correction", "subpattern"})
         for name in ("Microexpansion", "Rough Milling 01", "Polishing 01"):
             panel = controls[name]["panel"]
             self.assertNotIn("num_graduations", panel.ctrl_dict)
@@ -194,6 +194,34 @@ class MillingTaskPanelTestCase(test.GuiTestCase):
                 set(panel.pattern_parameters),
                 {"width", "height", "depth", "spacing", "spot_size_correction"},
             )
+
+    def test_select_correlation_subpattern_updates_preview(self):
+        """Apply a dropdown choice immediately to the displayed milling geometry."""
+        controls = self.controller.controls["Correlation (NΠ+⅂Ʇ)"]
+        pattern = self.tasks["Correlation (NΠ+⅂Ʇ)"].patterns[0]
+        selector = controls["panel"].ctrl_dict["subpattern"]
+        fields = controls["panel"].ctrl_dict
+        self.assertEqual(list(fields)[0], "subpattern")
+        self.assertEqual(selector.GetStrings(), ["All", "N", "Π", "+", "⅂", "Ʇ"])
+        self.controller.draw_milling_tasks.reset_mock()
+        selector.SetValue("Π")
+        event = wx.CommandEvent(wx.EVT_COMBOBOX.typeId, selector.Id)
+        event.SetEventObject(selector)
+        selector.GetEventHandler().ProcessEvent(event)
+        test.gui_loop()
+        self.assertEqual(pattern.subpattern.value, "Π")
+        self.assertEqual(len(pattern.generate()), 3)
+        for parameter in ("width", "height"):
+            self.assertFalse(fields[parameter].IsEditable())
+            self.assertAlmostEqual(fields[parameter].GetValue(), 75e-6)
+        self.controller.draw_milling_tasks.assert_called_once()
+        pattern.marker_length.value = 80e-6
+        test.gui_loop()
+        self.assertAlmostEqual(fields["width"].GetValue(), 80e-6)
+        pattern.subpattern.value = "All"
+        test.gui_loop()
+        self.assertTrue(fields["width"].IsEditable())
+        self.assertEqual((fields["width"].GetValue(), fields["height"].GetValue()), (900e-6, 700e-6))
 
     def test_edit_ruler_parameters_updates_pattern_and_preview(self) -> None:
         """Apply ruler control edits and redraw the preview."""

@@ -75,6 +75,7 @@ class MillingTaskPanel(wx.Panel):
             "marker_length": {
                 "label": "Marker length", "accuracy": 2, "unit": "m"
             },
+            "subpattern": {"label": "Subpattern"},
             "top_width": {"label": "Top width", "accuracy": 2, "unit": "m"},
             "top_height": {"label": "Top height", "accuracy": 2, "unit": "m"},
             "bottom_width": {
@@ -115,6 +116,17 @@ class MillingTaskPanel(wx.Panel):
                                   "field_of_view", "voltage",
                                   "rate", "dwell_time"]
 
+        pattern = task.patterns[0]
+        self.pattern_parameters = []
+        for parameter, tooltip in pattern.PARAMETER_TOOLTIPS.items():
+            CONFIG.setdefault(parameter, {})["tooltip"] = tooltip
+
+        if hasattr(pattern, "subpattern"):
+            conf = CONFIG["subpattern"].copy()
+            label = conf.pop("label")
+            self._add_value_field(label, pattern.subpattern, conf, param="subpattern")
+            self.pattern_parameters.append("subpattern")
+
         for param in vars(task.milling):
             if param in unsupported_parameters:
                 continue
@@ -125,14 +137,9 @@ class MillingTaskPanel(wx.Panel):
             val = getattr(task.milling, param)
             self._add_value_field(label, val, conf, param=param)
 
-        pattern = task.patterns[0]
-        self.pattern_parameters = []
-        for parameter, tooltip in pattern.PARAMETER_TOOLTIPS.items():
-            CONFIG.setdefault(parameter, {})["tooltip"] = tooltip
-
         for param in vars(pattern):
 
-            if param in unsupported_parameters:
+            if param in unsupported_parameters or param in self.pattern_parameters:
                 continue
 
             conf = CONFIG.get(param, {}).copy()

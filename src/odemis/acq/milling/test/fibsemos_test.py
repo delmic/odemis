@@ -392,7 +392,7 @@ class TestConvertMillingTasksToMillingStages(unittest.TestCase):
         self.assert_composite_pattern_uses_one_stage(pattern)
 
     def test_correlation_pattern_uses_one_milling_stage(self) -> None:
-        """Send all correlation markers in one milling stage."""
+        """Keep each selected correlation layout in one milling stage."""
         pattern = CorrelationPatternParameters(
             width=900e-6, height=700e-6, marker_length=75e-6,
             thickness=4e-6, depth=3e-6)
@@ -404,6 +404,12 @@ class TestConvertMillingTasksToMillingStages(unittest.TestCase):
         self.assertEqual(len(rotated_rectangles), 1)
         # The N diagonal descends to the right: 45 degrees clockwise in Odemis.
         self.assertAlmostEqual(rotated_rectangles[0].rotation, 7 * math.pi / 4)
+
+        pattern.subpattern.value = "N"
+        # A single marker at this position fits; the full layout would not.
+        pattern.center.value = (100e-6, 0)
+        stage = self.assert_composite_pattern_uses_one_stage(pattern)
+        self.assertEqual(len(stage.patterns), 3)
 
     def test_waffle_trench_uses_one_milling_stage(self) -> None:
         """Send both waffle trench rectangles in one milling stage."""
