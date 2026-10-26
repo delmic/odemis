@@ -407,7 +407,9 @@ class CorrelationPatternParametersTestCase(unittest.TestCase):
         self.assertTrue(all(rectangle.depth.value == 3e-6 for rectangle in rectangles))
         self.assertTrue(all(rectangle.spot_size_correction.value == 20e-9
                             for rectangle in rectangles))
-        self.assertEqual(sum(rectangle.rotation.value != 0 for rectangle in rectangles), 1)
+        rotated = [rectangle for rectangle in rectangles if rectangle.rotation.value]
+        self.assertEqual(len(rotated), 1)
+        self.assertAlmostEqual(rotated[0].rotation.value, 7 * math.pi / 4)
         left = min(rectangle.center.value[0] - rectangle.width.value / 2
                    for rectangle in rectangles)
         right = max(rectangle.center.value[0] + rectangle.width.value / 2

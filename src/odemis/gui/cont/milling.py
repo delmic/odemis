@@ -171,7 +171,11 @@ def _get_alignment_area_polygon(feature: CryoFeature) -> Optional[Polygon]:
 
 
 def _get_milling_rectangle_polygon(rectangle: RectanglePatternParameters) -> Polygon:
-    """Return a generated milling rectangle in image-relative physical coordinates."""
+    """Return a generated milling rectangle in image-relative physical coordinates.
+
+    :param rectangle: Rectangle with counterclockwise rotation in radians.
+    :returns: Rotated rectangle in physical coordinates.
+    """
     center_x, center_y = rectangle.center.value
     half_width = rectangle.width.value / 2
     half_height = rectangle.height.value / 2
@@ -182,9 +186,8 @@ def _get_milling_rectangle_polygon(rectangle: RectanglePatternParameters) -> Pol
         center_y + half_height,
     )
     if rectangle.rotation.value:
-        # Overlay angles increase clockwise because viewport Y points down.
         geometry = affinity.rotate(
-            geometry, -rectangle.rotation.value, origin=(center_x, center_y), use_radians=True)
+            geometry, rectangle.rotation.value, origin=(center_x, center_y), use_radians=True)
     return geometry
 
 
@@ -213,15 +216,26 @@ def _get_pattern_stack_center(patterns: List[MillingPatternParameters]) -> Tuple
 
 
 # TODO: support other shapes
-def rectangle_pattern_to_shape(canvas,
+def rectangle_pattern_to_shape(canvas: Any,
                         ref_img: model.DataArray,
                         pattern: RectanglePatternParameters,
                         colour: str = theme.categorical_yellow,
-                        name: str = None,
+                        name: Optional[str] = None,
                         show_spot_size_correction: bool = False,
                         show_dimensions: bool = True,
                         opacity: float = MILLING_OVERLAY_ACTIVE_OPACITY) -> EditableShape:
-    """Convert a rectangle pattern to a shape"""
+    """Convert a rectangle pattern to a displayed shape.
+
+    :param canvas: Canvas that displays the shape.
+    :param ref_img: Reference image defining the pattern's coordinate origin.
+    :param pattern: Rectangle with counterclockwise rotation in radians.
+    :param colour: Shape color.
+    :param name: Optional shape label.
+    :param show_spot_size_correction: Whether to display the spot size correction.
+    :param show_dimensions: Whether to display the rectangle dimensions.
+    :param opacity: Shape opacity.
+    :returns: Rectangle overlay in viewport coordinates.
+    """
     rect = MillingRectangleOverlay(
         cnvs=canvas,
         colour=colour,
@@ -253,7 +267,8 @@ def rectangle_pattern_to_shape(canvas,
     rect.points.value = rect._points
 
     if pattern.rotation.value:
-        rect.set_rotation(pattern.rotation.value)
+        # Viewport Y points down, reversing physical counterclockwise angles.
+        rect.set_rotation(-pattern.rotation.value)
 
     return rect
 

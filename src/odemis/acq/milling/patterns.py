@@ -74,7 +74,7 @@ class MillingPatternParameters(ABC):
 
 
 class RectanglePatternParameters(MillingPatternParameters):
-    """Represents rectangle pattern parameters"""
+    """Rectangle parameters with counterclockwise rotation in physical coordinates."""
 
     def __init__(self, width: float, height: float, depth: float, rotation: float = 0.0,
                  center=(0, 0), scan_direction: str = "TopToBottom", name: str = "Rectangle",
@@ -681,12 +681,12 @@ class CorrelationPatternParameters(CompositeRectanglePatternParameters):
         diagonal_span = length / math.sqrt(2)
         n_vertical_left = (thickness, length, -diagonal_span / 2, 0, 0)
         n_vertical_right = (thickness, length, diagonal_span / 2, 0, 0)
-        diagonal_rising = (length, thickness, 0, 0, math.pi / 4)
+        diagonal_falling = (length, thickness, 0, 0, 7 * math.pi / 4)
         glyphs = (
             ("Pi", -edge_offset_x, edge_offset_y,
              (horizontal_top, vertical_left, vertical_right)),
             ("N", -edge_offset_x, -edge_offset_y,
-             (n_vertical_left, diagonal_rising, n_vertical_right)),
+             (n_vertical_left, diagonal_falling, n_vertical_right)),
             ("Cross", 0, 0,
              (horizontal_middle, vertical_middle)),
             ("Upper-right L", edge_offset_x, edge_offset_y,

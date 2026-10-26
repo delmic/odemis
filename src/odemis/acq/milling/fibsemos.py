@@ -326,14 +326,18 @@ def _apply_spot_size_correction(dimension: float, correction: float, dimension_n
 
 
 def _convert_rectangle_pattern(p: RectanglePatternParameters) -> 'RectanglePattern':
-    """Convert an Odemis rectangle pattern to a fibsemOS RectanglePattern."""
+    """Convert an Odemis rectangle pattern to a fibsemOS RectanglePattern.
+
+    :param p: Rectangle parameters with counterclockwise rotation in radians.
+    :returns: Rectangle with counterclockwise rotation in degrees.
+    :raises ValueError: If spot size correction makes a dimension non-positive.
+    """
     correction = p.spot_size_correction.value
     return RectanglePattern(
         width=_apply_spot_size_correction(p.width.value, correction, "rectangle width"),
         height=_apply_spot_size_correction(p.height.value, correction, "rectangle height"),
         depth=p.depth.value,
-        # Odemis overlay angles are clockwise; fibsemOS uses counterclockwise angles.
-        rotation=math.degrees(-p.rotation.value % (2 * math.pi)),
+        rotation=math.degrees(p.rotation.value),
         scan_direction=p.scan_direction.value,
         point=Point(x=p.center.value[0], y=p.center.value[1])
     )

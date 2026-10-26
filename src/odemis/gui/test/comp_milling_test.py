@@ -21,7 +21,8 @@ from unittest.mock import Mock, call, patch
 import cairo
 import numpy
 import wx
-from shapely.geometry import Polygon
+from shapely import affinity
+from shapely.geometry import Polygon, box
 
 import odemis.gui.comp.miccanvas as miccanvas
 import odemis.gui.test as test
@@ -97,19 +98,23 @@ class MillingTaskPanelTestCase(test.GuiTestCase):
         super().tearDown()
 
     def test_pattern_polygon_matches_displayed_rotation(self) -> None:
-        """Use the same rotation direction for validation and the drawn rectangle."""
+        """Draw and validate counterclockwise rotations in physical coordinates."""
         canvas = Mock()
         canvas.get_half_buffer_size.return_value = (0, 0)
         canvas.phys_to_view.side_effect = lambda point, offset: (point[0] / 1e-6, -point[1] / 1e-6)
         canvas.view_to_phys.side_effect = lambda point, offset: (point[0] * 1e-6, -point[1] * 1e-6)
         image = SimpleNamespace(metadata={model.MD_POS: (0, 0)})
-        for rotation in (0, math.pi / 6, math.pi / 4, 3 * math.pi / 4):
+        for rotation in (0, math.pi / 6, 3 * math.pi / 2):
             with self.subTest(rotation=rotation):
                 pattern = RectanglePatternParameters(width=80e-6, height=10e-6, depth=1e-6,
                                                      center=(20e-6, -30e-6), rotation=rotation)
                 shape = rectangle_pattern_to_shape(canvas, image, pattern)
-                expected = Polygon(shape.get_physical_sel())
+                expected = affinity.rotate(
+                    box(-20e-6, -35e-6, 60e-6, -25e-6), rotation,
+                    origin=pattern.center.value, use_radians=True)
+                displayed = Polygon(shape.get_physical_sel())
                 actual = _get_milling_rectangle_polygon(pattern)
+                self.assertLess(displayed.symmetric_difference(expected).area / expected.area, 1e-10)
                 self.assertLess(actual.symmetric_difference(expected).area / expected.area, 1e-10)
 
 

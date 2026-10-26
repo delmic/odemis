@@ -119,6 +119,7 @@ class TestConvertPatterns(unittest.TestCase):
                                     f"Got the error: {err}")
 
     def test_convert_rectangle_pattern(self):
+        """Preserve counterclockwise rotation when converting radians to degrees."""
         pattern_param = create_rectangle_pattern_params()
         pattern_param.rotation.value = math.pi / 6
         converted = convert_pattern_to_fibsemos(pattern_param)
@@ -126,7 +127,7 @@ class TestConvertPatterns(unittest.TestCase):
         self.assertAlmostEqual(converted.width, pattern_param.width.value)
         self.assertAlmostEqual(converted.height, pattern_param.height.value)
         self.assertAlmostEqual(converted.depth, pattern_param.depth.value)
-        self.assertAlmostEqual(converted.rotation, 330)
+        self.assertAlmostEqual(converted.rotation, 30)
         self.assertEqual(converted.scan_direction, pattern_param.scan_direction.value)
         self.assertEqual(converted.point, Point(x=pattern_param.center.value[0],
                                                 y=pattern_param.center.value[1]))
@@ -402,7 +403,7 @@ class TestConvertMillingTasksToMillingStages(unittest.TestCase):
         rotated_rectangles = [rectangle for rectangle in stage.pattern.define()
                               if rectangle.rotation]
         self.assertEqual(len(rotated_rectangles), 1)
-        # The N diagonal descends to the right: 45 degrees clockwise in Odemis.
+        # The N diagonal descends to the right: 315 degrees counterclockwise.
         self.assertAlmostEqual(rotated_rectangles[0].rotation, 7 * math.pi / 4)
 
         pattern.subpattern.value = "N"
