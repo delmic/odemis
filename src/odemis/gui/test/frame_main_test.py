@@ -90,7 +90,6 @@ class FrMainTest(unittest.TestCase):
             "menu_item_rawpixel",
             "menu_item_show_correlation",
             "menu_item_debug",
-            "menu_item_data_sharing",
         )
         for attribute in checkable:
             with self.subTest(attribute=attribute):

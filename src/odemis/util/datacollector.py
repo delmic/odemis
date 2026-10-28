@@ -42,7 +42,7 @@ import time
 import uuid
 import zipfile
 from dataclasses import dataclass, field
-from datetime import date, datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -79,10 +79,9 @@ _DEFAULT_QUEUE_DIR = Path("~/.local/share/odemis/dc_queue")
 _VALID_IMAGE_FORMATS = ("TIFF", "HDF5")
 _INITIAL_RETRY_DELAY_SECONDS = 30.0
 _MAX_RETRY_DELAY_SECONDS = 3600.0
-CONSENT_DATE_KEY = "consent_date"
 
 # Collection probability: fraction of record() calls that are actually uploaded.
-# 100% when consent expires within 1 day (1-day trial), 10% otherwise.
+# 100% when the consent was enabled for the session (overriding the config file), 10% otherwise.
 _DEFAULT_COLLECTION_PROBABILITY = 0.10
 _FULL_COLLECTION_PROBABILITY = 1.0
 
@@ -142,158 +141,57 @@ def _search_credentials() -> dict:
 
 
 class DataCollectorConfig:
-    """Persistent configuration for the data-collection framework.
+    """Configuration of the data-collection framework.
 
-    Backed by a configparser INI file at
-    ~/.config/odemis/datacollector.config.
+    Backed by a configparser INI file at ~/.config/odemis/data_sharing.config.
+    The file is read once, at initialisation. If it doesn't exist, it is created
+    with acquisition_analytics = false. Apart from this creation, the software
+    never modifies it: it is meant to be edited manually by a user, while Odemis
+    is not running.
 
     Sections
     --------
     [general]
-        consent       — true / false / none (not yet decided).
-        consent_date  — Date (ISO UTC) until which consent is active.
-                        Consent auto-expires to False after this date.
-                        Commented out when not applicable.
-
-    The file is written in a human-readable format with inline comments so it
-    can be inspected and manually edited by a support engineer.  Example::
-
-        [general]
-        # Data sharing consent (true / false).
-        # consent = true
-        #
-        # Date until which consent is active (ISO). Auto-expires to false.
-        # consent_date =
+        acquisition_analytics -- true / false. Whether acquisition-related data
+                                 and interaction logs are shared with Delmic.
+                                 A missing or malformed value is read as false.
     """
-    file_name: str = "datacollector.config"
+    file_name: str = "data_sharing.config"
+    _DEFAULT_CONTENT = (
+        "[general]\n"
+        "# Organization accepts sharing acquisition-related data and interaction logs with Delmic (true / false).\n"
+        "acquisition_analytics = false\n"
+    )
 
     def __init__(self) -> None:
         self.file_path = Path(_CONF_DIR) / self.file_name
         self._cp = configparser.ConfigParser(interpolation=None)
-        self._lock = threading.Lock()
         self._read()
 
     def _read(self) -> None:
-        """Read the config file if it exists; otherwise leave defaults."""
-        if self.file_path.exists():
-            self._cp.read(self.file_path)
-        else:
-            logging.info("No datacollector config found; using defaults.")
-
-    def _write(self) -> None:
-        """Write the current config to file, creating parent directories if needed."""
-        self.file_path.parent.mkdir(parents=True, exist_ok=True)
-        self._ensure_section("general")
-
-        # consent
-        if self.consent is None:
+        """Read the config file, creating it with the default content if it doesn't exist."""
+        if not self.file_path.exists():
             try:
-                self._cp.remove_option("general", "consent")
-            except configparser.NoOptionError:
-                pass
-        else:
-            self._cp.set("general", "consent", "true" if self.consent else "false")
-
-        # consent_date (stored as local date: YYYY-MM-DD)
-        consent_day = self.consent_date
-        if consent_day is None:
-            try:
-                self._cp.remove_option("general", CONSENT_DATE_KEY)
-            except configparser.NoOptionError:
-                pass
-        else:
-            self._cp.set("general", CONSENT_DATE_KEY, consent_day.isoformat())
-
-        with self.file_path.open("w", encoding="utf-8") as fh:
-            self._cp.write(fh)
-
-        os.chmod(str(self.file_path), 0o600)
-
-    def _ensure_section(self, section: str) -> None:
-        """
-        Ensure that section exists in the config, creating it if necessary.
-        :param section: Section name to ensure.
-        """
-        if not self._cp.has_section(section):
-            self._cp.add_section(section)
+                self.file_path.parent.mkdir(parents=True, exist_ok=True)
+                self.file_path.write_text(self._DEFAULT_CONTENT, encoding="utf-8")
+                os.chmod(str(self.file_path), 0o600)
+            except OSError:
+                logging.warning("Failed to create data sharing config %s", self.file_path, exc_info=True)
+        try:
+            self._cp.read(self.file_path, encoding="utf-8")
+        except (configparser.Error, OSError, UnicodeDecodeError):
+            logging.warning("Failed to read data sharing config %s", self.file_path, exc_info=True)
 
     @property
-    def consent(self) -> Optional[bool]:
+    def acquisition_analytics(self) -> bool:
         """
-        Get the consent state, or None if not yet set.
-        :return: True if consented, False if declined, None if undecided.
-        """
-        try:
-            return self._cp.getboolean("general", "consent")
-        except (configparser.NoSectionError, configparser.NoOptionError):
-            return None
-        except ValueError:
-            return None
-
-    @consent.setter
-    def consent(self, value: bool) -> None:
-        """
-        Set consent to true or false, and clear consent expiry. If none, the consent is cleared
-         and becomes undecided.
-        :param value: True to opt in, False to opt out.
-        """
-        with self._lock:
-            self._ensure_section("general")
-            if value is None:
-                self.clear_consent()
-            else:
-                self._cp.set("general", "consent", "true" if value else "false")
-                self._cp.remove_option("general", CONSENT_DATE_KEY)
-                self._write()
-
-    def clear_consent(self) -> None:
-        """
-        Unset consent so it becomes undecided again.
-        :return: None
-        """
-        with self._lock:
-            self._ensure_section("general")
-            self._cp.remove_option("general", "consent")
-            self._cp.remove_option("general", CONSENT_DATE_KEY)
-            self._write()
-
-    @property
-    def consent_date(self) -> Optional[date]:
-        """
-        Return the consent expiry date as a local-date value, or None when unset.
-        When this date is reached, consent automatically expires to False.
-        :return: Local date of consent expiry, or None if not set.
+        Get the acquisition analytics setting from the file.
+        :return: True if enabled. False if disabled, missing or malformed.
         """
         try:
-            value = self._cp.get("general", CONSENT_DATE_KEY)
-        except (configparser.NoSectionError, configparser.NoOptionError):
-            return None
-        value = value.strip()
-        if not value:
-            return None
-        # Preferred format: YYYY-MM-DD (local date only).
-        try:
-            return date.fromisoformat(value)
-        except ValueError:
-            pass
-
-        return None
-
-    def set_consent_with_expiry(self, consent_date: date) -> None:
-        """
-        Enable consent until consent_date (inclusive), then auto-expire to False.
-
-        When consent_date is today or tomorrow, record() uses 100% collection
-        probability; otherwise the default 10% applies.
-
-        :param consent_date: Local date after which consent is revoked automatically.
-        :return: None
-        """
-        with self._lock:
-            self._ensure_section("general")
-            self._cp.set("general", "consent", "true")
-            self._cp.set("general", CONSENT_DATE_KEY, consent_date.isoformat())
-            self._write()
+            return self._cp.getboolean("general", "acquisition_analytics")
+        except (configparser.Error, ValueError):
+            return False
 
     def get_upload_backend(self) -> "S3UploadBackend":
         """
@@ -677,27 +575,21 @@ class DataCollector:
         self._worker: Optional[_BackgroundWorker] = None
         self._init_ok: bool = False
         self._init_lock = threading.Lock()
+        # Consent for this session, overriding the config file. None = no override.
+        self._consent_override: Optional[bool] = None
         # Controls the probability of collecting acquired data. 0 means no data
         # is collected, 1 means all data is collected.
         self.probability = 0.0
 
     def _refresh_probability(self) -> None:
-        """Refresh collection probability from consent state and expiry date."""
+        """Refresh collection probability from the consent state."""
         if not self._init_ok or self._config is None:
             return
 
-        # No consent means no collection.
-        if self._config.consent is not True:
+        if not self.get_consent():
             self.probability = 0.0
-            return
-
-        consent_day = self._config.consent_date
-        if consent_day is None:
-            self.probability = _DEFAULT_COLLECTION_PROBABILITY
-            return
-
-        days_left = (consent_day - datetime.now().astimezone().date()).days
-        if days_left <= 1:
+        elif self._consent_override is not None:
+            # Explicitly enabled for the session => collect everything
             self.probability = _FULL_COLLECTION_PROBABILITY
         else:
             self.probability = _DEFAULT_COLLECTION_PROBABILITY
@@ -714,63 +606,46 @@ class DataCollector:
                 self._worker = _BackgroundWorker(self._config)
                 self._init_ok = True
                 self._refresh_probability()
-                logging.debug("DataCollector initialised.")
+                logging.debug("DataCollector initialised, with default consent = %s.",
+                              self._config.acquisition_analytics)
             except Exception:
                 logging.warning(
                     "DataCollector failed to initialise; all record() calls will be no-ops."
                 )
 
-    def get_consent(self) -> Optional[bool]:
-        """Return current consent state and auto-expire temporary consent when needed."""
+    def get_consent_default(self) -> bool:
+        """
+        Return the consent as defined in the config file, ignoring any session override.
+        :returns: True if the config file enables the acquisition analytics.
+        """
         self._lazy_init()
         if not self._init_ok:
-            return None
-        consent = self._config.consent
-        if consent is not True:
-            return consent
-
-        consent_day = self._config.consent_date
-        if consent_day is None:
-            return True
-
-        today_local = datetime.now().astimezone().date()
-        if today_local > consent_day:
-            self._config.consent = False
-            self._refresh_probability()
-            logging.info("DataCollector: temporary consent expired; consent set to False.")
             return False
-        return True
+        return self._config.acquisition_analytics
 
-    def set_consent(self, value: bool) -> None:
+    def get_consent(self) -> bool:
         """
-        Persist explicit user consent choice.
-        :param value: Boolean indicating user's consent choice.
+        Return the current consent: the session override if any, otherwise the config file value.
+        :returns: True if data can be collected.
         """
-        if not isinstance(value, bool):
-            raise ValueError("value must be a bool")
-        self._lazy_init()
-        if not self._init_ok:
-            return
-        self._config.consent = value
-        self._refresh_probability()
+        if self._consent_override is not None:
+            return self._consent_override
+        return self.get_consent_default()
 
-    def set_temporary_consent(self, days: int = 1) -> None:
+    def set_temporary_consent(self, value: bool) -> None:
         """
-        Enable consent for the specified number of days, after which it
-        auto-expires to False.
-
-        When days == 1, the remaining time at the moment record() is called
-        will be ≤ 1 day, so 100% collection probability applies throughout.
-        When days > 1, the default 10% probability applies until the final day.
-
-        :param days: Number of days the temporary consent is active.
+        Override the consent for the current session only. The config file is not modified.
+        Setting the same value as the config file removes the override.
+        When the consent is enabled by the override, the collection probability is 100%.
+        :param value: True to enable, False to disable.
         """
         self._lazy_init()
         if not self._init_ok:
             return
-        consent_day = datetime.now().astimezone().date() + timedelta(days=days)
-        self._config.set_consent_with_expiry(consent_date=consent_day)
+        self._consent_override = None if value == self._config.acquisition_analytics else value
         self._refresh_probability()
+        logging.info("DataCollector: consent set to %s for the session (default = %s, probability = %g).",
+                     value, self._config.acquisition_analytics, self.probability)
 
     def record(
         self,

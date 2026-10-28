@@ -183,9 +183,14 @@ class MainFrame(wx.Frame):
         self.menu_item_bugreport = menu.Append(
             wx.ID_ANY, "Report a problem..."
         )
-        self.menu_item_data_sharing = menu.AppendCheckItem(
-            wx.ID_ANY, "Share Data with Delmic"
+        data_sharing_menu = wx.Menu()
+        self.menu_item_data_sharing_status = data_sharing_menu.Append(
+            wx.ID_ANY, "Acquisition analytics"
         )
+        self.menu_item_data_sharing_change = data_sharing_menu.Append(
+            wx.ID_ANY, "Change..."
+        )
+        self.menu_item_data_sharing = menu.AppendSubMenu(data_sharing_menu, "Data sharing")
         menu.AppendSeparator()
         self.menu_item_update = menu.Append(wx.ID_ANY, "Check for update")
         self.menu_item_about = menu.Append(wx.ID_ANY, "About...")
