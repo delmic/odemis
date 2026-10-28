@@ -2583,8 +2583,8 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
         # at the milling position.
         # Note that the 180-degree rotation is taken care of by swapping the +/- signs for x and y (wrt the m equation).
         transformed_pos = {
-            "x": milling_reference_pos_x + (fib_view_fm_reference_pos_x - pos["x"]),
-            "y": milling_reference_pos_y + (fib_view_fm_reference_pos_y - pos["y"]),
+            "x": milling_reference_pos_x + (pos["x"] - fib_view_fm_reference_pos_x),
+            "y": milling_reference_pos_y + (pos["y"] - fib_view_fm_reference_pos_y),
             "z": milling_reference_pos_z + (pos["z"] - fib_view_fm_reference_pos_z),
             "rx": rx_milling,
             "rz": pos["rz"],
@@ -2622,8 +2622,8 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
         # at the FIB-view FM position.
         # Note that the 180-degree rotation is taken care of by swapping the +/- signs for x and y (wrt the m equation).
         transformed_pos = {
-            "x": fib_view_fm_reference_pos_x + (milling_reference_pos_x - pos["x"]),
-            "y": fib_view_fm_reference_pos_y + (milling_reference_pos_y - pos["y"]),
+            "x": fib_view_fm_reference_pos_x + (pos["x"] - milling_reference_pos_x),
+            "y": fib_view_fm_reference_pos_y + (pos["y"] - milling_reference_pos_y),
             "z": fib_view_fm_reference_pos_z + (pos["z"] - milling_reference_pos_z),
             "rx": rx_fib_view_fm,
             "rz": pos["rz"],
