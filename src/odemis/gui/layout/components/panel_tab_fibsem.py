@@ -713,11 +713,14 @@ class PnlTabFibsem(wx.Panel):
     def _build_acquire_row(self, parent: wx.Window) -> wx.Sizer:
         """Build acquisition action, estimate, and progress controls.
 
+        The acquire button and the progress gauge are on the first line. The
+        estimated/remaining time sentence and the cancel button are on the
+        second line, with the cancel button aligned to the right edge so it
+        keeps a fixed position whatever the text length.
+
         :param parent: Parent window.
         :returns: Acquisition row.
         """
-        grid = wx.FlexGridSizer(rows=1, cols=3, vgap=0, hgap=5)
-
         button_panel = wx.Panel(parent, size=(200, 48))
         button_panel.SetBackgroundColour(self._theme.background)
         with hbox() as button_sizer:
@@ -738,61 +741,69 @@ class PnlTabFibsem(wx.Panel):
                 flag=wx.ALIGN_CENTER,
             )
         button_panel.SetSizer(button_sizer)
-        grid.Add(
-            button_panel,
-            flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL,
-            border=2,
-        )
 
-        self.txt_cryosecom_est_time = create_label(
-            parent,
-            LABEL_ESTIMATED_TIME,
-            self._theme.text_primary,
-        )
-        self.txt_cryosecom_est_time.Hide()
-        grid.Add(self.txt_cryosecom_est_time, flag=wx.TOP, border=17)
-
-        with hbox() as progress_sizer:
-            with vbox() as gauge_sizer:
+        with vbox() as sizer:
+            with hbox() as top_sizer:
+                top_sizer.Add(
+                    button_panel,
+                    flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL,
+                    border=2,
+                )
                 self.gauge_cryosecom_acq = wx.Gauge(
                     parent,
                     range=100,
-                    size=(-1, 10),
+                    size=(50, 10),
                     style=wx.GA_SMOOTH,
                 )
-                gauge_sizer.Add(
+                top_sizer.Add(
                     self.gauge_cryosecom_acq,
                     proportion=1,
-                    flag=wx.TOP,
+                    flag=wx.ALIGN_CENTER_VERTICAL | wx.LEFT,
                     border=self._theme.spacing_standard,
                 )
-                self.txt_cryosecom_left_time = create_label(
-                    parent, "", self._theme.text_primary
-                )
-                self.txt_cryosecom_left_time.Hide()
-                gauge_sizer.Add(
-                    self.txt_cryosecom_left_time,
-                    proportion=1,
-                    flag=wx.TOP,
-                    border=self._theme.spacing_standard,
-                )
-            progress_sizer.Add(gauge_sizer, flag=wx.TOP, border=-8)
+            sizer.Add(top_sizer, flag=wx.EXPAND)
 
-            self.btn_cryosecom_acqui_cancel = create_text_button(
-                parent,
-                LABEL_CANCEL,
-                height=24,
-                text_colour=self._theme.button_text,
-                contrast_text_colour=self._theme.button_text_contrast,
+            with hbox() as bottom_sizer:
+                with vbox() as text_sizer:
+                    self.txt_cryosecom_est_time = create_label(
+                        parent,
+                        LABEL_ESTIMATED_TIME,
+                        self._theme.text_primary,
+                    )
+                    self.txt_cryosecom_est_time.Hide()
+                    text_sizer.Add(self.txt_cryosecom_est_time)
+                    self.txt_cryosecom_left_time = create_label(
+                        parent, "", self._theme.text_primary
+                    )
+                    self.txt_cryosecom_left_time.Hide()
+                    text_sizer.Add(self.txt_cryosecom_left_time)
+                bottom_sizer.Add(
+                    text_sizer,
+                    proportion=1,
+                    flag=wx.ALIGN_CENTER_VERTICAL | wx.LEFT,
+                    border=self._theme.spacing_standard,
+                )
+
+                self.btn_cryosecom_acqui_cancel = create_text_button(
+                    parent,
+                    LABEL_CANCEL,
+                    height=24,
+                    text_colour=self._theme.button_text,
+                    contrast_text_colour=self._theme.button_text_contrast,
+                )
+                bottom_sizer.Add(
+                    self.btn_cryosecom_acqui_cancel,
+                    flag=wx.ALIGN_CENTER_VERTICAL | wx.LEFT,
+                    border=self._theme.spacing_standard,
+                )
+                # Keep the line height constant whether or not the cancel button is shown
+                bottom_sizer.Add((0, 24))
+            sizer.Add(
+                bottom_sizer,
+                flag=wx.EXPAND | wx.TOP,
+                border=self._theme.spacing_standard,
             )
-            progress_sizer.Add(
-                self.btn_cryosecom_acqui_cancel,
-                flag=wx.TOP | wx.LEFT,
-                border=12,
-            )
-        grid.Add(progress_sizer, flag=wx.EXPAND)
-        grid.AddGrowableCol(1)
-        return grid
+        return sizer
 
     def _build_correlation_row(self, parent: wx.Window) -> wx.Sizer:
         """Build the FIB/FM correlation action.
