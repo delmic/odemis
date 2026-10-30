@@ -1449,12 +1449,46 @@ class TUCamDLL:
          This means that a camera is not connected. be aware that it can take multiple seconds
          after switching a camera on before it is recognised.
         """
+        self.TUCAMOPEN.uiIdxOpen = idx
+        self.TUCAMOPEN.hIdxTUCam = 0
         self.TUCAM_Dev_Open(pointer(self.TUCAMOPEN))
         if 0 == self.TUCAMOPEN.hIdxTUCam:
             logging.debug("Open camera failed")
             raise TUCamError(TUCAMRET_Enum.TUCAMRET_NO_CAMERA, "Open camera failed")
         else:
             logging.debug("Open camera succeeded, Idx=%d" % idx)
+
+    def find_camera(self, sn: Optional[str] = None) -> None:
+        """
+        Open the camera with the given serial number. The cameras are opened one at a time
+        to read their serial number, and the non-matching ones are closed immediately.
+        :param sn: serial number of the camera to open. If None, the first camera is opened.
+        :raises TUCamError: if no camera could be opened, or none has the requested serial number.
+        """
+        if sn is None:
+            self.open_camera(0)
+            return
+
+        found = []
+        for idx in range(self._nrCameras):
+            try:
+                self.open_camera(idx)
+            except TUCamError as ex:
+                logging.warning("Failed to open Tucsen camera %d, skipping it: %s", idx, ex)
+                continue
+            try:
+                cam_sn = self.get_serial_number()
+            except Exception:
+                self.close_camera()
+                raise
+            if cam_sn == sn:
+                logging.debug("Found Tucsen camera with serial number %s at index %d", sn, idx)
+                return
+            found.append(cam_sn)
+            self.close_camera()
+
+        raise TUCamError(TUCAMRET_Enum.TUCAMRET_NO_CAMERA.value,
+                         "No Tucsen camera with serial number %s, found %s" % (sn, found))
 
     def close_camera(self) -> None:
         """
@@ -1805,9 +1839,13 @@ class TUCamDLL:
 
 class FakeTUCamDLL:
     """
-    Simulator of the TUCamDLL
+    Simulator of the TUCamDLL, which simulates 2 cameras
     """
+    SERIAL_NUMBERS = ("FAKE123456", "FAKE654321")
+
     def __init__(self):
+        self._nrCameras = len(self.SERIAL_NUMBERS)
+        self._idx: Optional[int] = None  # index of the open camera
         # camera parameters
         self._res_id = 0  # 0 = 2048,2040 1 = 2048,2040 HDR  2= 1024, 1020 2x2  3 = 512, 510 4x4
         self._roi = (0, 0, 2048, 2010)
@@ -1827,14 +1865,25 @@ class FakeTUCamDLL:
         pass
 
     def open_camera(self, idx: int):
-        if idx >= 1:
+        if not 0 <= idx < self._nrCameras:
             logging.debug("Open camera %s failed", idx)
             raise model.HwError("No Tucsen camera found, check the camera is turned on")
 
+        self._idx = idx
         logging.debug("Open camera succeeded, idx=%d" % idx)
 
+    def find_camera(self, sn: Optional[str] = None) -> None:
+        if sn is None:
+            self.open_camera(0)
+            return
+        if sn not in self.SERIAL_NUMBERS:
+            raise TUCamError(TUCAMRET_Enum.TUCAMRET_NO_CAMERA.value,
+                             "No Tucsen camera with serial number %s, found %s" %
+                             (sn, list(self.SERIAL_NUMBERS)))
+        self.open_camera(self.SERIAL_NUMBERS.index(sn))
+
     def close_camera(self):
-        pass
+        self._idx = None
 
     def start_capture(self) -> None:
         """
@@ -2023,7 +2072,7 @@ class FakeTUCamDLL:
         return "1.0.0.fake"
 
     def get_serial_number(self) -> str:
-        return "FAKE123456"
+        return self.SERIAL_NUMBERS[self._idx]
 
 
 # Acquisition control messages
@@ -2057,7 +2106,8 @@ class TUCam(model.DigitalCamera):
                  max_res: Optional[Tuple[int, int]] = None, **kwargs) -> None:
         """
         See Digital Camera for the common parameters.
-        :param device: serial number of the device, or "fake" to use a simulator.
+        :param device: serial number of the device, or "fake" to use a simulator
+        (or "fake:SN" to simulate the camera with the given serial number).
         If None, the first camera found is used.
         :param max_res: (width, height, in px) limits the maximum resolution reported, in user
         coordinates (ie, after applying the transpose). It must be at least the minimum
@@ -2079,8 +2129,9 @@ class TUCam(model.DigitalCamera):
         self._genmsg = queue.Queue()  # GEN_* or float
         self._need_settings_update = False
 
-        if device == "fake":
+        if device is not None and device.startswith("fake"):
             self._dll = FakeTUCamDLL()
+            device = device[len("fake:"):] if device.startswith("fake:") else None
         else:
             try:
                 self._dll = TUCamDLL()
@@ -2273,12 +2324,12 @@ class TUCam(model.DigitalCamera):
         """
         :raise: HwError if the camera cannot be opened
         """
-        # TODO: support selecting the device via its serial number
         try:
-            self._dll.open_camera(0)
+            self._dll.find_camera(device)
         except (OSError, TUCamError) as ex:
             logging.exception("Failed to open Tucsen camera %s", device)
-            raise model.HwError("No Tucsen camera found, check the camera is turned on") from ex
+            raise model.HwError("No Tucsen camera %s found, check the camera is turned on" %
+                                (device or "",)) from ex
 
     def _set_gain(self, gain: float) -> float:
         """
