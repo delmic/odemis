@@ -31,8 +31,7 @@ from concurrent.futures.thread import ThreadPoolExecutor
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 
 from odemis import model, util
-from odemis.acq import move, stream
-from odemis.acq.move import Posture, MicroscopePostureManager
+from odemis.acq import stream
 from odemis.model import BAND_PASS_THROUGH, MD_POL_NONE
 
 
@@ -1016,7 +1015,7 @@ class OpticalPathManager:
         except KeyError:
             raise KeyError("Metadata %s does not exist in component %s" % (md_name, comp.name))
 
-    def _in_affected(self, target: str, affected: set[str]) -> bool:
+    def _in_affected(self, target: str, affected: Set[str]) -> bool:
         """
         Check whether a component is affected by any component of a set.
 
