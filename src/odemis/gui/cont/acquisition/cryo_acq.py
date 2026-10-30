@@ -145,6 +145,9 @@ class CryoAcquiController(object):
         # common VA's
         self._tab_data.filename.subscribe(self._on_filename, init=True)
         self._tab_data.streams.subscribe(self._on_streams_change, init=True)
+        if self.acqui_mode is guimod.AcquiMode.FIBSEM:
+            # The streams to acquire (and so the estimated time) depend on the view
+            self._tab_data.focussedView.subscribe(self._on_focussed_view, init=False)
         # TODO link .acquiStreams with a callback that is called
         # to check/uncheck items (?)
         self._tab_data.main.is_acquiring.subscribe(self._on_acquisition, init=True)
@@ -292,10 +295,19 @@ class CryoAcquiController(object):
         sender = evt.GetEventObject()
         if (self.acqui_mode is guimod.AcquiMode.FIBSEM and
                 sender == self._panel.btn_cryosecom_acquire):
-            view = self._tab_data.focussedView.value
-            acq_streams = [s for s in acq_streams if view.is_compatible(s.__class__)]
+            acq_streams = self._get_streams_of_focussed_view(acq_streams)
         logging.debug(f"Acquisition streams: {acq_streams}")
         return acq_streams
+
+    def _get_streams_of_focussed_view(self, streams: List[stream.Stream]) -> List[stream.Stream]:
+        """
+        :param streams: streams to filter
+        :returns: the streams which are compatible with the currently focussed view
+        """
+        view = self._tab_data.focussedView.value
+        if view is None:
+            return list(streams)
+        return [s for s in streams if view.is_compatible(s.__class__)]
 
     def _on_acquire(self, evt: wx.Event):
         """
@@ -674,12 +686,21 @@ class CryoAcquiController(object):
         # update the zlevels dictionary with the added/removed stream
         self._on_zstack()
 
+    def _on_focussed_view(self, _) -> None:
+        """Called when the focussed view changes, to update the estimated acquisition time."""
+        self._update_acquisition_time()
+
     def _get_acq_time(self) -> float:
         """Calculate the estimated acquisition time."""
+        streams = self._acquiStreams.value
+        if self.acqui_mode is guimod.AcquiMode.FIBSEM:
+            # Same streams as the ones acquired by the "ACQUIRE" button
+            streams = self._get_streams_of_focussed_view(streams)
+
         if not self._zStackActive.value:  # if no zstack
-            acq_time = acqmng.estimateTime(self._acquiStreams.value)
+            acq_time = acqmng.estimateTime(streams)
         else:  # if zstack
-            acq_time = acqmng.estimateZStackAcquisitionTime(self._acquiStreams.value, self._zlevels)
+            acq_time = acqmng.estimateZStackAcquisitionTime(streams, self._zlevels)
 
         acq_time = math.ceil(acq_time)
         return acq_time

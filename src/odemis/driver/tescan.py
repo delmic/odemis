@@ -143,15 +143,28 @@ class DeviceHandler:
             If the connection to the TESCAN server fails, this is raised with an appropriate
             error message.
         """
-        logging.info("Attempting to connect sockets")
+        self._host = host
+        self._port = port
+        self._socket_timeout = socket_timeout
         self.device = sem.Sem()
         self.device_type = device_type
+        self.device._sharksem_lock = threading.Lock()
+        self._call_lock = self.device._sharksem_lock
+        self._connect()
+
+    def _connect(self) -> None:
+        """
+        Connects the sockets of the device, and sets the socket options.
+
+        :raises HwError: if the connection to the TESCAN server fails.
+        """
+        logging.info("Attempting to connect sockets")
         # Attempts to connect all sockets, but does nothing if already running
-        connection_status = self.device.connection.Connect(host, port, socket_timeout)
+        connection_status = self.device.connection.Connect(self._host, self._port, self._socket_timeout)
         if connection_status < 0:
             raise HwError("Failed to connect to TESCAN server '%s'. "
                           "Check that the ip address is correct and TESCAN server "
-                          "connected to the network." % (host,))
+                          "connected to the network." % (self._host,))
 
         logging.info("Connected to sockets")
 
@@ -163,8 +176,15 @@ class DeviceHandler:
         self.device.connection.socket_d.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         self.device.connection.socket_d.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 
-        self.device._sharksem_lock = threading.Lock()
-        self._call_lock = self.device._sharksem_lock
+    def reconnect(self) -> None:
+        """
+        Closes and re-opens the connection to the TESCAN server, to recover from a broken connection.
+
+        :raises HwError: if the connection to the TESCAN server fails.
+        """
+        with self._call_lock:
+            self.device.connection.Disconnect()
+            self._connect()
 
     def __getattr__(self, name: str) -> Callable[[Literal[DeviceType.ELECTRON, DeviceType.ION], Any], Any]:
         """
@@ -371,8 +391,15 @@ class SEM(model.HwComponent):
         Note: acquisition might still go on on other channels
         """
         with self._acquisition_mng_lock:
-            # This call to stop the scanning will timeout the socket, which allows us to exit early.
-            detector._device_handler.ScStopScan()
+            # Stopping the scan makes the blocking image fetch time out, which allows us to exit early.
+            # It must not use the detector's connection: that connection is locked for the whole
+            # duration of the image fetch, so the call would only return once the scan is complete.
+            # Instead, use the connection of the SEM component, which is not used during acquisition.
+            if self._device_handler:
+                if detector._device_handler.device_type == DeviceType.ION:
+                    self._device_handler.FibScStopScan()
+                else:
+                    self._device_handler.ScStopScan()
             self._acquisitions.discard(detector)
             self._acq_cmd_q.put(ACQ_CMD_UPD)
             if not self._acquisitions:
@@ -442,7 +469,8 @@ class SEM(model.HwComponent):
                         else:
                             logging.warning("Acquisition failed, will retry")
                             time.sleep(1)
-                            self._connect_socket()
+                            for d in detectors:
+                                d._device_handler.reconnect()
                             continue
 
                     nfailures = 0
