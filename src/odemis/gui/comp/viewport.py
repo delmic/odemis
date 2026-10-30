@@ -376,7 +376,8 @@ class MicroscopeViewport(ViewPort):
 
         main_data = tab_data.main
         posture_manager = main_data.posture_manager
-        if posture_manager:
+        # Static views (e.g., analysis tab) have no stage: the posture is not relevant
+        if posture_manager and view.has_stage():
             pos = posture_manager.stage.position.value
             if self.bottom_legend and "rx" in pos and "rz" in pos:
                 self._current_posture = posture_manager.current_posture
