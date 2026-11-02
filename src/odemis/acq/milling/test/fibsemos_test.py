@@ -398,7 +398,7 @@ class TestConvertMillingTasksToMillingStages(unittest.TestCase):
             thickness=4e-6, depth=3e-6)
 
         stage = self.assert_composite_pattern_uses_one_stage(pattern)
-        self.assertEqual(stage.milling.hfw, 960e-6)
+        self.assertAlmostEqual(stage.milling.hfw, 909e-6)
         rotated_rectangles = [rectangle for rectangle in stage.pattern.define()
                               if rectangle.rotation]
         self.assertEqual(len(rotated_rectangles), 1)
@@ -412,6 +412,38 @@ class TestConvertMillingTasksToMillingStages(unittest.TestCase):
             depth=1e-6, spacing=3e-6)
 
         self.assert_composite_pattern_uses_one_stage(pattern)
+
+    def test_write_fields_stay_inside_reference(self):
+        """Limit composite and rotated rectangle patterns to their saved image."""
+        reference_size = (448e-6, 448e-6)
+        patterns = (
+            CorrelationPatternParameters(width=448e-6, height=300e-6, marker_length=75e-6,
+                                         thickness=4e-6, depth=3e-6),
+            RectanglePatternParameters(width=200e-6, height=100e-6, depth=3e-6, rotation=math.pi / 4))
+        for pattern in patterns:
+            with self.subTest(pattern=pattern.name.value):
+                task = MillingTaskSettings(name=pattern.name.value, patterns=[pattern], milling=MillingSettings(
+                    current=60e-9, voltage=30000, field_of_view=960e-6))
+                stage = convert_milling_tasks_to_milling_stages([task], reference_size=reference_size)[0]
+                self.assertAlmostEqual(stage.milling.hfw, 448e-6)
+                pattern.center.value = (300e-6, 0)
+                with self.assertRaisesRegex(ValueError, "outside its saved reference image"):
+                    convert_milling_tasks_to_milling_stages([task], reference_size=reference_size)
+                pattern.center.value = (0, 0)
+                pattern.width.value = 900e-6
+                with self.assertRaisesRegex(ValueError, "outside its saved reference image"):
+                    convert_milling_tasks_to_milling_stages([task], reference_size=reference_size)
+
+    def test_write_field_uses_reference_width(self):
+        """Use the saved reference width instead of a smaller task field."""
+        pattern = RectanglePatternParameters(width=20e-6, height=10e-6, depth=1e-6, center=(40e-6, 0))
+        task = MillingTaskSettings(name="Offset", patterns=[pattern], milling=MillingSettings(
+            current=60e-12, voltage=30000, field_of_view=60e-6))
+
+        stage = convert_milling_tasks_to_milling_stages([task], reference_size=(120e-6, 120e-6))[0]
+
+        self.assertEqual(stage.milling.hfw, 120e-6)
+        self.assertEqual(task.milling.field_of_view.value, 60e-6)
 
     def test_cross_pattern_uses_one_milling_stage(self) -> None:
         """Send both cross arms in one milling stage."""
@@ -708,7 +740,7 @@ class TestMillingAPICompatibility(unittest.TestCase):
             setattr(self.microscope, name, mock.Mock())
         self.microscope.get.return_value = (1e-6, 2e-6)
         self.rect = SimpleNamespace(left=0.25, top=0.25, width=0.5, height=0.5)
-        self.stage = SimpleNamespace(name="Test stage", alignment=SimpleNamespace(rect=self.rect),
+        self.stage = SimpleNamespace(name="Test stage", alignment=SimpleNamespace(enabled=False, rect=self.rect),
                                      milling=SimpleNamespace(milling_channel="ION"), imaging=SimpleNamespace())
         self.feature = CryoFeature(name="f1", stage_position={}, fm_focus_position={})
         self.feature.reference_image = model.DataArray(numpy.arange(48).reshape(6, 8), metadata={
@@ -728,7 +760,7 @@ class TestMillingAPICompatibility(unittest.TestCase):
 
     def _strategy(self, microscope: TescanMicroscopeStub, stage: SimpleNamespace,
                   asynch: bool = False, stop_event: Optional[threading.Event] = None) -> None:
-        """Emulate the cancellable fibsemOS strategy interface.
+        """Check the reference FOV and cancellation event supplied to the strategy.
 
         :param microscope: External microscope stub used for milling.
         :param stage: Milling stage containing the converted reference image.
@@ -738,6 +770,7 @@ class TestMillingAPICompatibility(unittest.TestCase):
         self.assertIs(stage.reference_image, self.ref_image)
         self.assertFalse(asynch)
         self.assertIs(stop_event, self.manager._stop_event)
+        microscope.set.assert_called_with("hfw", value=100e-6, beam_type="ION")
         microscope.run_milling()
 
     def _local_converter(self, image: model.DataArray, system_state: dict,
@@ -898,7 +931,10 @@ class TestMillingAPICompatibility(unittest.TestCase):
         with self.assertRaisesRegex(TypeError, "Milling failed"):
             self._run_with_api(strategy)
         self.restore.assert_called_once_with(self.restoration_state)
-        self.microscope.set.assert_called_once_with("shift", value=(1e-6, 2e-6), beam_type="ION")
+        self.microscope.set.assert_has_calls([
+            mock.call("hfw", value=100e-6, beam_type="ION"),
+            mock.call("shift", value=(1e-6, 2e-6), beam_type="ION"),
+        ])
         self.assertFalse(self.manager._active)
 
     def test_strategy_cancellation_restores_state(self):

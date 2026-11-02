@@ -644,7 +644,11 @@ class MillingTaskController:
         logging.debug("Shapes updated: %s", shapes)
 
         # check if any of the points of the shapes are outside the bounding box of the image
-        s_bbox = self.acq_cont.stream.getBoundingBox()
+        feature = self._tab_data.main.currentFeature.value
+        if feature is None or feature.reference_image is None:
+            self.valid_patterns.value = False
+            return
+        s_bbox = img.getBoundingBox(feature.reference_image)
         for shape in shapes:
             valid = all([is_point_in_rect(pt, s_bbox) for pt in shape.points.value])
 
@@ -1501,6 +1505,7 @@ class AutomatedMillingController:
         features = [f for i, f in enumerate(features) if self._panel.workflow_features_chk_list.IsChecked(i)]
         if not features:
             return
+        task_list = [t for i, t in enumerate(self.task_list) if self._panel.workflow_task_chk_list.IsChecked(i)]
         if fibsemos.FIBSEMOS_INSTALLED:
             missing_state = [feature.name.value for feature in features if not feature.system_state]
             if missing_state:
@@ -1510,6 +1515,18 @@ class AutomatedMillingController:
                     "to acquire a new reference image before starting automated milling.",
                     "New milling references required", wx.OK | wx.ICON_WARNING)
                 return
+            for feature in features:
+                tasks = [task for workflow in task_list
+                         for task in millmng.get_associated_tasks(workflow, feature.milling_tasks)]
+                try:
+                    reference = fibsemos._get_reference_image(feature)
+                    left, bottom, right, top = img.getBoundingBox(reference)
+                    fibsemos.convert_milling_tasks_to_milling_stages(
+                        tasks, reference_size=(right - left, top - bottom))
+                except ValueError as exc:
+                    wx.MessageBox(f"Cannot mill {feature.name.value}: {exc}",
+                                  "Invalid milling pattern", wx.OK | wx.ICON_WARNING)
+                    return
         stage = self._tab_data.main.stage_bare
         sem_stream = self._tab.sem_stream
         fib_stream = self._tab.fib_stream
@@ -1521,7 +1538,6 @@ class AutomatedMillingController:
             feature_dir = get_feature_dir(self.conf.pj_last_path, feature.name.value)
             feature.path = str(feature_dir) if feature_dir else None
 
-        task_list = [t for i, t in enumerate(self.task_list) if self._panel.workflow_task_chk_list.IsChecked(i)]
         logging.info(f"Running automated milling for tasks: {task_list}")
 
         # TODO: add estimated time to the dialog, gui
