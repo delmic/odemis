@@ -28,7 +28,8 @@ import time
 import unittest
 from copy import deepcopy
 from concurrent.futures import CancelledError, Future, wait
-from concurrent.futures._base import CANCELLED
+from concurrent.futures._base import CANCELLED, RUNNING
+from unittest import mock
 
 import numpy
 
@@ -40,12 +41,12 @@ from odemis.acq.feature import (
     FEATURE_ACTIVE,
     FEATURE_DEACTIVE,
 )
-from odemis.acq.milling import DEFAULT_MILLING_TASKS_PATH
+from odemis.acq.milling import DEFAULT_MILLING_TASKS_PATH, millmng
 from odemis.acq.milling.millmng import (
     AutomatedMillingManager, MillingWorkflowTask, get_associated_tasks, run_automated_milling, status_map,
 )
 from odemis.acq.milling.tasks import load_milling_tasks
-from odemis.acq.stream import FIBStream, SEMStream
+from odemis.acq.stream import FIBStream, SEMStream, StaticSEMStream
 from odemis.driver import simulated
 from odemis.util import executeAsyncTask, testing
 from odemis.acq.move import Posture
@@ -95,7 +96,24 @@ class TestAssociatedMillingTasks(unittest.TestCase):
 
 
 class TestMillingReferenceAcquisition(unittest.TestCase):
-    """Check workflow cancellation without a hardware backend."""
+    """Check reference acquisition failures and cancellation without a hardware backend."""
+
+    def test_partial_acquisition_preserves_error(self):
+        """Report the original FIB timeout when only the SEM image was acquired."""
+        image = model.DataArray(numpy.zeros((8, 8), dtype=numpy.uint8))
+        manager = AutomatedMillingManager.__new__(AutomatedMillingManager)
+        manager.sem_stream = StaticSEMStream("SEM", image)
+        manager.fib_stream = StaticSEMStream("FIB", image)
+        manager._future = model.ProgressiveFuture()
+        manager._future._task_lock = threading.Lock()
+        manager._future._task_state = RUNNING
+        error = IOError("Acquisition of stream FIB timed out")
+        result = model.InstantaneousFuture(result=([image], error))
+        feature = CryoFeature("Feature-1", {}, {})
+        with mock.patch.object(millmng, "acquire", return_value=result):
+            with self.assertRaises(IOError) as caught:
+                manager._acquire_reference_images(feature)
+        self.assertIs(caught.exception, error)
 
     def test_canceled_workflow_does_not_start_next_task(self):
         """Do not move hardware after a workflow cancellation request."""
