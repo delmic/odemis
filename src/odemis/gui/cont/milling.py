@@ -29,7 +29,6 @@ This module contains classes to control the actions related to the milling.
 import logging
 import os
 from concurrent.futures import CancelledError
-from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
 import wx
@@ -1581,12 +1580,16 @@ class AutomatedMillingController:
         )
 
         @call_in_wx_main
-        def _update_progress(future, start, end):
+        def _update_progress(future: model.ProgressiveFuture, elapsed: float, remaining: float) -> None:
+            """Display milling progress using elapsed and remaining durations.
+
+            :param future: Milling future supplying the status and current feature.
+            :param elapsed: Elapsed milling duration in seconds.
+            :param remaining: Estimated duration left in seconds.
+            """
             if hasattr(future, "msg"):
-                startdt = datetime.fromtimestamp(start).strftime('%Y-%m-%d_%H-%M-%S')
-                enddt = datetime.fromtimestamp(end).strftime('%Y-%m-%d_%H-%M-%S')
-                now = datetime.now().timestamp()
-                logging.info(f"automated milling update: {future.msg}, {startdt}, {enddt}, {end-now} seconds remaining")
+                logging.info("Automated milling update: %s, %.1f s elapsed, %.1f s remaining",
+                             future.msg, elapsed, remaining)
                 self._panel.txt_automated_milling_status.SetLabel(future.msg)
 
             if hasattr(future, "current_feature"):

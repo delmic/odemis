@@ -525,10 +525,10 @@ class AutomatedMillingManager(object):
         self._exporter.export(align_filename, new_image)
 
     def _acquire_reference_images(self, feature: CryoFeature) -> None:
-        """Acquire SEM and FIB reference images after milling.
+        """Acquire both reference images and propagate any partial acquisition error.
 
         :param feature: Feature whose completed milling workflow is being imaged.
-        :raises CancelledError: The workflow was canceled before or during imaging.
+        :raises Exception: Acquisition of either reference image failed.
         """
         self.check_cancelled()
 
@@ -537,6 +537,8 @@ class AutomatedMillingManager(object):
 
         # acquire images
         data, ex = self._run_subtask(acquire, [self.sem_stream, self.fib_stream])
+        if ex is not None:
+            raise ex
         sem_image, fib_image = data
 
         # save images
