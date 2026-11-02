@@ -1543,6 +1543,7 @@ class AutomatedMillingController:
         self._panel.txt_automated_milling_est_time.Hide()
         self._panel.txt_automated_milling_left_time.Show()
         self._panel.gauge_automated_milling.Show()
+        self._panel.btn_automated_milling_cancel.Enable()
         self._panel.btn_automated_milling_cancel.Show()
         self._tab_data.main.is_acquiring.value = True
         self._tab_data.main.is_milling.value = True
@@ -1611,9 +1612,13 @@ class AutomatedMillingController:
         self._panel.txt_automated_milling_est_time.SetLabel(milling_status_txt)
         self._panel.txt_automated_milling_status.SetLabel(milling_status_txt)
 
-    def _cancel_automated_milling(self, _):
-        """
-        called when the button "Cancel" is pressed
+    def _cancel_automated_milling(self, evt: wx.Event) -> None:
+        """Request cancellation while keeping controls busy until cleanup finishes.
+
+        :param evt: Event from the automated milling cancel button.
         """
         logging.debug("Cancelling automated milling.")
-        self.automation_future.cancel()
+        if self.automation_future.cancel():
+            self.automation_future.msg = "Canceling milling..."
+            self._panel.txt_automated_milling_status.SetLabel(self.automation_future.msg)
+            self._panel.btn_automated_milling_cancel.Disable()

@@ -2,9 +2,9 @@
 '''
 Created on 13 Mar 2014
 
-@author: Éric Piel
+@author: Éric Piel, Alexéy Ilyushkin
 
-Copyright © 2014 Éric Piel, Delmic
+Copyright © 2014-2026 Éric Piel, Alexéy Ilyushkin, Delmic
 
 This file is part of Odemis.
 
@@ -23,6 +23,7 @@ from odemis import model
 from odemis.util import executeAsyncTask
 import threading
 import time
+from typing import Callable
 
 
 def wrapSimpleStreamIntoFuture(stream):
@@ -150,3 +151,56 @@ class SimpleStreamFuture(futures.Future):
 
         # let the _run() waiter know that it's all done
         self._acq_over.set()
+
+
+class MillingFuture(model.ProgressiveFuture):
+    """Keep a canceled milling task running until its worker finishes cleanup."""
+
+    def __init__(self) -> None:
+        """Initialize progress tracking and the cancellation request state."""
+        super().__init__()
+        self._cancel_requested = False
+
+    def cancel(self) -> bool:
+        """Request cancellation without reporting completion before cleanup.
+
+        :returns: Whether cancellation was accepted or already completed.
+        """
+        with self._condition:
+            if self._state in (FINISHED, CANCELLED, CANCELLED_AND_NOTIFIED):
+                return self.cancelled()
+            if self._cancel_requested:
+                return True
+            if self.task_canceller is None or not self.task_canceller(self):
+                return False
+            self._cancel_requested = True
+            return True
+
+    def run_task(self, task: Callable[[], None]) -> None:
+        """Run the worker and acknowledge cancellation after its cleanup returns.
+
+        :param task: Worker that performs milling or an automated workflow.
+        :raises CancelledError: The worker acknowledged cancellation.
+        """
+        try:
+            task()
+        except CancelledError:
+            self._complete_cancellation()
+            raise
+        finally:
+            # Once the worker has returned, no new cancellation can be accepted.
+            with self._condition:
+                self.task_canceller = None
+
+        if self._cancel_requested:
+            self._complete_cancellation()
+            raise CancelledError()
+
+    def _complete_cancellation(self) -> None:
+        """Release result waiters and completion callbacks after worker cleanup."""
+        with self._condition:
+            self._state = CANCELLED_AND_NOTIFIED
+            for waiter in self._waiters:
+                waiter.add_cancelled(self)
+            self._condition.notify_all()
+        self._invoke_callbacks()

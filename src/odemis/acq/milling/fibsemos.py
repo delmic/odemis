@@ -32,6 +32,7 @@ from inspect import signature
 from typing import List, Optional, Tuple, Union
 
 from odemis import model
+from odemis.acq._futures import MillingFuture
 from odemis.acq.feature import (
     CryoFeature,
     DEFAULT_MILLING_ALIGNMENT_AREA,
@@ -60,6 +61,7 @@ from odemis.util import executeAsyncTask
 
 # Check if fibsemOS is available
 try:
+    from fibsem.cancellation import OperationCancelledError
     from fibsem.microscopes.odemis_microscope import (
         OdemisThermoMicroscope,
         OdemisTescanMicroscope,
@@ -550,11 +552,11 @@ class FibsemOSMillingTaskManager:
         self.microscope = create_fibsemos_microscope()
         self._lock = threading.Lock()
         self._active = False
-        self._cancel_requested = False
+        self._stop_event = threading.Event()
 
         # per-run state (set in async_run)
         self.milling_stages: List["FibsemMillingStage"] = []
-        self._future: Optional[futures.Future] = None
+        self._future: Optional[MillingFuture] = None
 
     def cancel(self, future: futures.Future) -> bool:
         """Request cancellation of the current milling run.
@@ -566,9 +568,9 @@ class FibsemOSMillingTaskManager:
         with self._lock:
             if not self._active:
                 return False
-            if self._cancel_requested:
+            if self._stop_event.is_set():
                 return True
-            self._cancel_requested = True
+            self._stop_event.set()
         # Do not hold the lock during potentially blocking calls
         subf = getattr(future, "running_subf", None)
         if subf is not None:
@@ -621,20 +623,14 @@ class FibsemOSMillingTaskManager:
         return state
 
     def _finish_milling(self, system_state: dict) -> None:
-        """Clear patterns without selecting a default Tescan imaging preset.
+        """Finish milling through the shared microscope API.
 
         :param system_state: Imaging settings captured immediately before milling.
-            Thermo uses the recorded FIB current and voltage for cleanup.
+            Supply the recorded FIB voltage and current when available.
         """
-        if isinstance(self.microscope, OdemisTescanMicroscope):
-            self.microscope.connection.DrawBeam.UnloadLayer()
-            # Reset fibsemOS's cached layer and pre-milling preset.
-            self.microscope._milling_layer_loaded = False
-            self.microscope._preset_before_milling = None
-        else:
-            beam = system_state["ion-beam"]
-            self.microscope.finish_milling(imaging_current=beam["probeCurrent"][0],
-                                          imaging_voltage=beam["accelVoltage"][0])
+        beam = system_state["ion-beam"]
+        self.microscope.finish_milling(imaging_current=beam.get("probeCurrent", [None])[0],
+                                      imaging_voltage=beam["accelVoltage"][0])
 
     def _run_stage(self, stage: 'FibsemMillingStage', system_state: dict) -> None:
         """Run the shared strategy API and restore conditions without hiding errors.
@@ -647,9 +643,8 @@ class FibsemOSMillingTaskManager:
         initial_shift = self.microscope.get("shift", beam_type=channel)
         failed = False
         try:
-            # fibsemOS 0.5.0a0 removed mill_stages.
-            # Use stage.strategy.run(), also available in fibsemOS 0.4.1a1.
-            stage.strategy.run(microscope=self.microscope, stage=stage, asynch=False)
+            stage.strategy.run(microscope=self.microscope, stage=stage, asynch=False,
+                               stop_event=self._stop_event)
         except BaseException:
             failed = True
             raise
@@ -673,7 +668,10 @@ class FibsemOSMillingTaskManager:
                 raise cleanup_error
 
     def _run(self) -> None:
-        """Internal worker that performs the milling stages sequentially."""
+        """Perform milling stages sequentially and restore the imaging settings.
+
+        :raises CancelledError: Milling was canceled before or during a stage.
+        """
         future = self._future
         if future is None:
             # Should never happen if async_run configured correctly, but don't use assert.
@@ -689,7 +687,7 @@ class FibsemOSMillingTaskManager:
             system_state = self._normalize_system_state(recorded_state)
             for stage in self.milling_stages:
                 with self._lock:
-                    if self._cancel_requested:
+                    if self._stop_event.is_set():
                         raise CancelledError()
 
                 logging.info(f"Running milling stage: {stage.name}")
@@ -709,7 +707,12 @@ class FibsemOSMillingTaskManager:
                     restoration_state = capture_system_state()
                 milling_started = True
                 self._run_stage(stage, restoration_state)
+                if self._stop_event.is_set():
+                    raise CancelledError()
 
+        except OperationCancelledError as exc:
+            failed = True
+            raise CancelledError() from exc
         except BaseException:
             failed = True
             raise
@@ -725,11 +728,10 @@ class FibsemOSMillingTaskManager:
             finally:
                 with self._lock:
                     self._active = False
-                    self._cancel_requested = False
 
     def async_run(self,
                   *,
-                  future: futures.Future,
+                  future: MillingFuture,
                   tasks: List[MillingTaskSettings],
                   feature: CryoFeature,
                   path: Optional[str] = None) -> futures.Future:
@@ -755,7 +757,7 @@ class FibsemOSMillingTaskManager:
             if self._active:
                 raise RuntimeError("A fibsemOS milling session is already running.")
             self._active = True
-            self._cancel_requested = False
+            self._stop_event.clear()
             self.microscope._last_imaging_settings.path = path
             self.milling_stages = milling_stages
             self.path = path
@@ -767,7 +769,7 @@ class FibsemOSMillingTaskManager:
             self._future.set_progress(remaining_time=estimated_dur)
 
             try:
-                executeAsyncTask(self._future, self._run)
+                executeAsyncTask(self._future, self._future.run_task, args=(self._run,))
             except Exception:
                 self._active = False
                 raise
@@ -789,5 +791,5 @@ def run_milling_tasks_fibsemos(tasks: List[MillingTaskSettings], feature: CryoFe
     if _persistent_millmng is None:
         _persistent_millmng = FibsemOSMillingTaskManager()
 
-    future = model.ProgressiveFuture()
+    future = MillingFuture()
     return _persistent_millmng.async_run(future=future, tasks=tasks, feature=feature, path=path)
