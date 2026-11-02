@@ -31,10 +31,11 @@ from concurrent.futures import Future
 from concurrent.futures._base import CANCELLED, FINISHED, RUNNING, CancelledError
 from datetime import datetime
 from enum import Enum
-from typing import Dict, List
+from typing import Any, Callable, Dict, List
 
 
 from odemis import model
+from odemis.acq._futures import MillingFuture
 from odemis.acq.acqmng import acquire
 from odemis.acq.drift import align_reference_image
 from odemis.acq.milling import fibsemos
@@ -86,6 +87,7 @@ class TFSMillingTaskManager:
         self._future = future
         self._future.running_subf = model.InstantaneousFuture()
         self._future._task_lock = threading.Lock()
+        self._future._task_state = RUNNING
 
     def cancel(self, future: Future) -> bool:
         """
@@ -196,7 +198,7 @@ class TFSMillingTaskManager:
             while self.fibsem.get_patterning_state() == "Running":
 
                 with self._future._task_lock:
-                    if self._future.cancelled() == CANCELLED:
+                    if self._future._task_state == CANCELLED:
                         raise CancelledError()
 
                 logging.debug(f"Milling in progress... elapsed time: {elapsed_time} s, estimated time:  {estimated_time} s")
@@ -222,8 +224,6 @@ class TFSMillingTaskManager:
         """
         The main function of the task class, which will be called by the future asynchronously
         """
-        self._future._task_state = RUNNING
-
         try:
             for i, task in enumerate(self.tasks, 1):
 
@@ -254,7 +254,7 @@ def run_milling_tasks(tasks: List[MillingTaskSettings], fib_stream: FIBStream, f
     :return: ProgressiveFuture
     """
     # Create a progressive future with running sub future
-    future = model.ProgressiveFuture()
+    future = MillingFuture()
     # create acquisition task
     milling_task_manager = TFSMillingTaskManager(future, tasks, fib_stream, filename)
     # add the ability of cancelling the future during execution
@@ -264,7 +264,7 @@ def run_milling_tasks(tasks: List[MillingTaskSettings], fib_stream: FIBStream, f
     future.set_progress(remaining_time=10 * len(tasks))
 
     # assign the acquisition task to the future
-    executeAsyncTask(future, milling_task_manager.run)
+    executeAsyncTask(future, future.run_task, args=(milling_task_manager.run,))
 
     return future
 
@@ -334,12 +334,13 @@ class AutomatedMillingManager(object):
         if future is not None:
             self._future.running_subf = model.InstantaneousFuture()
             self._future._task_lock = threading.Lock()
+            self._future._task_state = RUNNING
 
     def cancel(self, future: Future) -> bool:
-        """
-        Canceler of milling task.
-        :param future: the future that will be executing the task
-        :return: True if it successfully cancelled (stopped) the future
+        """Request cancellation of the workflow and its current task.
+
+        :param future: Future executing the automated workflow.
+        :returns: Whether cancellation was requested before the worker finished.
         """
         logging.debug("Canceling milling procedure...")
 
@@ -347,12 +348,17 @@ class AutomatedMillingManager(object):
             if future._task_state == FINISHED:
                 return False
             future._task_state = CANCELLED
-            future.running_subf.cancel()
-            logging.debug("Milling procedure cancelled.")
+            subfuture = future.running_subf
+        subfuture.cancel()
+        logging.debug("Milling procedure cancellation requested.")
         return True
 
-    def run(self):
-        self._future._task_state = RUNNING
+    def run(self) -> None:
+        """Run the automated workflow, checking for cancellation before starting.
+
+        :raises CancelledError: Cancellation was requested before or during the workflow.
+        """
+        self.check_cancelled()
 
         for task_num, workflow_task in enumerate(self.task_list, 1):
 
@@ -420,10 +426,32 @@ class AutomatedMillingManager(object):
         # TODO: configuraable settings for sem/fib imaging
         # TODO: configurable workflow for flm imaging
 
-    def check_cancelled(self):
+    def check_cancelled(self) -> None:
+        """Stop the workflow once cancellation has been requested.
+
+        :raises CancelledError: The workflow has a pending cancellation request.
+        """
         with self._future._task_lock:
-            if self._future.cancelled() == CANCELLED:
+            if self._future._task_state == CANCELLED:
                 raise CancelledError()
+
+    def _run_subtask(self, task: Callable[..., Future], *args: Any, **kwargs: Any) -> Any:
+        """Start a task atomically with cancellation and wait for its completion.
+
+        :param task: Function that starts a movement, milling, or acquisition task.
+        :param args: Positional task arguments.
+        :param kwargs: Keyword task arguments.
+        :returns: Completed task result.
+        :raises CancelledError: Cancellation was requested before or during the task.
+        """
+        with self._future._task_lock:
+            if self._future._task_state == CANCELLED:
+                raise CancelledError()
+            subfuture = task(*args, **kwargs)
+            self._future.running_subf = subfuture
+        result = subfuture.result()
+        self.check_cancelled()
+        return result
 
     def _move_to_milling_position(self, feature: CryoFeature) -> None:
 
@@ -435,26 +463,27 @@ class AutomatedMillingManager(object):
         stage_position = feature.get_posture_position(Posture.MILLING)
 
         # move to position
-        self._future.running_subf = self.stage.moveAbs(stage_position)
-        self._future.running_subf.result()
+        self._run_subtask(self.stage.moveAbs, stage_position)
 
         self._future.msg = f"Moved to {feature.name.value}"
         self._future.set_progress()
 
     def _run_milling_tasks(self, feature: CryoFeature, milling_tasks: List[MillingTaskSettings]) -> None:
-        """Run the milling tasks for the given feature."""
+        """Run the milling tasks for the given feature.
+
+        :param feature: Feature holding the milling reference and output path.
+        :param milling_tasks: Tasks selected for this workflow.
+        :raises CancelledError: Cancellation was requested before or during milling.
+        """
 
         self._future.msg = f"{feature.name.value}: Milling: {self.current_workflow}"
         self._future.set_progress()
 
         if fibsemos.FIBSEMOS_INSTALLED:
-            self._future.running_subf = run_milling_tasks_fibsemos(tasks=milling_tasks, feature=feature, path=feature.path)
+            self._run_subtask(run_milling_tasks_fibsemos, tasks=milling_tasks, feature=feature, path=feature.path)
         else:
             filename = self.get_filename(feature, "Milling-Tasks")
-            self._future.running_subf = run_milling_tasks(tasks=milling_tasks,
-                                                      fib_stream=self.fib_stream,
-                                                      filename=filename)
-        self._future.running_subf.result()
+            self._run_subtask(run_milling_tasks, tasks=milling_tasks, fib_stream=self.fib_stream, filename=filename)
 
     def _align_reference_image(self, feature: CryoFeature) -> None:
         """Align the reference image to the current image using beam shift."""
@@ -480,8 +509,7 @@ class AutomatedMillingManager(object):
 
         # beam shift alignment
         for i in range(3):
-            self._future.running_subf = acquire([self.fib_stream])
-            data, _ = self._future.running_subf.result()
+            data, _ = self._run_subtask(acquire, [self.fib_stream])
             new_image = data[0]
 
             align_filename = self.get_filename(feature, f"Pre-Alignment-FIB-{i}")
@@ -490,22 +518,25 @@ class AutomatedMillingManager(object):
             align_reference_image(ref_image, new_image, scanner=self.ion_beam)
 
         # save post-alignment image
-        self._future.running_subf = acquire([self.fib_stream])
-        data, _ = self._future.running_subf.result()
+        data, _ = self._run_subtask(acquire, [self.fib_stream])
         new_image = data[0]
 
         align_filename = self.get_filename(feature, "Post-Alignment-FIB")
         self._exporter.export(align_filename, new_image)
 
     def _acquire_reference_images(self, feature: CryoFeature) -> None:
+        """Acquire SEM and FIB reference images after milling.
+
+        :param feature: Feature whose completed milling workflow is being imaged.
+        :raises CancelledError: The workflow was canceled before or during imaging.
+        """
         self.check_cancelled()
 
         self._future.msg = f"{feature.name.value}: Acquiring Reference Images"
         self._future.set_progress()
 
         # acquire images
-        self._future.running_subf = acquire([self.sem_stream, self.fib_stream])
-        data, ex = self._future.running_subf.result()
+        data, ex = self._run_subtask(acquire, [self.sem_stream, self.fib_stream])
         sem_image, fib_image = data
 
         # save images
@@ -536,7 +567,7 @@ def run_automated_milling(features: List[CryoFeature],
     :return: ProgressiveFuture
     """
     # Create a progressive future with running sub future
-    future = model.ProgressiveFuture()
+    future = MillingFuture()
     # create automated milling task
     amm = AutomatedMillingManager(
         future=future,
@@ -554,6 +585,6 @@ def run_automated_milling(features: List[CryoFeature],
     future.set_progress(remaining_time=total_duration) # TODO: get proper time estimate from fibsemOS
 
     # assign the acquisition task to the future
-    executeAsyncTask(future, amm.run)
+    executeAsyncTask(future, future.run_task, args=(amm.run,))
 
     return future

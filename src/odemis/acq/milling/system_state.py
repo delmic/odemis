@@ -134,8 +134,8 @@ def restore_system_state(state: dict) -> None:
                     component.moveAbs(value).result()
                 else:
                     vas[field].value = value
-            except Exception:
-                failures.append(f"{key}.{field}")
+            except Exception as ex:
+                failures.append(f"{key}.{field}.{ex}")
                 logging.exception("Failed to restore %s.%s.", key, field)
     if failures:
         raise RuntimeError(f"Could not restore recorded imaging settings: {', '.join(failures)}")
