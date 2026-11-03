@@ -32,6 +32,7 @@ import os
 from builtins import str
 from concurrent import futures
 from concurrent.futures._base import CancelledError
+from functools import partial
 from typing import Dict, List, Optional
 
 import wx
@@ -197,7 +198,9 @@ class CryoAcquiController(object):
             self._panel.btn_tdct.Show(LICENCE_CORRELATION_ENABLED)
             self._panel.btn_tdct.Enable(False)
             self._panel.btn_tdct.Bind(wx.EVT_BUTTON, self._on_tdct)
-            self._panel.btn_acquire_all.Bind(wx.EVT_BUTTON, self._on_acquire)
+            self._panel.btn_acquire_all.Bind(wx.EVT_BUTTON, partial(self._on_acquire, all_streams=True))
+            # the estimated time depends on the streams of the focused view
+            self._tab_data.focussedView.subscribe(self._on_settings_va)
             self._panel.chkbox_save_acquisition.Bind(wx.EVT_CHECKBOX, self._on_chkbox_save_acquisition)
             self._panel.btn_cryosecom_change_file.Enable(False) # disable the change file button
             self._panel.streams_chk_list.Hide()
@@ -283,23 +286,25 @@ class CryoAcquiController(object):
         # update the layout
         self._panel.Layout()
 
-    def _get_acqui_streams(self, evt: wx.Event) -> List[stream.Stream]:
+    def _get_acqui_streams(self, only_in_focused_view: bool = False) -> List[stream.Stream]:
         """
-        Get the acquisition streams based on the acqui mode,
-        button pressed, and the current view
+        Get the streams selected for acquisition.
+        :param only_in_focused_view: if True, only return the streams which can be
+        displayed in the currently focused view.
+        :returns: the streams to acquire
         """
-        acq_streams = self._acquiStreams.value
-        sender = evt.GetEventObject()
-        if (self.acqui_mode is guimod.AcquiMode.FIBSEM and
-                sender == self._panel.btn_cryosecom_acquire):
+        acq_streams = list(self._acquiStreams.value)
+        if only_in_focused_view:
             view = self._tab_data.focussedView.value
             acq_streams = [s for s in acq_streams if view.is_compatible(s.__class__)]
         logging.debug(f"Acquisition streams: {acq_streams}")
         return acq_streams
 
-    def _on_acquire(self, evt: wx.Event):
+    def _on_acquire(self, _: wx.Event, all_streams: bool = False):
         """
-        called when the button "acquire" is pressed
+        called when the button "acquire" (or "acquire all") is pressed
+        :param all_streams: if True, acquire the streams of all the views, instead of
+        only the ones of the focused view (only relevant in FIBSEM mode).
         """
         if self.acqui_mode is guimod.AcquiMode.FLM:
             self._tab.tab_data_model.select_current_position_feature()
@@ -313,7 +318,8 @@ class CryoAcquiController(object):
         self._tab.streambar_controller.pauseStreams()
 
         # get the streams to acquire (depending on mode, btn, ...)
-        acq_streams = self._get_acqui_streams(evt)
+        only_in_focused_view = self.acqui_mode is guimod.AcquiMode.FIBSEM and not all_streams
+        acq_streams = self._get_acqui_streams(only_in_focused_view)
 
         # acquire the data
         if self._zStackActive.value:
@@ -675,11 +681,14 @@ class CryoAcquiController(object):
         self._on_zstack()
 
     def _get_acq_time(self) -> float:
-        """Calculate the estimated acquisition time."""
+        """
+        Calculate the estimated acquisition time of the streams acquired by the "acquire" button.
+        """
+        acq_streams = self._get_acqui_streams(self.acqui_mode is guimod.AcquiMode.FIBSEM)
         if not self._zStackActive.value:  # if no zstack
-            acq_time = acqmng.estimateTime(self._acquiStreams.value)
+            acq_time = acqmng.estimateTime(acq_streams)
         else:  # if zstack
-            acq_time = acqmng.estimateZStackAcquisitionTime(self._acquiStreams.value, self._zlevels)
+            acq_time = acqmng.estimateZStackAcquisitionTime(acq_streams, self._zlevels)
 
         acq_time = math.ceil(acq_time)
         return acq_time
