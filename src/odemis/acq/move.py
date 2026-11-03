@@ -414,6 +414,10 @@ class MeteorPostureManager(MicroscopePostureManager):
         # The trenching angle is deviated from the milling angle and should not be directly edited
         self.trenching_angle = model.FloatVA(milling_angle + math.radians(90), unit="rad", readonly=True)
 
+        # Store the initial SEM IMAGING rx
+        self.initial_sem_imaging_rx = model.FloatVA(self.get_posture_orientation(Posture.SEM_IMAGING)["rx"], unit="rad",
+                                                    readonly=True)
+
         # Check if objective is FIB-view FM
         self.has_fib_view_fm_objective = False
         try:
@@ -520,7 +524,8 @@ class MeteorPostureManager(MicroscopePostureManager):
                 return Posture.FIB_IMAGING
             if self.at_milling_posture(position):
                 return Posture.MILLING
-            return Posture.SEM_IMAGING
+            if self.at_sem_posture(position):
+                return Posture.SEM_IMAGING
         # None of the above -> unknown position
         return Posture.UNKNOWN
 
@@ -571,6 +576,43 @@ class MeteorPostureManager(MicroscopePostureManager):
         milling_orientation = self.get_posture_orientation(Posture.MILLING)
         tilt_in_range = isInRange(pos, active_range={"rx": stage_tilt_range}, axes={"rx"})
         rotation_close = isNearPosition(pos, milling_orientation, axes={"rz"}, atol_rotation=POSTURE_ANGLE_ATOL)
+        return tilt_in_range and rotation_close
+
+    def at_sem_posture(self, pos: Dict[str, float]) -> bool:
+        """
+        Check whether the provided position is at the sem posture
+        :param pos: the stage position
+        :return: True if the stage is at the sem posture, False if not (or not available)
+        """
+        if Posture.SEM_IMAGING not in self.postures:
+            return False
+
+        sem_orientation = self.get_posture_orientation(Posture.SEM_IMAGING)
+
+        is_odemis_basic = True
+        try:
+            self.get_posture_orientation(Posture.MILLING)
+            # When the milling posture metadata is available, we most likely are dealing with an Odemis advanced system.
+            is_odemis_basic = False
+        except KeyError:
+            pass
+
+        # For Odemis basic, the user just has the SEM posture to its availability. In this scenario it can fungate as
+        # both an SEM posture as a FIB posture, so we need to consider both.
+        if is_odemis_basic:
+            r = [
+                self.calculate_stage_tilt(MILLING_RANGE[0], posture=Posture.MILLING),
+                self.initial_sem_imaging_rx.value,
+            ]
+            logging.debug(
+                "Odemis Basic detected, using a broad rx range "
+                f"for the {Posture.SEM_IMAGING} posture: {math.degrees(r[0]):0.2f}° to {math.degrees(r[1]):0.2f}°"
+            )
+            tilt_in_range = isInRange(pos, active_range={"rx": r}, axes={"rx"})
+        else:
+            tilt_in_range = isNearPosition(pos, sem_orientation, axes={"rx"}, atol_rotation=POSTURE_ANGLE_ATOL)
+
+        rotation_close = isNearPosition(pos, sem_orientation, axes={"rz"}, atol_rotation=POSTURE_ANGLE_ATOL)
         return tilt_in_range and rotation_close
 
     def at_trenching_posture(self, pos: Dict[str, float]) -> bool:
