@@ -33,6 +33,7 @@ import numpy
 
 import odemis.acq.test as acq_test
 from odemis import model
+from odemis.dataio import tiff
 from odemis.model import MD_FAV_POS_ACTIVE
 from odemis.acq.feature import (
     CryoFeature,
@@ -46,6 +47,7 @@ from odemis.gui.cont.cryo_project import (
     sanitize_feature_name,
     trash_feature_dir,
     load_project,
+    reconcile_overviews,
     read_project_file,
     save_project,
     IMG_FILENAME,
@@ -88,6 +90,15 @@ class TestCryoProject(unittest.TestCase):
         self.assertEqual(project_data["overviews"][0][IMG_FILENAME], str(overview_file))
         # Check that the list of features is there, but empty
         self.assertEqual(len(project_data["features"]), 0)
+
+    def test_reconcile_overviews(self):
+        """Tests that missing overview files are dropped and new ones added."""
+        project_dir = self.test_dir / "reconcile"
+        project_dir.mkdir()
+        (project_dir / "new-overview.ome.tiff").touch()
+        old = {IMG_FILENAME: str(project_dir / "old-overview.ome.tiff"), IMG_IN_FILE_IDS: {3}}
+        overviews = reconcile_overviews([old], project_dir)
+        self.assertEqual(overviews, [{IMG_FILENAME: str(project_dir / "new-overview.ome.tiff")}])
 
     def test_legacy_project(self):
         """Tests that the legacy project works properly."""
