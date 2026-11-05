@@ -933,6 +933,8 @@ class CryoFeatureAcquisitionTask(object):
                 logging.error(
                     f"Acquisition for feature {site.name.value} partially failed: {exp}"
                 )
+        except CancelledError:
+            raise
         except Exception as exp:
             logging.error(f"Acquisition for feature {site.name.value} failed: {exp}")
 
@@ -1139,6 +1141,9 @@ class CryoFeatureAcquisitionTask(object):
                 if feature.status.value == FEATURE_DEACTIVE:
                     logging.info(f"Skipping feature {feature.name.value} because it is deactivated")
                     continue
+
+                if self._future._task_state == CANCELLED:
+                    raise CancelledError()
 
                 # move to feature position
                 self._move_to_site(feature)
