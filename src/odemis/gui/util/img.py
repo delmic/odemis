@@ -680,6 +680,25 @@ def draw_image(ctx, im_data, p_im_center, buffer_center, buffer_scale,
     apply_shear(ctx, shear, b_im_rect)
     apply_flip(ctx, flip, b_im_rect)
 
+    # The transformations move the image, so the part of the image to crop is the
+    # one which, once transformed, falls into the buffer: map the buffer back
+    # through the inverse transformation.
+    if rotation or shear or flip:
+        try:
+            inv = cairo.Matrix(*ctx.get_matrix())
+            inv.invert()
+            corners = [inv.transform_point(cx, cy) for cx, cy in
+                       ((0, 0), (buffer_size[0], 0), (0, buffer_size[1]), tuple(buffer_size))]
+            xs, ys = zip(*corners)
+            src_rect = (min(xs), min(ys), max(xs) - min(xs), max(ys) - min(ys))
+            intersection = intersect(src_rect, b_im_rect)
+        except cairo.Error:
+            intersection = b_im_rect
+        if not intersection:
+            ctx.restore()
+            logging.debug("Skipping draw: no intersection with buffer after transformation")
+            return
+
     width_ratio = float(im_scale[0]) / float(buffer_scale[0])
     height_ratio = float(im_scale[1]) / float(buffer_scale[1])
     total_scale = total_scale_x, total_scale_y = (width_ratio, height_ratio)

@@ -1205,6 +1205,26 @@ class BitmapCanvas(BufferedCanvas):
         apply_shear(ctx, shear, b_im_rect)
         apply_flip(ctx, flip, b_im_rect)
 
+        # The transformations move the image, so the part of the image to crop is the
+        # one which, once transformed, falls into the buffer: map the buffer back
+        # through the inverse transformation.
+        if rotation or shear or flip:
+            try:
+                inv = cairo.Matrix(*ctx.get_matrix())
+                inv.invert()
+                bw, bh = self._bmp_buffer_size
+                corners = [inv.transform_point(cx, cy) for cx, cy in
+                           ((0, 0), (bw, 0), (0, bh), (bw, bh))]
+                xs, ys = zip(*corners)
+                src_rect = (min(xs), min(ys), max(xs) - min(xs), max(ys) - min(ys))
+                intersection = intersect(src_rect, b_im_rect)
+            except cairo.Error:
+                intersection = b_im_rect
+            if not intersection:
+                ctx.restore()
+                logging.debug("Skipping draw: no intersection with buffer after transformation")
+                return
+
         # logging.debug("Total scale: %s x %s = %s", im_scale, self.scale, total_scale)
 
         scale_x, scale_y = im_scale[:2]
