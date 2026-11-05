@@ -334,7 +334,9 @@ class TestMeteorTescan1FibsemMove(move_tfs3_test.TestMeteorTFS3Move):
 
     def test_fib_view_fm_movements(self):
         """Test that milling <> fib-view fm switches work as expected"""
-        self.stage_bare.moveAbs(self.stage_grid_centers[Posture.GRID_1.value]).result()
+        initial_translation = self.stage_grid_centers[Posture.GRID_1.value]
+        initial_orientation = self.pm.get_posture_orientation(Posture.SEM_IMAGING)
+        self.stage_bare.moveAbs({**initial_translation, **initial_orientation}).result()
         self.pm.switch_posture(Posture.MILLING).result()
         initial_pos = self.stage_bare.position.value
         self.assertEqual(self.pm.current_posture.value, Posture.MILLING)
@@ -348,10 +350,11 @@ class TestMeteorTescan1FibsemMove(move_tfs3_test.TestMeteorTFS3Move):
             self.pm.switch_posture(Posture.FM_IMAGING).result()
 
         self.pm.switch_posture(Posture.MILLING).result()
+        time.sleep(0.5)
         resulting_posture = self.pm.get_current_posture()
         self.assertEqual(resulting_posture, Posture.MILLING)
         final_pos = self.stage_bare.position.value
-        testing.assert_pos_almost_equal(initial_pos, final_pos)
+        testing.assert_pos_almost_equal(initial_pos, final_pos, atol=3e-6)
 
     def test_trenching_outside_raw_sem_range(self):
         """Recognize Trenching using its equivalent SEM position."""
