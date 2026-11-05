@@ -225,6 +225,59 @@ def load_project(project_dir: os.PathLike) -> dict:
     return {"overviews": overviews, "features": features}
 
 
+def _get_in_file_indices(filename: os.PathLike) -> Optional[set]:
+    """
+    Read the in-file indices of all the images contained in a file.
+    :param filename: the file to open
+    :return: the set of indices, or None if the file cannot be read
+    """
+    from odemis.model import MD_IN_FILE_INDEX
+    from odemis.util.dataio import open_acquisition
+    try:
+        return {da.metadata[MD_IN_FILE_INDEX] for da in open_acquisition(str(filename))}
+    except Exception:
+        logging.warning("Failed to read overview file %s", filename, exc_info=True)
+        return None
+
+
+def reconcile_overviews(overviews: List[Dict[str, Any]], project_dir: os.PathLike) -> List[Dict[str, Any]]:
+    """
+    Update the overview list to match the files actually present in the project directory, as the user
+    might have renamed overview files. Overview files (with "overview" in their name) not referenced by
+    the project are added. Entries whose file is missing are kept (with their in-file indices), so that
+    the information about deleted images is not lost if the file comes back, unless the file looks like
+    it was renamed: if exactly one file went missing and one new file appeared, and the new file contains
+    all the images referenced by the missing entry, the entry is updated with the new filename.
+
+    :param overviews: overview entries, with absolute filenames
+    :param project_dir: the project directory
+    :return: the updated overview list (the one passed is not modified)
+    """
+    project_dir = Path(project_dir)
+    missing = [o for o in overviews if not Path(o[IMG_FILENAME]).is_file()]
+    known = {Path(o[IMG_FILENAME]) for o in overviews}
+    new_files = sorted(f for f in project_dir.glob("*overview*.ome.tiff") if f.is_file() and f not in known)
+
+    for o in missing:
+        logging.warning("Overview file %s not found, keeping its entry in the project", o[IMG_FILENAME])
+
+    result = list(overviews)
+    if len(missing) == 1 and len(new_files) == 1 and IMG_IN_FILE_IDS in missing[0]:
+        new_ids = _get_in_file_indices(new_files[0])
+        old_ids = set(missing[0][IMG_IN_FILE_IDS])
+        if new_ids is not None and old_ids and old_ids <= new_ids:
+            logging.warning("Overview file %s renamed to %s", missing[0][IMG_FILENAME], new_files[0])
+            result[result.index(missing[0])] = {IMG_FILENAME: str(new_files[0]),
+                                                IMG_IN_FILE_IDS: missing[0][IMG_IN_FILE_IDS]}
+            new_files = []
+
+    for f in new_files:
+        logging.warning("New overview file %s found, adding it to the project", f)
+        result.append({IMG_FILENAME: str(f)})
+
+    return result
+
+
 def serialize_project_data(main_data: "CryoMainGUIData") -> Dict:
     """
     Convert the in-memory project data with complex structure to a serialized form,
