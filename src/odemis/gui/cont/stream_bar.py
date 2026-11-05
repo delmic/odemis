@@ -2209,6 +2209,14 @@ class CryoAcquiredStreamsController(CryoStreamsController):
         # Clear all features except the newly selected one
         self._clear_all_feature_streams_except(feature)
 
+        # The previous feature might have just been deleted, so it's no longer in
+        # features.value, and its streams would otherwise stay displayed.
+        prev_feature = self._current_feature
+        if (prev_feature is not None and prev_feature is not feature
+                and prev_feature not in self._tab_data_model.main.features.value
+                and prev_feature.streams.value):
+            self.clear_feature_streams(prev_feature)
+
         self._current_feature = feature
 
         # Load streams from disk if they were previously evicted (streams list is empty)
