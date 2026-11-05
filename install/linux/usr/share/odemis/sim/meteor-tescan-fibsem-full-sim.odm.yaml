@@ -96,7 +96,7 @@
             "z": [28.e-3, 38.e-3]  # NOTE: increased max z, since grid 1 center was outside
         },
         FM_IMAGING_RANGE: {
-            "x": [44.e-3, 55.e-3],
+            "x": [25.e-3, 55.e-3],
             "y": [-23.e-3, 8.e-3],
             "z": [28.e-3, 37.e-3]
         },
