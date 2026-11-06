@@ -29,7 +29,6 @@ This module contains classes to control the actions related to the milling.
 import logging
 import os
 from concurrent.futures import CancelledError
-from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
 import wx
@@ -644,7 +643,11 @@ class MillingTaskController:
         logging.debug("Shapes updated: %s", shapes)
 
         # check if any of the points of the shapes are outside the bounding box of the image
-        s_bbox = self.acq_cont.stream.getBoundingBox()
+        feature = self._tab_data.main.currentFeature.value
+        if feature is None or feature.reference_image is None:
+            self.valid_patterns.value = False
+            return
+        s_bbox = img.getBoundingBox(feature.reference_image)
         for shape in shapes:
             valid = all([is_point_in_rect(pt, s_bbox) for pt in shape.points.value])
 
@@ -1501,6 +1504,7 @@ class AutomatedMillingController:
         features = [f for i, f in enumerate(features) if self._panel.workflow_features_chk_list.IsChecked(i)]
         if not features:
             return
+        task_list = [t for i, t in enumerate(self.task_list) if self._panel.workflow_task_chk_list.IsChecked(i)]
         if fibsemos.FIBSEMOS_INSTALLED:
             missing_state = [feature.name.value for feature in features if not feature.system_state]
             if missing_state:
@@ -1510,6 +1514,18 @@ class AutomatedMillingController:
                     "to acquire a new reference image before starting automated milling.",
                     "New milling references required", wx.OK | wx.ICON_WARNING)
                 return
+            for feature in features:
+                tasks = [task for workflow in task_list
+                         for task in millmng.get_associated_tasks(workflow, feature.milling_tasks)]
+                try:
+                    reference = fibsemos._get_reference_image(feature)
+                    left, bottom, right, top = img.getBoundingBox(reference)
+                    fibsemos.convert_milling_tasks_to_milling_stages(
+                        tasks, reference_size=(right - left, top - bottom))
+                except ValueError as exc:
+                    wx.MessageBox(f"Cannot mill {feature.name.value}: {exc}",
+                                  "Invalid milling pattern", wx.OK | wx.ICON_WARNING)
+                    return
         stage = self._tab_data.main.stage_bare
         sem_stream = self._tab.sem_stream
         fib_stream = self._tab.fib_stream
@@ -1521,7 +1537,6 @@ class AutomatedMillingController:
             feature_dir = get_feature_dir(self.conf.pj_last_path, feature.name.value)
             feature.path = str(feature_dir) if feature_dir else None
 
-        task_list = [t for i, t in enumerate(self.task_list) if self._panel.workflow_task_chk_list.IsChecked(i)]
         logging.info(f"Running automated milling for tasks: {task_list}")
 
         # TODO: add estimated time to the dialog, gui
@@ -1543,6 +1558,7 @@ class AutomatedMillingController:
         self._panel.txt_automated_milling_est_time.Hide()
         self._panel.txt_automated_milling_left_time.Show()
         self._panel.gauge_automated_milling.Show()
+        self._panel.btn_automated_milling_cancel.Enable()
         self._panel.btn_automated_milling_cancel.Show()
         self._tab_data.main.is_acquiring.value = True
         self._tab_data.main.is_milling.value = True
@@ -1564,12 +1580,16 @@ class AutomatedMillingController:
         )
 
         @call_in_wx_main
-        def _update_progress(future, start, end):
+        def _update_progress(future: model.ProgressiveFuture, elapsed: float, remaining: float) -> None:
+            """Display milling progress using elapsed and remaining durations.
+
+            :param future: Milling future supplying the status and current feature.
+            :param elapsed: Elapsed milling duration in seconds.
+            :param remaining: Estimated duration left in seconds.
+            """
             if hasattr(future, "msg"):
-                startdt = datetime.fromtimestamp(start).strftime('%Y-%m-%d_%H-%M-%S')
-                enddt = datetime.fromtimestamp(end).strftime('%Y-%m-%d_%H-%M-%S')
-                now = datetime.now().timestamp()
-                logging.info(f"automated milling update: {future.msg}, {startdt}, {enddt}, {end-now} seconds remaining")
+                logging.info("Automated milling update: %s, %.1f s elapsed, %.1f s remaining",
+                             future.msg, elapsed, remaining)
                 self._panel.txt_automated_milling_status.SetLabel(future.msg)
 
             if hasattr(future, "current_feature"):
@@ -1611,9 +1631,13 @@ class AutomatedMillingController:
         self._panel.txt_automated_milling_est_time.SetLabel(milling_status_txt)
         self._panel.txt_automated_milling_status.SetLabel(milling_status_txt)
 
-    def _cancel_automated_milling(self, _):
-        """
-        called when the button "Cancel" is pressed
+    def _cancel_automated_milling(self, evt: wx.Event) -> None:
+        """Request cancellation while keeping controls busy until cleanup finishes.
+
+        :param evt: Event from the automated milling cancel button.
         """
         logging.debug("Cancelling automated milling.")
-        self.automation_future.cancel()
+        if self.automation_future.cancel():
+            self.automation_future.msg = "Canceling milling..."
+            self._panel.txt_automated_milling_status.SetLabel(self.automation_future.msg)
+            self._panel.btn_automated_milling_cancel.Disable()

@@ -3,7 +3,9 @@
 """
 Created on 12 May 2014
 
-Copyright © 2014-2026 Kimon Tsitsikas, Delmic
+@author: Kimon Tsitsikas, Alexéy Ilyushkin
+
+Copyright © 2014-2026 Kimon Tsitsikas, Alexéy Ilyushkin, Delmic
 
 This file is part of Odemis.
 
@@ -23,10 +25,12 @@ import logging
 import math
 import os
 import pickle
+import socket
 import threading
 import time
 import unittest
 from concurrent.futures import CancelledError
+from typing import Any, List
 from unittest import mock
 
 import numpy
@@ -34,7 +38,7 @@ import Pyro4
 
 from odemis import model
 from odemis.dataio import hdf5
-from odemis.driver import tescan
+from odemis.driver import simulated, tescan
 from odemis.util import testing
 
 
@@ -103,6 +107,70 @@ class TestSEMStatic(unittest.TestCase):
     """
     Tests which don't need a SEM component ready
     """
+    def _create_device_handler(self) -> tescan.DeviceHandler:
+        """Create an SDK handler with an unconnected control socket.
+
+        :returns: Handler whose SDK responses can be supplied without hardware.
+        """
+        handler = tescan.DeviceHandler.__new__(tescan.DeviceHandler)
+        handler.device = tescan.sem.Sem()
+        handler.device_type = tescan.DeviceType.ION
+        handler._call_lock = threading.Lock()
+        command_socket = socket.socket()
+        command_socket.settimeout(2.0)
+        handler.device.connection.socket_c = command_socket
+        self.addCleanup(command_socket.close)
+        return handler
+
+    def test_preset_command_timeout_is_scoped(self):
+        """Allow a slow preset response without lengthening ordinary read timeouts."""
+        handler = self._create_device_handler()
+        command_socket = handler.device.connection.socket_c
+        timeouts = []
+
+        def receive(*args: Any) -> List[int]:
+            """Record the socket timeout used for an SDK response.
+
+            :param args: SDK request arguments.
+            :returns: Successful SDK response.
+            """
+            timeouts.append(command_socket.gettimeout())
+            return [0]
+
+        with mock.patch.object(handler.device.connection, "Recv", side_effect=receive):
+            handler.PresetSetEx("10 keV; 20 pA")
+            handler.GetViewField()
+        self.assertEqual(timeouts, [tescan.FIB_READY_TIMEOUT, 2.0])
+        self.assertEqual(command_socket.gettimeout(), 2.0)
+
+    def test_preset_failure_restores_socket_timeout(self):
+        """Restore the normal timeout after an SDK exception."""
+        handler = self._create_device_handler()
+        with mock.patch.object(handler.device.connection, "Recv", side_effect=RuntimeError("SDK failure")):
+            with self.assertRaisesRegex(RuntimeError, "SDK failure"):
+                handler.PresetSetEx("10 keV; 20 pA")
+        self.assertEqual(handler.device.connection.socket_c.gettimeout(), 2.0)
+
+    def test_missing_voltage_preserves_polled_value(self):
+        """Keep a missing voltage response out of the numeric VA and its subscribers."""
+        parent = simulated.GenericComponent("SEM", None)
+        self.addCleanup(model.HwComponent.terminate, parent)
+        parent._acquisition_init_lock = threading.Lock()
+        parent._acq_progress_lock = threading.Lock()
+        scanner = tescan.Scanner.__new__(tescan.Scanner)
+        model.Emitter.__init__(scanner, "FIB", "ion-beam", parent=parent)
+        self.addCleanup(model.HwComponent.terminate, scanner)
+        scanner._device_handler = self._create_device_handler()
+        scanner.horizontalFoV = model.FloatVA(100e-6)
+        scanner.accelVoltage = model.FloatVA(30000, readonly=True)
+        update = mock.Mock()
+        scanner.accelVoltage.subscribe(update)
+        with mock.patch.object(scanner._device_handler.device.connection, "Recv", side_effect=[[0.1], None]):
+            with self.assertLogs(level=logging.WARNING):
+                scanner._pollVAs()
+        self.assertEqual(scanner.accelVoltage.value, 30000)
+        update.assert_not_called()
+
     def test_creation(self):
         """
         Doesn't even try to acquire an image, just create and delete components
@@ -1039,6 +1107,16 @@ class TestFIB(BaseFIBTest, unittest.TestCase):
                 self.sed.data.get()
                 self.assertEqual(self.scanner.beamPreset.value, reported)
                 activate.assert_not_called()
+
+    def test_preset_waits_for_optics(self):
+        """Wait for the FIB to settle before restoring scan rotation."""
+        device = self.scanner._device_handler
+        preset = next(preset for preset in self.scanner.beamPreset.choices if preset)
+        with mock.patch.object(device, "IsBusy", side_effect=[0, 1, 0]) as busy, \
+             mock.patch.object(device, "PresetSetEx", return_value=0), \
+             mock.patch.object(device, "SetImageRot", side_effect=lambda value: self.assertEqual(busy.call_count, 3)):
+            self.scanner.beamPreset.value = preset
+        self.assertEqual(busy.call_count, 3)
 
     def test_set_presets(self):
         # Change presets (we use hardcoded presets here). If the hardcoded presets are not available on the hardware in
