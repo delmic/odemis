@@ -26,6 +26,7 @@ import time
 import unittest
 import warnings
 from builtins import range
+from typing import Tuple
 
 import cairo
 import numpy
@@ -43,7 +44,7 @@ from odemis.dataio import tiff
 from odemis.gui.comp.overlay.gadget import RulerGadget, LabelGadget
 from odemis.gui.model import TOOL_LABEL, TOOL_RULER
 from odemis.gui.util import img
-from odemis.gui.util.img import (calculate_ticks, format_rgba_darray,
+from odemis.gui.util.img import (calculate_ticks, draw_image, format_rgba_darray,
                                  insert_tile_to_image, merge_screen,
                                  wxImage2NDImage)
 
@@ -1483,6 +1484,46 @@ class TestSpatialExportPyramidal(unittest.TestCase):
         for data_gray, ratio in zip(exp_data_gray, self.image_ratio):
             new_image_ratio = data_gray.shape[0] / data_gray.shape[1]
             self.assertLess(abs(new_image_ratio - ratio) / ratio, 1.5)
+
+
+class TestDrawImageRotated(unittest.TestCase):
+
+    def _render(self, im: model.DataArray, buffer_center: Tuple[float, float],
+                buffer_size: Tuple[int, int], rotation: float) -> numpy.ndarray:
+        """
+        Draw the image on a new buffer, with an upscaling of 2.
+        :param im: the image to draw
+        :param buffer_center: center of the buffer (in m)
+        :param buffer_size: size of the buffer (in px)
+        :param rotation: rotation of the image (in rad)
+        :returns: the BGRA pixels of the buffer
+        """
+        surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, *buffer_size)
+        ctx = cairo.Context(surface)
+        draw_image(ctx, im, (0, 0), buffer_center, (0.5e-6, 0.5e-6), buffer_size,
+                   im_scale=(1e-6, 1e-6), rotation=rotation)
+        surface.flush()
+        arr = numpy.frombuffer(surface.get_data(), dtype=numpy.uint8)
+        return arr.reshape(buffer_size[1], surface.get_stride() // 4, 4)[:, :buffer_size[0]]
+
+    def test_zoom_rotated(self):
+        """Zooming on a rotated image must show the same pixels as the full view"""
+        grad = numpy.linspace(0, 255, 100).astype(numpy.uint8)
+        im = numpy.zeros((100, 100, 4), dtype=numpy.uint8)
+        im[:, :, 0] = grad[None, :]  # blue, left to right
+        im[:, :, 1] = grad[:, None]  # green, top to bottom
+        im[:, :, 3] = 255
+        im = model.DataArray(im)
+
+        rotation = 0.5  # rad
+        full = self._render(im, (0, 0), (200, 200), rotation)
+        # Top-right quarter of the full view
+        zoom = self._render(im, (50 * 0.5e-6, 50 * 0.5e-6), (100, 100), rotation)
+
+        expected = full[:100, 100:]
+        diff = numpy.abs(zoom.astype(int) - expected.astype(int)).max(axis=2)
+        self.assertGreater(zoom[:, :, 3].sum(), 0)
+        self.assertLess(numpy.mean(diff > 10), 0.02)
 
 
 class TestOverviewFunctions(unittest.TestCase):
