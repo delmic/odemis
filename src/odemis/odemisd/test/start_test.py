@@ -28,6 +28,7 @@ import unittest
 from unittest import mock
 
 import notify2
+import wx
 
 import odemis
 from odemis.odemisd.start import find_window, main, run_model_options
@@ -49,10 +50,36 @@ class StartTestCase(unittest.TestCase):
         )
         cls.notify2_mocks = cls.notify2_patcher.start()
 
+        # Create the wx.App on the actual main thread. odemis.odemisd.start
+        # (BackendStarter, display_log, show_error_box) reuses this existing
+        # app (via get_or_create_wx_app()) instead of creating a new one on
+        # the "GUI/Back-end thread" spawned by the tests below. wx.App (and
+        # any window it owns) may only be created/destroyed on the thread
+        # that instantiated it, so creating it here, on the main thread,
+        # avoids the "only main thread can be here" wx assertions that occur
+        # when it is created from a worker thread instead.
+        cls.wx_app = wx.App()
+
     @classmethod
     def tearDownClass(cls):
         cls.notify2_patcher.stop()
         testing.stop_backend()
+        cls.wx_app.Destroy()
+
+    def _kill_gui_process(self):
+        """
+        Force-terminate any lingering odemis-gui process, regardless of
+        whether a window matching a specific title can currently be found.
+        Relying only on find_window("Odemis") is not enough: a crashed
+        odemis-gui can leave start.py stuck showing a differently-titled
+        blocking error dialog (e.g. "Log message of Odemis GUI"), so the
+        underlying GUI process itself is targeted directly and unconditionally.
+        """
+        # returncode 1 simply means no matching process was found; anything
+        # else would be an unexpected subprocess failure.
+        ret = subprocess.call(["pkill", "-f", "odemis.gui.main"])
+        if ret == 0:
+            time.sleep(1)  # Wait for the Odemis GUI to properly close
 
     def setUp(self):
         try:
@@ -60,14 +87,15 @@ class StartTestCase(unittest.TestCase):
         except IOError:
             pass
 
-        if find_window("Odemis"):
-            subprocess.check_call(["pkill", "-f", "odemis.gui.main"])
-            time.sleep(1)  # Wait for the Odemis GUI to properly close
+        self._kill_gui_process()
 
     def tearDown(self):
-        if find_window("Odemis"):
-            subprocess.check_call(["pkill", "-f", "odemis.gui.main"])
-            time.sleep(1) # Wait for the Odemis GUI to properly close
+        self._kill_gui_process()
+
+        try:
+            testing.stop_backend()
+        except IOError:
+            pass
 
         # Cannot join the gui thread if the GUI is still running. Therefore, close the GUI first.
         if hasattr(self, "_gui_thread"):
@@ -79,7 +107,16 @@ class StartTestCase(unittest.TestCase):
             main([" ", SECOM_CONFIG])
 
         self._gui_thread = threading.Thread(target=thread_call, name="GUI/Back-end thread")
-        self._gui_thread.daemon = False
+        # Use a daemon thread: main() can end up blocked indefinitely (e.g. a
+        # crashed odemis-gui triggers a blocking wx error dialog, or a slow
+        # simulated back-end delays wait_backend_is_ready()). A non-daemon
+        # thread would then prevent the whole test process from ever exiting,
+        # since Python waits for all non-daemon threads before shutting down.
+        # Marking it as daemon guarantees the process exits with the rest of
+        # the test suite even if this thread never finishes; tearDown() below
+        # is still responsible for actively cleaning up any spawned
+        # processes/windows so nothing is left running behind the test.
+        self._gui_thread.daemon = True
         self._gui_thread.start()
 
         # Poll for the window to appear, rather than using a fixed sleep

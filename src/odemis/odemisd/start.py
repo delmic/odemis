@@ -144,6 +144,24 @@ def get_notify_object():
     return notif
 
 
+def get_or_create_wx_app() -> "wx.App":
+    """
+    Return the current wx.App instance, or create a new one if none exists yet.
+
+    wx.App (and any window it owns) may only be created and destroyed on the
+    thread that first instantiated it (usually the actual process main
+    thread). Always calling wx.App() blindly would create a new instance
+    every time, which is both wasteful and, if done from a thread other than
+    the one that owns the existing app, unsafe.
+
+    :return: the (possibly newly created) wx.App singleton for this process
+    """
+    app = wx.App.Get()
+    if app is None:
+        app = wx.App()
+    return app
+
+
 def display_log(type, logfile):
     """
     Shows the most recent log containing the "possible" traceback of an error in the process/file specified.
@@ -188,7 +206,7 @@ def display_log(type, logfile):
                 failurele = i  # End of backtrace
                 break
 
-    app = wx.App()  # This variable is created to show the log_frame. Required even though it is unused.
+    app = get_or_create_wx_app()  # This variable is created to show the log_frame. Required even though it is unused.
 
     if failurelb is not None:
         if failurele is None:
@@ -247,7 +265,7 @@ class BackendStarter(object):
 
         # For displaying wx windows
         logging.debug("Creating app")
-        self._app = wx.App()
+        self._app = get_or_create_wx_app()
 
         self._nogui = nogui
 
@@ -484,8 +502,12 @@ class BackendStarter(object):
             if ret != wx.ID_EXIT:
                 self._mic.ghosts.unsubscribe(self._on_ghosts)
         except Exception:
-            # Can happen if the backend failed
-            pass
+            # Can happen if the backend failed. Log it (instead of silently
+            # swallowing it) because a failed unsubscribe leaves _on_ghosts
+            # registered on the back-end, which keeps receiving component
+            # state updates (and the underlying Pyro callback thread alive)
+            # for as long as the back-end keeps running.
+            logging.warning("Failed to unsubscribe from back-end ghosts", exc_info=True)
 
         # status = driver.get_backend_status()
         # if status == driver.BACKEND_RUNNING:
@@ -632,7 +654,7 @@ def show_error_box(caption, message):
     caption (str): the window title
     message (str): the error text
     """
-    app = wx.App()
+    app = get_or_create_wx_app()
     box = wx.MessageDialog(None, message, caption, wx.OK | wx.ICON_ERROR | wx.CENTER)
     box.ShowModal() # Waits for the window to be closed
     app.Yield() # Hides the window
