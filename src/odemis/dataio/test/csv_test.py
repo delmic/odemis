@@ -21,7 +21,6 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 import logging
-import math
 import numpy
 from odemis import model
 from odemis.dataio import csv
@@ -318,6 +317,18 @@ class TestCSVIO(unittest.TestCase):
         except IOError:
             raised = True
         self.assertFalse(raised, 'Failed to read csv file')
+
+    def test_export_image(self):
+        """Test that a 2D YX image (e.g. SEM) is exported as a matrix with the same shape and values."""
+        size = (2000, 3000)  # rows, columns
+        md = {model.MD_ACQ_TYPE: model.MD_AT_EM,
+              model.MD_DIMS: "YX"}
+        data = model.DataArray(numpy.arange(size[0] * size[1], dtype=numpy.uint16).reshape(size), md)
+        csv.export(FILENAME, data)
+
+        with open(FILENAME) as f:
+            rows = list(pycsv.reader(f))
+        numpy.testing.assert_array_equal(numpy.array(rows, dtype=numpy.uint16), data)
 
     def test_unknown_acquisition_type(self):
         """Test that a ValueError is raised for an unknown acquisition type."""
