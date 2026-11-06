@@ -33,6 +33,7 @@ import numpy
 
 import odemis.acq.test as acq_test
 from odemis import model
+from odemis.dataio import tiff
 from odemis.model import MD_FAV_POS_ACTIVE
 from odemis.acq.feature import (
     CryoFeature,
@@ -46,6 +47,7 @@ from odemis.gui.cont.cryo_project import (
     sanitize_feature_name,
     trash_feature_dir,
     load_project,
+    reconcile_overviews,
     read_project_file,
     save_project,
     IMG_FILENAME,
@@ -88,6 +90,35 @@ class TestCryoProject(unittest.TestCase):
         self.assertEqual(project_data["overviews"][0][IMG_FILENAME], str(overview_file))
         # Check that the list of features is there, but empty
         self.assertEqual(len(project_data["features"]), 0)
+
+    def test_renamed_overview(self):
+        """Tests that a renamed overview file replaces the old name in the project."""
+        project_dir = self.test_dir / "renamed"
+        project_dir.mkdir()
+        da = model.DataArray(numpy.zeros((4, 4), dtype=numpy.uint16), {model.MD_IN_FILE_INDEX: 0})
+        tiff.export(str(project_dir / "old-overview.ome.tiff"), da)
+        self.main_data.tab.value.conf.pj_last_path = project_dir
+        self.main_data.overviews.value = [{IMG_FILENAME: str(project_dir / "old-overview.ome.tiff"),
+                                           IMG_IN_FILE_IDS: {0}}]
+        save_project(self.main_data)
+
+        (project_dir / "old-overview.ome.tiff").rename(project_dir / "new-overview.ome.tiff")
+        overviews = reconcile_overviews(load_project(project_dir)["overviews"], project_dir)
+        self.assertEqual(len(overviews), 1)
+        self.assertEqual(overviews[0][IMG_FILENAME], str(project_dir / "new-overview.ome.tiff"))
+        self.assertEqual(list(overviews[0][IMG_IN_FILE_IDS]), [0])
+
+    def test_missing_overview_kept(self):
+        """Tests that a missing overview keeps its indices, and an unrelated new file does not inherit them."""
+        project_dir = self.test_dir / "missing"
+        project_dir.mkdir()
+        da = model.DataArray(numpy.zeros((4, 4), dtype=numpy.uint16), {model.MD_IN_FILE_INDEX: 0})
+        tiff.export(str(project_dir / "other-overview.ome.tiff"), da)
+        old = {IMG_FILENAME: str(project_dir / "old-overview.ome.tiff"), IMG_IN_FILE_IDS: {3}}
+        overviews = reconcile_overviews([old], project_dir)
+        self.assertEqual(len(overviews), 2)
+        self.assertEqual(overviews[0], old)
+        self.assertNotIn(IMG_IN_FILE_IDS, overviews[1])
 
     def test_legacy_project(self):
         """Tests that the legacy project works properly."""

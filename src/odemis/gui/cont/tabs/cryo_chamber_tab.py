@@ -46,7 +46,7 @@ from odemis.gui.comp.buttons import (
 )
 from odemis.gui.comp.edit_position_metadata import EditMeteorCalibrationDialog
 from odemis.gui.conf.licences import ODEMIS_ADVANCED_FLAG
-from odemis.gui.cont.cryo_project import load_project, IMG_IN_FILE_IDS, IMG_FILENAME, save_project
+from odemis.gui.cont.cryo_project import load_project, IMG_IN_FILE_IDS, IMG_FILENAME, save_project, reconcile_overviews
 from odemis.gui.cont.tabs.correlation_tab import CorrelationTab
 from odemis.gui.cont.tabs.localization_tab import LocalizationTab
 from odemis.gui.cont.tabs.tab import Tab
@@ -405,9 +405,11 @@ class CryoChamberTab(Tab):
         # load project data
         proj_data = load_project(proj_path)
 
+        overviews_reconciled = reconcile_overviews(proj_data["overviews"], proj_path)
+
         # no data found in the project directory, not necessarily an error as the
         # user may create a project, but not have any data yet. so we just inform the user
-        if len(proj_data["features"]) == 0 and len(proj_data["overviews"]) == 0:
+        if len(proj_data["features"]) == 0 and len(overviews_reconciled) == 0:
             logging.warning("No data found in the project directory.")
             box = wx.MessageDialog(self.main_frame,
                                f"No data found in the selected directory: {proj_path}.",
@@ -446,12 +448,16 @@ class CryoChamberTab(Tab):
         self.tab_data_model.main.features.value = decoded_features
 
         # Load overview streams in the Localization and Fibsem tabs
-        self.tab_data_model.main.overviews.value = proj_data["overviews"]
+        self.tab_data_model.main.overviews.value = overviews_reconciled
+        if overviews_reconciled != proj_data["overviews"]:
+            save_project(self.tab_data_model.main)
 
         overviews = []
         for overview in self.tab_data_model.main.overviews.value:
             in_file_ids = overview.get(IMG_IN_FILE_IDS)
             if in_file_ids == []:  # If empty list, don't load at all
+                continue
+            if not os.path.isfile(overview[IMG_FILENAME]):  # Kept in the project, in case the file comes back
                 continue
 
             overview_das = open_acquisition(overview[IMG_FILENAME])
