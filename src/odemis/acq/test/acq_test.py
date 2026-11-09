@@ -752,6 +752,24 @@ class MeteorTestCase(unittest.TestCase):
         # 2 streams, 2 updates per stream, so 2 updates at least
         self.assertGreaterEqual(self._nb_updates, 2)
 
+    def test_zstack_uses_zstack_focuser(self):
+        """The z-stack moves the zstack_focuser, not the focuser used for regular focusing"""
+        self.ccd.exposureTime.value = 0.1  # s
+        s1 = stream.FluoStream(
+            "fluo1", self.ccd, self.ccd.data, self.light, self.light_filter,
+            focuser=self.posture_manager.stage, zstack_focuser=self.fm_focuser
+        )
+        s1.excitation.value = sorted(s1.excitation.choices)[0]
+        self.assertIs(s1.zstack_focuser, self.fm_focuser)
+
+        stage_z = self.posture_manager.stage.position.value["z"]
+        zlevels = {s1: generate_zlevels(self.fm_focuser, (-2e-6, 2e-6), 1e-6)}
+        f = acqmng.acquireZStack([s1], zlevels)
+        f.result()
+
+        self.assertAlmostEqual(self.fm_focuser.position.value["z"], zlevels[s1][-1], delta=1e-7)
+        self.assertEqual(self.posture_manager.stage.position.value["z"], stage_z)
+
     def test_only_SEM_streams_with_zstack(self):
         self.ebeam.dwellTime.value = 1e-6  # s
         sems = stream.SEMStream("sem", self.sed, self.sed.data, self.ebeam)
