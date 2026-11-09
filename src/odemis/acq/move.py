@@ -501,6 +501,7 @@ class MeteorPostureManager(MicroscopePostureManager):
                 Posture.SEM_IMAGING: self._transform_from_trenching_to_sem,
                 # trenching position can be dynamically updated, so we need to support this recalculation
                 Posture.TRENCHING: self._transform_from_trenching_to_trenching,
+                Posture.SLM_IMAGING: self._transform_from_trenching_to_slm,
             },
             Posture.SLM_IMAGING: {
                 Posture.SEM_IMAGING: self._transform_from_slm_to_sem,
@@ -508,6 +509,7 @@ class MeteorPostureManager(MicroscopePostureManager):
                 Posture.MILLING: self._transform_from_slm_to_milling,
                 Posture.FIB_IMAGING: self._transform_from_slm_to_fib,
                 Posture.FIB_VIEW_FM: self._transform_from_slm_to_fib_view_fm,
+                Posture.TRENCHING: self._transform_from_slm_to_trenching,
             },
             Posture.UNKNOWN: {
                 Posture.UNKNOWN: lambda x: x
@@ -1442,6 +1444,14 @@ class MeteorPostureManager(MicroscopePostureManager):
     def _transform_from_slm_to_fib_view_fm(self, pos: Dict[str, float]) -> Dict[str, float]:
         """Transform from SLM posture to FIB-view FM posture."""
         return self._transform_from_sem_to_fib_view_fm(self._transform_from_slm_to_sem(pos))
+
+    def _transform_from_slm_to_trenching(self, pos: Dict[str, float]) -> Dict[str, float]:
+        """Transform from SLM posture to trenching posture."""
+        return self._transform_from_sem_to_trenching(self._transform_from_slm_to_sem(pos))
+
+    def _transform_from_trenching_to_slm(self, pos: Dict[str, float]) -> Dict[str, float]:
+        """Transform from trenching posture to SLM posture."""
+        return self._transform_from_sem_to_slm(self._transform_from_trenching_to_sem(pos))
 
     def is_posture_switch_allowed(self, source_posture: Posture, target_posture: Posture) -> bool:
         """
@@ -3374,6 +3384,9 @@ class SampleStage(model.Actuator):
                                                 unit=("m", "m", "m"),  readonly=True)
         # it's just a conversion from the dep's position
         self._stage_bare.position.subscribe(self._updatePosition, init=True)
+        # The posture can change without the stage moving (eg, when only the SLM objective is engaged),
+        # in which case the sample stage position must be recomputed with the transform of the new posture.
+        self._pm.current_posture.subscribe(self._onPostureChange)
 
         if model.hasVA(self._stage_bare, "speed"):
             speed_axes = set(sample_stage_axes.keys())
@@ -3383,6 +3396,13 @@ class SampleStage(model.Actuator):
             else:
                 logging.info("Axes %s of dependency are missing from .speed, so not providing it",
                              set(self.axes) - speed_axes)
+
+    def _onPostureChange(self, posture: Posture) -> None:
+        """
+        Update the position VA when the posture changes, as the transform depends on it
+        :param posture: the new posture (unused, recomputed from the stage position)
+        """
+        self._updatePosition(self._stage_bare.position.value)
 
     def _updatePosition(self, pos_dep):
         """

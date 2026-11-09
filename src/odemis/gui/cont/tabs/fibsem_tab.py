@@ -54,7 +54,7 @@ from odemis.gui.util import call_in_wx_main
 from odemis.util.dataio import data_to_static_streams
 
 
-FIBSEM_POSTURES = [Posture.SEM_IMAGING, Posture.MILLING, Posture.FIB_IMAGING, Posture.TRENCHING]
+FIBSEM_POSTURES = [Posture.SEM_IMAGING, Posture.MILLING, Posture.FIB_IMAGING, Posture.TRENCHING, Posture.SLM_IMAGING]
 
 class FibsemTab(Tab):
 
