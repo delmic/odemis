@@ -310,7 +310,7 @@ class CryoAcquiController(object):
             self._tab.tab_data_model.select_current_position_feature()
 
         # store the focuser position
-        self._good_focus_pos = self._tab_data.main.focus.position.value["z"]
+        self._store_focus_positions()
 
         # NOTE: acquisition manager expects all streams to be paused before starting.
         # this cannot be done in the is_acquiring callback as it can be delayed
@@ -347,6 +347,28 @@ class CryoAcquiController(object):
         self._acq_future.add_done_callback(self._on_acquisition_done)
         self._panel.Layout()
 
+    def _store_focus_positions(self) -> None:
+        """
+        Remember the position of the focus component moved by the acquisition, to restore it afterwards.
+        In FM imaging and FIB-view FM postures, it is the optical focus. In SLM posture, it is the
+        SLM focus, which only moves during a z-stack (the sample z is not restored).
+        """
+        main = self._tab_data.main
+        posture = main.posture_manager.get_current_posture()
+        focusers = []
+        if posture in (Posture.FM_IMAGING, Posture.FIB_VIEW_FM):
+            focusers = [main.focus]
+        elif posture == Posture.SLM_IMAGING and self._zStackActive.value and main.focus_coincident:
+            focusers = [main.focus_coincident]
+        self._good_focus_pos = [(f, f.position.value["z"]) for f in focusers]
+
+    def _restore_focus_positions(self) -> None:
+        """
+        Move the optical focus components back to the position stored before the acquisition.
+        """
+        for f, z in self._good_focus_pos:
+            f.moveAbs({"z": z})
+
     @call_in_wx_main
     def _on_acquisition_done(self, future):
         """
@@ -356,7 +378,7 @@ class CryoAcquiController(object):
         self._acq_future = None
         self._gauge_future_conn = None
         self._tab_data.main.is_acquiring.value = False
-        self._tab_data.main.focus.moveAbs({"z": self._good_focus_pos})
+        self._restore_focus_positions()
 
         # try to get the acquisition data
         try:
@@ -387,7 +409,7 @@ class CryoAcquiController(object):
     def _acquire_at_features(self, _: wx.Event):
         """Acquire at the features using the current imaging settings."""
         # store the focuser position
-        self._good_focus_pos = self._tab_data.main.focus.position.value["z"]
+        self._store_focus_positions()
 
         # NOTE: acquisition manager expects all streams to be paused before starting.
         # this cannot be done in the is_acquiring callback as it can be delayed
@@ -405,7 +427,7 @@ class CryoAcquiController(object):
 
         filename = self._filename.value
         stage = self._tab_data.main.stage_bare
-        focus = self._tab_data.main.focus
+        focus = self._tab_data.main.get_posture_focuser()
         acq_streams = self._acquiStreams.value
         features = self._get_selected_features()
         acq_time = self._get_acq_time()
@@ -473,7 +495,7 @@ class CryoAcquiController(object):
         self._acq_future = None
         self._gauge_future_conn = None
         self._tab_data.main.is_acquiring.value = False
-        self._tab_data.main.focus.moveAbs({"z": self._good_focus_pos})
+        self._restore_focus_positions()
 
         try:
             self._reset_acquisition_gui(state=ST_FINISHED)
@@ -808,9 +830,12 @@ class CryoAcquiController(object):
             return
 
         try:
-            levels = generate_zlevels(self._tab_data.main.focus,
-                                      (self._tab_data.zMin.value, self._tab_data.zMax.value),
-                                      self._tab_data.zStep.value)
+            # Each stream moves along its own z-stack focuser (eg, the SLM focus in SLM posture)
+            streams = [s for s in self._acquiStreams.value
+                       if isinstance(s, (FluoStream, BrightfieldStream))]
+            zrange = (self._tab_data.zMin.value, self._tab_data.zMax.value)
+            levels = {s: generate_zlevels(s.zstack_focuser, zrange, self._tab_data.zStep.value)
+                      for s in streams}
         except (ValueError, IndexError, ZeroDivisionError, KeyError) as ex:
             # This is usually due to invalid z-stack parameters => forbid acquiring
             logging.warning("Could not generate z-levels for z-stack: %s", ex)
@@ -820,8 +845,7 @@ class CryoAcquiController(object):
             self._zstack_error = None
             # Only use zstack for the optical streams (not SEM), as that's the ones
             # the user is interested in on the METEOR.
-            self._zlevels = {s: levels for s in self._acquiStreams.value
-                             if isinstance(s, (FluoStream, BrightfieldStream))}
+            self._zlevels = levels
 
         # update the time, taking the zstack into account
         self._update_acquisition_time()

@@ -2097,39 +2097,44 @@ class CryoStreamsController(SecomStreamsController):
 
     def _is_slm_stream(self, stream) -> bool:
         """
-        Check if the given stream is associated with SLM imaging posture based on its focuser.
+        Check if the given stream is associated with SLM imaging posture based on its z-stack focuser.
         """
-        focuser = getattr(stream, "focuser", None)
-        return focuser is self._main_data_model.focus_coincident
+        focuser = getattr(stream, "zstack_focuser", None)
+        return focuser is not None and focuser is self._main_data_model.focus_coincident
 
-    def _get_fluo_components(self) -> Tuple[object, object, object, object]:
+    def _get_fluo_components(self) -> Tuple[object, object, object, object, object]:
         """
         Pick optical components for a fluorescence stream based on posture.
 
-        Returns detector, light source, filter and focuser.
+        Returns detector, light source, filter, focuser, and z-stack focuser. In SLM posture,
+        the focuser (used for viewport focus and autofocus) is the sample stage, while the
+        z-stack focuser is the SLM focus.
         """
         if self._is_slm_posture():
             logging.debug("SLM components enabled for imaging")
             ccd = self._main_data_model.ccd_coincident
             light = self._main_data_model.light_coincident
             light_filter = self._main_data_model.filter_coincident
-            focuser = self._main_data_model.focus_coincident
-            if all((ccd, light, light_filter, focuser)):
+            zstack_focuser = self._main_data_model.focus_coincident
+            focuser = self._main_data_model.get_posture_focuser()
+            if all((ccd, light, light_filter, zstack_focuser, focuser)):
                 logging.debug("FM components enabled for imaging")
-                return ccd, light, light_filter, focuser
+                return ccd, light, light_filter, focuser, zstack_focuser
 
+        focuser = self._main_data_model.focus
         return (
             self._main_data_model.ccd,
             self._main_data_model.light,
             self._main_data_model.light_filter,
-            self._main_data_model.focus,
+            focuser,
+            focuser,
         )
 
     def _create_fluo_stream(self, name: str) -> acqstream.FluoStream:
         """
         Create a fluorescence stream bound to posture-specific optics.
         """
-        ccd, light, light_filter, focuser = self._get_fluo_components()
+        ccd, light, light_filter, focuser, zstack_focuser = self._get_fluo_components()
         return acqstream.FluoStream(
             name,
             ccd,
@@ -2137,6 +2142,7 @@ class CryoStreamsController(SecomStreamsController):
             light,
             light_filter,
             focuser=focuser,
+            zstack_focuser=zstack_focuser,
             opm=self._main_data_model.opm,
             detvas={"exposureTime"},
         )

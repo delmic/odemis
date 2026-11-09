@@ -32,7 +32,7 @@ from odemis import model
 from odemis.acq import acqmng, path
 from odemis.acq.align.fastem import Calibrations
 from odemis.acq.fastem import FastEMCalibration, FastEMROC
-from odemis.acq.move import MicroscopePostureManager
+from odemis.acq.move import MicroscopePostureManager, Posture
 from odemis.gui import conf
 from odemis.gui.conf.data import get_hw_settings_config
 from odemis.gui.log import observe_comp_state
@@ -601,6 +601,18 @@ class CryoMainGUIData(MainGUIData):
         # Bounding-box of the "useful area" relative to the center of a grid
         self.sample_rel_bbox = self.SAMPLE_USABLE_BBOX_TEM_GRID
 
+    def get_posture_focuser(self) -> Optional[model.HwComponent]:
+        """
+        Get the component to use for regular focusing (viewport focus, autofocus,
+        feature focus position) in the current posture. In the SLM imaging posture,
+        it is the sample stage (z axis). Otherwise, it is the optical focus.
+        The z-stack acquisition is independent: it uses the stream zstack_focuser.
+        :returns: the focuser component, with a "z" axis
+        """
+        if (self.focus_coincident is not None and self.stage is not None
+                and self.posture_manager.get_current_posture() == Posture.SLM_IMAGING):
+            return self.stage
+        return self.focus
 
     def _on_data_collection_probability(self, probability: float) -> None:
         """
