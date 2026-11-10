@@ -20,9 +20,11 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 import logging
 import math
 import os
+import shutil
+import tempfile
 import time
 import unittest
-from concurrent.futures._base import FINISHED, CancelledError
+from concurrent.futures._base import CANCELLED, FINISHED, PENDING, CancelledError
 from typing import List, Tuple
 from unittest import mock
 
@@ -45,13 +47,25 @@ from odemis.acq.stitching import (
 )
 from odemis.acq.stitching._tiledacq import (
     START_INDEX,
-    TiledAcquisitionTask,
     clip_tiling_bbox_to_range,
+    create_tiled_acquisition_task,
     get_fov,
     get_fov_based_bbox,
     get_stream_based_bbox,
     get_tiled_bboxes,
     get_zstack_levels,
+)
+from odemis.acq.stitching._tiledacq_components import (
+    STITCH_SPEED,
+    FocusMap,
+    FocusMapHook,
+    GridPlan,
+    ProgressEstimator,
+    Stitcher,
+    TaskContext,
+    Tile,
+    TileAcquirerBase,
+    TileSaver,
 )
 from odemis.acq.stream import FluoStream
 from odemis.util import img, testing
@@ -121,58 +135,58 @@ class CRYOSECOMTestCase(unittest.TestCase):
         # use area as multiples of fov (in case simulator parameters changed)
 
         # Smaller than FoV => 1x1
-        tiled_acq_task = TiledAcquisitionTask(self.fm_streams, self.stage,
+        tiled_acq_task = create_tiled_acquisition_task(self.fm_streams, self.stage,
                                               (0, 0, fov[0] / 2, fov[1] / 2),
                                               overlap=0, future=model.InstantaneousFuture())
 
-        self.assertEqual(tiled_acq_task._number_of_tiles, 1)
-        self.assertEqual(tiled_acq_task._tile_indices, [(0, 0)])
+        self.assertEqual(tiled_acq_task._plan.number_of_tiles, 1)
+        self.assertEqual(tiled_acq_task._plan._tile_indices, [(0, 0)])
 
-        # Precisely 2x2 FoV, without overlap => 2x2 tiles
-        tiled_acq_task = TiledAcquisitionTask(self.fm_streams, self.stage,
+        # Precisely 2x2 FoV, without overlap => 2x2 tiles_tile_indices
+        tiled_acq_task = create_tiled_acquisition_task(self.fm_streams, self.stage,
                                               (0, 0, 2 * fov[0], 2 * fov[1]),
                                               overlap=0, future=model.InstantaneousFuture())
-        self.assertEqual(tiled_acq_task._number_of_tiles, 4)
-        self.assertEqual(tiled_acq_task._tile_indices, [(0, 0), (1, 0), (0, 1), (1, 1)])
+        self.assertEqual(tiled_acq_task._plan.number_of_tiles, 4)
+        self.assertEqual(tiled_acq_task._plan._tile_indices, [(0, 0), (1, 0), (0, 1), (1, 1)])
 
         # Precisely 1 x 2 FoV, without overlap => should give 1 x 2 tiles
-        tiled_acq_task = TiledAcquisitionTask(self.fm_streams, self.stage,
+        tiled_acq_task = create_tiled_acquisition_task(self.fm_streams, self.stage,
                                               (0, 0, fov[0], 2 * fov[1]),
                                               overlap=0, future=model.InstantaneousFuture())
-        self.assertEqual(tiled_acq_task._number_of_tiles, 2)
-        self.assertEqual(tiled_acq_task._tile_indices, [(0, 0), (0, 1)])
+        self.assertEqual(tiled_acq_task._plan.number_of_tiles, 2)
+        self.assertEqual(tiled_acq_task._plan._tile_indices, [(0, 0), (0, 1)])
 
         # Precisely 0.8 FoV, with overlap 0.2 => 1x1 tiles
-        tiled_acq_task = TiledAcquisitionTask(self.fm_streams, self.stage,
+        tiled_acq_task = create_tiled_acquisition_task(self.fm_streams, self.stage,
                                               (0, 0, 0.8 * fov[0], 0.8 * fov[1]),
                                               overlap=0.2, future=model.InstantaneousFuture())
-        self.assertEqual(tiled_acq_task._number_of_tiles, 1)
-        self.assertEqual(tiled_acq_task._tile_indices, [(0, 0)])
+        self.assertEqual(tiled_acq_task._plan.number_of_tiles, 1)
+        self.assertEqual(tiled_acq_task._plan._tile_indices, [(0, 0)])
 
         # 2x3 FoV with overlap 0.2 => 3x4
-        tiled_acq_task = TiledAcquisitionTask(self.fm_streams, self.stage,
+        tiled_acq_task = create_tiled_acquisition_task(self.fm_streams, self.stage,
                                               (0, 0, 2 * fov[0], 3 * fov[1]),
                                               overlap=0.2, future=model.InstantaneousFuture())
-        self.assertEqual(tiled_acq_task._number_of_tiles, 12)
+        self.assertEqual(tiled_acq_task._plan.number_of_tiles, 12)
         self.assertEqual(
-            tiled_acq_task._tile_indices,
+            tiled_acq_task._plan._tile_indices,
             [(0, 0), (1, 0), (2, 0), (0, 1), (1, 1), (2, 1), (0, 2), (1, 2), (2, 2), (0, 3), (1, 3), (2, 3)]
         )
 
         # Precisely 4*0.8x7*0.8 FoV, with overlap 0.2 => 4x7 tiles
-        tiled_acq_task = TiledAcquisitionTask(self.fm_streams, self.stage,
+        tiled_acq_task = create_tiled_acquisition_task(self.fm_streams, self.stage,
                                               (0, 0, 4 * 0.8 * fov[0], 7 * 0.8 * fov[1]),
                                               overlap=0.2, future=model.InstantaneousFuture())
-        self.assertEqual(tiled_acq_task._number_of_tiles, 28)
-        self.assertEqual(tiled_acq_task._tile_indices, [(col, row) for row in range(7) for col in range(4)])
+        self.assertEqual(tiled_acq_task._plan.number_of_tiles, 28)
+        self.assertEqual(tiled_acq_task._plan._tile_indices, [(col, row) for row in range(7) for col in range(4)])
 
         # A tiny bit more 4*0.8x7*0.8 FoV, with overlap 0.2 => 4x7 tiles
         eps = 1e-12
-        tiled_acq_task = TiledAcquisitionTask(self.fm_streams, self.stage,
+        tiled_acq_task = create_tiled_acquisition_task(self.fm_streams, self.stage,
                                               (0, 0, 4 * 0.8 * fov[0] + eps, 7 * 0.8 * fov[1] + eps),
                                               overlap=0.2, future=model.InstantaneousFuture())
-        self.assertEqual(tiled_acq_task._number_of_tiles, 28)
-        self.assertEqual(tiled_acq_task._tile_indices, [(col, row) for row in range(7) for col in range(4)])
+        self.assertEqual(tiled_acq_task._plan.number_of_tiles, 28)
+        self.assertEqual(tiled_acq_task._plan._tile_indices, [(col, row) for row in range(7) for col in range(4)])
 
     def test_move_to_tiles(self):
         """
@@ -181,31 +195,33 @@ class CRYOSECOMTestCase(unittest.TestCase):
         self.posture_manager.switch_posture(Posture.FM_IMAGING).result()
         area = (-0.001, -0.001, 0.001, 0.001)
         overlap = 0.2
-        tiled_acq_task = TiledAcquisitionTask(self.fm_streams, self.stage,
+        tiled_acq_task = create_tiled_acquisition_task(self.fm_streams, self.stage,
                                               area, overlap=overlap, future=model.InstantaneousFuture())
         fov = compute_camera_fov(self.ccd)
         exp_shift = fov[0] * (1 - overlap), fov[1] * (1 - overlap)
         # move to starting position (left, top)
-        starting_pos = tiled_acq_task._starting_pos
+        starting_pos = tiled_acq_task._plan._starting_pos
         logging.debug("Starting position: %s, expected shift per tile = %s", starting_pos, exp_shift)
-        tiled_acq_task._moveToTile((0, 0), START_INDEX, fov)
+        move_to = tiled_acq_task._plan.move_to
+        ctx = tiled_acq_task._ctx
+        move_to((0, 0), START_INDEX, ctx)
         time.sleep(0.01)
         testing.assert_pos_almost_equal(self.stage.position.value, starting_pos, atol=1e-6, match_all=False)
 
         # Note that we cannot predict precisely, as the algorithm may choose to spread
         # more or less the tiles to fit within the area.
-        tiled_acq_task._moveToTile((1, 0), (0, 0), fov)  # move right on x
+        move_to((1, 0), (0, 0), ctx)  # move right on x
         time.sleep(0.01)
         exp_pos = {'x': starting_pos["x"] + exp_shift[0]}
         testing.assert_pos_almost_equal(self.stage.position.value, exp_pos, atol=1e-6, match_all=False)
 
-        tiled_acq_task._moveToTile((1, 1), (1, 0), fov)  # move down on y
+        move_to((1, 1), (1, 0), ctx)  # move down on y
         time.sleep(0.01)
         exp_pos = {'x': starting_pos["x"] + exp_shift[0],
                    'y': starting_pos["y"] - exp_shift[1]}
         testing.assert_pos_almost_equal(self.stage.position.value, exp_pos, atol=1e-6, match_all=False)
 
-        tiled_acq_task._moveToTile((0, 1), (1, 1), fov)  # move back on x
+        move_to((0, 1), (1, 1), ctx)  # move back on x
         time.sleep(0.01)
         exp_pos = {'x': starting_pos["x"],
                    'y': starting_pos["y"] - exp_shift[1]}
@@ -217,7 +233,7 @@ class CRYOSECOMTestCase(unittest.TestCase):
         """
         area = (-0.001, -0.001, 0.001, 0.001)
         overlap = 0.2
-        tiled_acq_task = TiledAcquisitionTask(self.fm_streams, self.stage,
+        tiled_acq_task = create_tiled_acquisition_task(self.fm_streams, self.stage,
                                               area, overlap=overlap, future=model.InstantaneousFuture())
         sem_fov = tiled_acq_task.getFov(self.sem_streams[0])
 
@@ -345,22 +361,24 @@ class CRYOSECOMTestCase(unittest.TestCase):
         zlevels = [focus_points[0][2], focus_points[1][2], focus_points[2][2]]
         axis_range = self.focus.axes['z'].range
 
-        tiled_acq_task = TiledAcquisitionTask(self.fm_streams, self.stage,
+        tiled_acq_task = create_tiled_acquisition_task(self.fm_streams, self.stage,
                                               area, overlap=overlap, future=model.InstantaneousFuture(),
                                               zlevels=zlevels, focus_points=focus_points,
                                               focusing_method=FocusingMethod.MAX_INTENSITY_PROJECTION)
-        tiled_acq_task._refocus()
+        tile = Tile(0, (0, 0))
+        focus_hook = next(h for h in tiled_acq_task._hooks if isinstance(h, FocusMapHook))
+        focus_hook.before(tile, tiled_acq_task._ctx)
         # min with none values
         zmin = min(axis_range)
         zmax = max(axis_range)
         # Test the min and max range of the zstack
-        self.assertGreaterEqual(tiled_acq_task._zlevels[0], zmin)
-        self.assertLessEqual(tiled_acq_task._zlevels[-1], zmax)
+        self.assertGreaterEqual(tile.zlevels[0], zmin)
+        self.assertLessEqual(tile.zlevels[-1], zmax)
 
         # Test when z level is provided and the focusing method is not max intensity projection
 
         with self.assertRaises(NotImplementedError):
-            tiled_acq_task = TiledAcquisitionTask(self.fm_streams, self.stage,
+            tiled_acq_task = create_tiled_acquisition_task(self.fm_streams, self.stage,
                                                   area, overlap=overlap, future=model.InstantaneousFuture(),
                                                   zlevels=zlevels, focus_points=focus_points,
                                                   focusing_method=FocusingMethod.ON_LOW_FOCUS_LEVEL)
@@ -368,7 +386,7 @@ class CRYOSECOMTestCase(unittest.TestCase):
         # Test 3 when z level, focus_points are provided and the focusing method is max intensity projection,
         # no exception should be raised
         try:
-            tiled_acq_task = TiledAcquisitionTask(self.fm_streams, self.stage,
+            tiled_acq_task = create_tiled_acquisition_task(self.fm_streams, self.stage,
                                                   area, overlap=overlap, future=model.InstantaneousFuture(),
                                                   zlevels=zlevels, focus_points=focus_points,
                                                   focusing_method=FocusingMethod.MAX_INTENSITY_PROJECTION)
@@ -389,20 +407,18 @@ class CRYOSECOMTestCase(unittest.TestCase):
                         [0.0, 0.0001485, -8.125e-06],
                         [0.0001989, 0.0001485, 4.766e-06]]
 
-        tiled_acq_task = TiledAcquisitionTask(self.fm_streams, self.stage,
-                                              area, overlap=overlap, future=model.InstantaneousFuture(),
-                                              focus_points=focus_points)
+        focus_map = FocusMap(focus_points)
         # Test a point that is on the plane
         x = 0
         y = 0
-        z = tiled_acq_task._get_z_on_focus_plane(x, y)
-        self.assertEqual(z, tiled_acq_task._focus_plane["gamma"])
+        z = focus_map._get_z_on_plane(x, y)
+        self.assertEqual(z, focus_map.plane["gamma"])
 
         # Check the equation of the plane for the given focus points. Plane equation is found from the focus points
         gamma = 3.1784e-06
         normal = (0.008549, -0.02786, -1)
-        z = tiled_acq_task._get_z_on_focus_plane(x, y)
-        self.assertAlmostEqual(tiled_acq_task._focus_plane["gamma"], gamma)
+        z = focus_map._get_z_on_plane(x, y)
+        self.assertAlmostEqual(focus_map.plane["gamma"], gamma)
         self.assertAlmostEqual(z, gamma + normal[0] * x + normal[1] * y)
 
     def test_get_triangulated_focus_point(self):
@@ -437,21 +453,18 @@ class CRYOSECOMTestCase(unittest.TestCase):
                         [-0.0001989, 0.0001485, -1.781e-05],
                         [0.0, 0.0001485, -8.125e-06],
                         [0.0001989, 0.0001485, 4.766e-06]]
-        # don't know if area and focus points are related
-        tiled_acq_task = TiledAcquisitionTask(self.fm_streams, self.stage,
-                                              area, overlap=overlap,
-                                              future=model.InstantaneousFuture(), focus_points=focus_points)
+        focus_map = FocusMap(focus_points)
 
         # Test a point which is inside the triangulation area
         point_inside = focus_points[0]
-        z = tiled_acq_task._get_triangulated_focus_point(point_inside[0], point_inside[1])
+        z = focus_map.z_at(point_inside[0], point_inside[1])
         self.assertAlmostEqual(z, point_inside[2], places=9)
 
         # Test a point which is outside the triangulation area
         focus_points = numpy.array(focus_points)
         point_outside = focus_points[0] - (focus_points[1] - focus_points[0])
-        z = tiled_acq_task._get_triangulated_focus_point(point_outside[0], point_outside[1])
-        z_expected = tiled_acq_task._get_z_on_focus_plane(point_outside[0], point_outside[1])
+        z = focus_map.z_at(point_outside[0], point_outside[1])
+        z_expected = focus_map._get_z_on_plane(point_outside[0], point_outside[1])
         self.assertAlmostEqual(z, z_expected, places=9)
 
     def test_always_focusing_method(self):
@@ -500,15 +513,15 @@ class CRYOSECOMTestCase(unittest.TestCase):
         area = (-0.001, -0.001, 0.001, 0.001)
         overlap = 0.2
         # Test with more than one z level
-        tiled_acq_task = TiledAcquisitionTask([self.fm_streams[0]], self.stage, area, overlap=overlap,
+        tiled_acq_task = create_tiled_acquisition_task([self.fm_streams[0]], self.stage, area, overlap=overlap,
                                               focusing_method=FocusingMethod.MAX_INTENSITY_PROJECTION,
                                               zlevels=[1, 2, 3])
-        total_tiles = tiled_acq_task._number_of_tiles
+        total_tiles = tiled_acq_task._plan.number_of_tiles
         # Observed time duration during stage movement between tiles
         min_stage_time = total_tiles * 0.1
         max_stage_time = total_tiles * 1.0
         # Calculated time duration during tile acquisition
-        zlevels_dict = {s: tiled_acq_task._zlevels for s in tiled_acq_task._streams
+        zlevels_dict = {s: tiled_acq_task._acquirer.zlevels for s in tiled_acq_task._streams
                         if isinstance(s, (FluoStream))}
         acq_time = acqmng.estimateZStackAcquisitionTime(tiled_acq_task._streams, zlevels_dict) * total_tiles
         min_total_time = min_stage_time + acq_time
@@ -518,16 +531,16 @@ class CRYOSECOMTestCase(unittest.TestCase):
         self.assertLessEqual(min_total_time, estimated_time)
         self.assertLessEqual(estimated_time, max_total_time)
         # Test with one z level
-        tiled_acq_task = TiledAcquisitionTask([self.fm_streams[0]], self.stage, area, overlap=overlap,
+        tiled_acq_task = create_tiled_acquisition_task([self.fm_streams[0]], self.stage, area, overlap=overlap,
                                               focusing_method=FocusingMethod.MAX_INTENSITY_PROJECTION,
                                               zlevels=[1])
-        total_tiles = tiled_acq_task._number_of_tiles
+        total_tiles = tiled_acq_task._plan.number_of_tiles
         # Observed time duration during stage movement between tiles
         min_total_time = min_stage_time + acq_time
         # overhead of 30% on min_total_time is used to account for stream settings, like, exposure time etc.
         max_total_time = max_stage_time + acq_time * 1.3
         # Calculated time duration during tile acquisition
-        zlevels_dict = {s: tiled_acq_task._zlevels for s in tiled_acq_task._streams
+        zlevels_dict = {s: tiled_acq_task._acquirer.zlevels for s in tiled_acq_task._streams
                         if isinstance(s, (FluoStream))}
         acq_time = acqmng.estimateZStackAcquisitionTime(tiled_acq_task._streams, zlevels_dict) * total_tiles
         min_total_time = min_stage_time + acq_time
@@ -846,48 +859,48 @@ class TiledAcquisitionTaskTestCase(unittest.TestCase):
     def test_convert_region_to_polygon(self):
         # Region is a valid polygon
         region = [(0.0, 0.0), (14.0e-3, 0.0), (14.0e-3, 13.0e-3), (0.0, 13.0e-3)]
-        tiled_acq_task = TiledAcquisitionTask(streams=self.streams, stage=mock.Mock(spec=model.Actuator), region=region, overlap=0.0145)
+        tiled_acq_task = create_tiled_acquisition_task(streams=self.streams, stage=mock.Mock(spec=model.Actuator), region=region, overlap=0.0145)
         # Exclude exterior coords closing point which is the same as the first
-        self.assertEqual(list(tiled_acq_task._polygon.exterior.coords[:-1]), region)
+        self.assertEqual(list(tiled_acq_task._plan._polygon.exterior.coords[:-1]), region)
 
         # Region is a bounding box
         region = (0.0, 0.0, 14.0e-3, 13.0e-3)
-        tiled_acq_task = TiledAcquisitionTask(streams=self.streams, stage=mock.Mock(spec=model.Actuator), region=region, overlap=0.0145)
+        tiled_acq_task = create_tiled_acquisition_task(streams=self.streams, stage=mock.Mock(spec=model.Actuator), region=region, overlap=0.0145)
         # Exclude exterior coords closing point which is the same as the first
-        self.assertEqual(list(tiled_acq_task._polygon.exterior.coords[:-1]), [(0.0, 0.0), (14.0e-3, 0.0), (14.0e-3, 13.0e-3), (0.0, 13.0e-3)])
+        self.assertEqual(list(tiled_acq_task._plan._polygon.exterior.coords[:-1]), [(0.0, 0.0), (14.0e-3, 0.0), (14.0e-3, 13.0e-3), (0.0, 13.0e-3)])
 
         # Region is a rotated rectangle
         rotated_rectangle = self.create_rectangle(0.0, 0.0, 14.0e-3, 13.0e-3, angle=45)
-        tiled_acq_task = TiledAcquisitionTask(streams=self.streams, stage=mock.Mock(spec=model.Actuator), region=rotated_rectangle, overlap=0.1)
+        tiled_acq_task = create_tiled_acquisition_task(streams=self.streams, stage=mock.Mock(spec=model.Actuator), region=rotated_rectangle, overlap=0.1)
         # Exclude exterior coords closing point which is the same as the first
-        self.assertEqual(list(tiled_acq_task._polygon.exterior.coords[:-1]), rotated_rectangle)
+        self.assertEqual(list(tiled_acq_task._plan._polygon.exterior.coords[:-1]), rotated_rectangle)
 
         # Region is not a valid polygon or bounding box
         region = [(0.1, 0.1), (0.1, 0.2), (0.2, 0.2), (0.2, 0.1, 0.1)]
         with self.assertRaises(ValueError) as ctx:
-            tiled_acq_task = TiledAcquisitionTask(streams=self.streams, stage=mock.Mock(spec=model.Actuator), region=region, overlap=0.0145)
+            tiled_acq_task = create_tiled_acquisition_task(streams=self.streams, stage=mock.Mock(spec=model.Actuator), region=region, overlap=0.0145)
         self.assertEqual("Region must either be a bounding box (xmin, ymin, xmax, ymax) or a list of (x, y) points.", str(ctx.exception))
 
     def test_get_number_of_tiles(self):
         # Region is a bounding box
         region = (0.0, 0.0, 14.0e-3, 13.0e-3)
-        tiled_acq_task = TiledAcquisitionTask(streams=self.streams, stage=mock.Mock(spec=model.Actuator), region=region, overlap=0.0145)
-        self.assertEqual(tiled_acq_task._number_of_tiles, 56)
+        tiled_acq_task = create_tiled_acquisition_task(streams=self.streams, stage=mock.Mock(spec=model.Actuator), region=region, overlap=0.0145)
+        self.assertEqual(tiled_acq_task._plan.number_of_tiles, 56)
 
         # Region is a bounding box with higher overlap
         region = (0.0, 0.0, 14.0e-3, 13.0e-3)
-        tiled_acq_task = TiledAcquisitionTask(streams=self.streams, stage=mock.Mock(spec=model.Actuator), region=region, overlap=0.5)
-        self.assertGreater(tiled_acq_task._number_of_tiles, 56)  # Should result in more tiles than the standard case
+        tiled_acq_task = create_tiled_acquisition_task(streams=self.streams, stage=mock.Mock(spec=model.Actuator), region=region, overlap=0.5)
+        self.assertGreater(tiled_acq_task._plan.number_of_tiles, 56)  # Should result in more tiles than the standard case
 
         # Region is a rotated rectangle
         rotated_rectangle = self.create_rectangle(0.0, 0.0, 14.0e-3, 13.0e-3, angle=45)
-        tiled_acq_task = TiledAcquisitionTask(streams=self.streams, stage=mock.Mock(spec=model.Actuator), region=rotated_rectangle, overlap=0.01)
-        self.assertGreater(tiled_acq_task._number_of_tiles, 56)  # Should result in more tiles than the standard case
+        tiled_acq_task = create_tiled_acquisition_task(streams=self.streams, stage=mock.Mock(spec=model.Actuator), region=rotated_rectangle, overlap=0.01)
+        self.assertGreater(tiled_acq_task._plan.number_of_tiles, 56)  # Should result in more tiles than the standard case
 
         # Region is a very small bounding box (edge case)
         region = (0.0, 0.0, 1e-6, 1e-6)
-        tiled_acq_task = TiledAcquisitionTask(streams=self.streams, stage=mock.Mock(spec=model.Actuator), region=region, overlap=0.1)
-        self.assertEqual(tiled_acq_task._number_of_tiles, 1)
+        tiled_acq_task = create_tiled_acquisition_task(streams=self.streams, stage=mock.Mock(spec=model.Actuator), region=region, overlap=0.1)
+        self.assertEqual(tiled_acq_task._plan.number_of_tiles, 1)
 
     def test_sort_tile_indices_zigzag(self):
         # Define expected zigzag order
@@ -901,22 +914,22 @@ class TiledAcquisitionTaskTestCase(unittest.TestCase):
         tile_indices = [(col, row) for row in range(3) for col in range(5)]
 
         # Apply zigzag sorting
-        tiled_acq_task = TiledAcquisitionTask(streams=self.streams, stage=mock.Mock(spec=model.Actuator), region=(0, 0, 1, 1), overlap=0.1)
-        sorted_indices = tiled_acq_task._sort_tile_indices_zigzag(tile_indices)
+        tiled_acq_task = create_tiled_acquisition_task(streams=self.streams, stage=mock.Mock(spec=model.Actuator), region=(0, 0, 1, 1), overlap=0.1)
+        sorted_indices = tiled_acq_task._plan.sort_tile_indices_zigzag(tile_indices)
         self.assertListEqual(sorted_indices, zigzag_tile_indices)
 
         # Single row (edge case)
         tile_indices = [(col, 0) for col in range(5)]
-        sorted_indices = tiled_acq_task._sort_tile_indices_zigzag(tile_indices)
+        sorted_indices = tiled_acq_task._plan.sort_tile_indices_zigzag(tile_indices)
         self.assertListEqual(sorted_indices, tile_indices)
 
         # Single column (edge case)
         tile_indices = [(0, row) for row in range(5)]
-        sorted_indices = tiled_acq_task._sort_tile_indices_zigzag(tile_indices)
+        sorted_indices = tiled_acq_task._plan.sort_tile_indices_zigzag(tile_indices)
         self.assertListEqual(sorted_indices, tile_indices)
 
         # Empty tile indices
-        sorted_indices = tiled_acq_task._sort_tile_indices_zigzag([])
+        sorted_indices = tiled_acq_task._plan.sort_tile_indices_zigzag([])
         self.assertListEqual(sorted_indices, [])
 
     def test_estimate_time_remaining_zero(self):
@@ -926,7 +939,7 @@ class TiledAcquisitionTaskTestCase(unittest.TestCase):
         mock_stream.configure_mock(**{"guessFoV.return_value": (0.0021, 0.0018),
                                       "estimateAcquisitionTime.return_value": 0.1})
         mock_stream.focuser = None
-        tiled_acq_task = TiledAcquisitionTask(streams=[mock_stream], stage=mock.Mock(spec=model.Actuator),
+        tiled_acq_task = create_tiled_acquisition_task(streams=[mock_stream], stage=mock.Mock(spec=model.Actuator),
                                               region=region, overlap=0.1,
                                               registrar=None, weaver=None)
         estimated = tiled_acq_task.estimateTime(remaining=0)
@@ -944,14 +957,320 @@ class TiledAcquisitionTaskTestCase(unittest.TestCase):
         # Provide raw data so stitch_time can be computed (simulates post-first-tile state)
         mock_stream.raw = [numpy.zeros((512, 512))]
 
-        tiled_acq_task = TiledAcquisitionTask(streams=[mock_stream], stage=mock.Mock(spec=model.Actuator),
+        tiled_acq_task = create_tiled_acquisition_task(streams=[mock_stream], stage=mock.Mock(spec=model.Actuator),
                                               region=region, overlap=0.1,
                                               registrar=REGISTER_GLOBAL_SHIFT, weaver=WEAVER_MEAN)
-        tiled_acq_task.average_acquisition_time = 0.5  # simulate post-first-tile
+        tiled_acq_task._estimator.average_acquisition_time = 0.5  # simulate post-first-tile
 
         estimated = tiled_acq_task.estimateTime(remaining=0)
         self.assertGreater(estimated, 0,
                            "estimateTime(0) must be > 0 when stitching remains (stitch_time must be included)")
+
+
+class TaskContextTestCase(unittest.TestCase):
+
+    def test_init_prepares_future(self):
+        """TaskContext initialises the future with a pending state, a lock and a sub-future."""
+        f = model.ProgressiveFuture()
+        ctx = TaskContext(f)
+        self.assertIs(ctx.future, f)
+        self.assertEqual(f._task_state, PENDING)
+        self.assertIsNotNone(f._task_lock)
+        self.assertIsNotNone(f.running_subf)
+
+    def test_check_cancelled(self):
+        """check_cancelled raises CancelledError only once the future is cancelled."""
+        f = model.ProgressiveFuture()
+        ctx = TaskContext(f)
+        ctx.check_cancelled()  # not cancelled => no exception
+
+        f._task_state = CANCELLED
+        with self.assertRaises(CancelledError):
+            ctx.check_cancelled()
+
+    def test_set_subf(self):
+        """set_subf registers the given sub-future as the running one."""
+        f = model.ProgressiveFuture()
+        ctx = TaskContext(f)
+        subf = model.InstantaneousFuture()
+        ctx.set_subf(subf)
+        self.assertIs(f.running_subf, subf)
+
+
+class GridPlanTestCase(unittest.TestCase):
+
+    def setUp(self):
+        self.stage = mock.Mock(spec=model.Actuator)
+        self.stage.position = mock.Mock(value={"x": 0, "y": 0})
+        self.sfov = (1e-3, 1e-3)
+
+    def test_number_of_tiles(self):
+        """Without overlap, a 10x5 mm region with 1 mm FoV needs 50 tiles."""
+        plan = GridPlan((0, 0, 10e-3, 5e-3), 0, self.sfov, self.stage)
+        self.assertEqual(plan.number_of_tiles, 50)
+        self.assertEqual(len(plan.tiles()), 50)
+
+    def test_number_of_tiles_with_overlap(self):
+        """Overlap between tiles increases the number of tiles needed to cover the region."""
+        # With 50% overlap, each new tile adds only 0.5 mm
+        plan = GridPlan((0, 0, 10e-3, 5e-3), 0.5, self.sfov, self.stage)
+        self.assertEqual(plan.number_of_tiles, 20 * 10)
+
+    def test_invalid_region(self):
+        """A self-intersecting polygon is rejected with a ValueError."""
+        with self.assertRaises(ValueError):
+            GridPlan.convert_region_to_polygon([(0, 0), (1, 1), (1, 0), (0, 1)])  # self-intersecting
+
+    def test_bbox_is_normalized(self):
+        """A bounding box given with swapped corners is reordered to (min, max)."""
+        poly = GridPlan.convert_region_to_polygon((5.0, 5.0, 1.0, 1.0))
+        self.assertEqual(poly.bounds, (1.0, 1.0, 5.0, 5.0))
+
+    def test_sort_tile_indices_zigzag(self):
+        """Tile indices are sorted row by row, reversing the direction on odd rows."""
+        indices = [(x, y) for y in range(3) for x in range(3)]
+        sorted_idx = GridPlan.sort_tile_indices_zigzag(list(reversed(indices)))
+        self.assertEqual(sorted_idx, [(0, 0), (1, 0), (2, 0),
+                                      (2, 1), (1, 1), (0, 1),
+                                      (0, 2), (1, 2), (2, 2)])
+
+    def test_move_to(self):
+        """move_to only moves the axes that changed, by one tile step."""
+        plan = GridPlan((0, 0, 3e-3, 2e-3), 0, self.sfov, self.stage)
+        ctx = TaskContext(model.ProgressiveFuture())
+
+        # First tile: both axes
+        plan.move_to((0, 0), START_INDEX, ctx)
+        m = self.stage.moveAbs.call_args[0][0]
+        self.assertEqual(set(m.keys()), {"x", "y"})
+
+        # Next tile in the same row: only X changes, by one FoV
+        self.stage.moveAbs.reset_mock()
+        plan.move_to((1, 0), (0, 0), ctx)
+        m2 = self.stage.moveAbs.call_args[0][0]
+        self.assertEqual(set(m2.keys()), {"x"})
+        self.assertAlmostEqual(m2["x"], m["x"] + self.sfov[0])
+
+        # Next row: only Y changes, going down
+        self.stage.moveAbs.reset_mock()
+        plan.move_to((1, 1), (1, 0), ctx)
+        m3 = self.stage.moveAbs.call_args[0][0]
+        self.assertEqual(set(m3.keys()), {"y"})
+        self.assertAlmostEqual(m3["y"], m["y"] - self.sfov[1])
+
+    def test_move_to_cancelled(self):
+        """move_to raises CancelledError without moving the stage if the task is cancelled."""
+        plan = GridPlan((0, 0, 3e-3, 2e-3), 0, self.sfov, self.stage)
+        f = model.ProgressiveFuture()
+        ctx = TaskContext(f)
+        f._task_state = CANCELLED
+        with self.assertRaises(CancelledError):
+            plan.move_to((0, 0), START_INDEX, ctx)
+        self.stage.moveAbs.assert_not_called()
+
+    def test_move_to_fails_after_retries(self):
+        """move_to retries 3 times, then raises OSError if the stage keeps failing."""
+        self.stage.moveAbs.return_value.result.side_effect = RuntimeError("stage broken")
+        plan = GridPlan((0, 0, 3e-3, 2e-3), 0, self.sfov, self.stage)
+        ctx = TaskContext(model.ProgressiveFuture())
+        with self.assertRaises(OSError):
+            plan.move_to((0, 0), START_INDEX, ctx)
+        self.assertEqual(self.stage.moveAbs.call_count, 3)
+
+
+class TileSaverTestCase(unittest.TestCase):
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self.da = model.DataArray(numpy.zeros((8, 8), dtype=numpy.uint16))
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    def test_disabled(self):
+        """Without a log path, the saver is disabled and save() does nothing."""
+        saver = TileSaver(None)
+        self.assertFalse(saver.enabled)
+        saver.save(0, 0, [self.da])  # does nothing
+        saver.close()
+
+    def test_no_filename(self):
+        """A log path without a filename raises a ValueError."""
+        with self.assertRaises(ValueError):
+            TileSaver(self.tmpdir + "/")
+
+    def test_save(self):
+        """Tiles are written to disk with the expected names, including stream cubes."""
+        saver = TileSaver(os.path.join(self.tmpdir, "tile.tiff"))
+        self.assertTrue(saver.enabled)
+        saver.save(1, 2, [self.da])
+        saver.save(3, 4, [self.da], stream_cube_id=5)
+        saver.close()  # waits for the saves
+        self.assertEqual(sorted(os.listdir(self.tmpdir)),
+                         ["tile-00001x00002.tiff", "tile-cube5-00003x00004.tiff"])
+
+
+class _DummyTileAcquirer(TileAcquirerBase):
+    def get_tile_das(self, tile):
+        return []
+
+
+class TileAcquirerBaseTestCase(unittest.TestCase):
+
+    def setUp(self):
+        self.future = model.ProgressiveFuture()
+        self.ctx = TaskContext(self.future)
+        self.settings_obs = mock.Mock()
+        self.acquirer = _DummyTileAcquirer(self.ctx, self.settings_obs)
+        self.tile = Tile(0, (1, 2))
+        self.stream = mock.Mock()
+        self.stream.name.value = "stream"
+
+    def _patch_acquire(self, das, err=None):
+        subf = mock.Mock()
+        subf.result.return_value = (das, err)
+        return mock.patch("odemis.acq.acqmng.acquire", return_value=subf)
+
+    def test_acquire_stream_tile(self):
+        """_acquire_stream_tile acquires one stream and returns the first DataArray."""
+        das = [model.DataArray(numpy.zeros((4, 4))), model.DataArray(numpy.ones((4, 4)))]
+        with self._patch_acquire(das) as acquire:
+            da = self.acquirer._acquire_stream_tile(self.tile, self.stream)
+        acquire.assert_called_once_with([self.stream], self.settings_obs)
+        self.assertIs(da, das[0])
+
+    def test_acquire_stream_tile_no_data(self):
+        """_acquire_stream_tile raises IndexError if the acquisition returned no data."""
+        with self._patch_acquire([], err=Exception("fail")):
+            with self.assertRaises(IndexError):
+                self.acquirer._acquire_stream_tile(self.tile, self.stream)
+
+    def test_acquire_stream_tile_cancelled(self):
+        """_acquire_stream_tile raises CancelledError if the task was cancelled during acquisition."""
+        self.future._task_state = CANCELLED
+        with self._patch_acquire([model.DataArray(numpy.zeros((4, 4)))]):
+            with self.assertRaises(CancelledError):
+                self.acquirer._acquire_stream_tile(self.tile, self.stream)
+
+    def test_acquire_streams_tile(self):
+        """_acquire_streams_tile acquires all the streams at once and returns all the DataArrays."""
+        das = [model.DataArray(numpy.zeros((4, 4))), model.DataArray(numpy.ones((5, 5)))]
+        streams = [self.stream, mock.Mock()]
+        with self._patch_acquire(das) as acquire:
+            res = self.acquirer._acquire_streams_tile(self.tile, streams)
+        acquire.assert_called_once_with(streams, self.settings_obs)
+        self.assertEqual(res, das)
+
+    def test_acquire_registers_subfuture(self):
+        """The acquisition future is registered in the context so it can be cancelled."""
+        with self._patch_acquire([model.DataArray(numpy.zeros((4, 4)))]) as acquire:
+            self.acquirer._acquire_stream_tile(self.tile, self.stream)
+        self.assertIs(self.future.running_subf, acquire.return_value)
+
+    def test_move_z(self):
+        """_move_z moves the focuser to the requested Z position and waits for it."""
+        focuser = mock.Mock(spec=model.Actuator)
+        self.acquirer._move_z(focuser, 1e-6)
+        focuser.moveAbsSync.assert_called_once_with({"z": 1e-6})
+
+
+class StitcherTestCase(unittest.TestCase):
+
+    def _make_tile(self, pos):
+        md = {
+            model.MD_POS: pos,
+            model.MD_PIXEL_SIZE: (1e-6, 1e-6),
+            model.MD_DIMS: "YX",
+        }
+        return model.DataArray(numpy.zeros((16, 16), dtype=numpy.uint16), md)
+
+    def test_enabled(self):
+        """The stitcher is enabled only if both a registrar and a weaver are given."""
+        self.assertTrue(Stitcher(REGISTER_IDENTITY, WEAVER_MEAN).enabled)
+        self.assertFalse(Stitcher(None, None).enabled)
+        self.assertFalse(Stitcher(REGISTER_IDENTITY, None).enabled)
+        self.assertFalse(Stitcher(None, WEAVER_MEAN).enabled)
+
+    def test_stitch(self):
+        """Two overlapping tiles are stitched into a single larger image."""
+        # Two tiles side by side, with a small overlap (16 px = 16 µm wide)
+        tiles = [self._make_tile((8e-6, 8e-6)), self._make_tile((20e-6, 8e-6))]
+        stitched = Stitcher(REGISTER_IDENTITY, WEAVER_MEAN).stitch(tiles)
+        self.assertEqual(len(stitched), 1)
+        self.assertEqual(stitched[0].shape, (16, 28))
+
+
+class ProgressEstimatorTestCase(unittest.TestCase):
+
+    def setUp(self):
+        self.plan = mock.Mock()
+        self.plan.number_of_tiles = 10
+        self.plan.sfov = (1e-3, 1e-3)
+        self.plan.overlap = 0.1
+        self.plan.move_speed = 1e-3
+        self.stream = mock.Mock()
+        self.stream.emtResolution.value = (100, 200)
+
+    def _make(self, stitching=False):
+        stitcher = Stitcher(REGISTER_IDENTITY, WEAVER_MEAN) if stitching else Stitcher(None, None)
+        return ProgressEstimator([self.stream], self.plan, stitcher, numpy.array([0.0]))
+
+    def test_reset_and_record(self):
+        """reset() clears the recorded times and record() appends durations per action."""
+        est = self._make()
+        est.reset()
+        self.assertEqual(est.save_time, {"acq": [], "stitch": [0], "move": [], "save": []})
+
+        est.record("acq", 1.5)
+        est.record("acq", 2.5)
+        est.record("move", 0.5)
+        self.assertEqual(est.save_time["acq"], [1.5, 2.5])
+        self.assertEqual(est.save_time["move"], [0.5])
+        est.log_summary()  # should not fail
+
+    def test_record_unknown_action(self):
+        """Recording an unknown action raises a KeyError."""
+        est = self._make()
+        est.reset()
+        with self.assertRaises(KeyError):
+            est.record("unknown", 1)
+
+    def test_estimate_stream_pixels(self):
+        """The pixel count of a stream is taken from its emitter resolution."""
+        est = self._make()
+        self.assertEqual(est._estimate_stream_pixels(self.stream), 100 * 200)
+
+    def test_estimate_memory_no_stitching(self):
+        """Without stitching, no memory is needed and it is always sufficient."""
+        self.assertEqual(self._make(stitching=False).estimate_memory(), (True, 0.0))
+
+    def test_estimate_memory_stitching(self):
+        """With stitching, memory scales with pixels and tiles, and is flagged when too large."""
+        est = self._make(stitching=True)
+        sufficient, mem = est.estimate_memory()
+        self.assertTrue(sufficient)
+        self.assertEqual(mem, 100 * 200 * 10 * ProgressEstimator.MEMPP)
+
+        # Way more than any computer has
+        self.plan.number_of_tiles = 10 ** 12
+        sufficient, mem = est.estimate_memory()
+        self.assertFalse(sufficient)
+
+    def test_estimate_time_with_average(self):
+        """Once the average tile time is known, the estimate is that time times the remaining tiles."""
+        est = self._make()
+        est.average_acquisition_time = 2.0
+        self.assertAlmostEqual(est.estimate_time(), 20.0)  # all the tiles by default
+        self.assertAlmostEqual(est.estimate_time(remaining=3), 6.0)
+        self.assertAlmostEqual(est.estimate_time(remaining=0), 0.0)
+
+    def test_estimate_time_includes_stitching(self):
+        """The stitching time is still part of the estimate when no tile remains."""
+        est = self._make(stitching=True)
+        est.average_acquisition_time = 1.0
+        self.stream.raw = [numpy.zeros((100, 100))]
+        expected_stitch = 10 * 100 * 100 * 0.1 / STITCH_SPEED
+        self.assertAlmostEqual(est.estimate_time(remaining=0), expected_stitch)
 
 
 if __name__ == '__main__':
