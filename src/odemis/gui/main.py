@@ -44,6 +44,9 @@ from odemis.gui.cont import acquisition
 from odemis.gui.cont.menu import MenuController
 from odemis.gui.cont.temperature import TemperatureController
 from odemis.gui.util import call_in_wx_main
+from odemis.gui.comp.popup import show_message
+from odemis.gui.conf.licences import ODEMIS_ADVANCED_FLAG
+from odemis.gui.cont.misconfiguration import find_microscope_configuration_issues
 from odemis.util.datacollector import get_data_collector
 import sys
 import threading
@@ -378,6 +381,28 @@ class OdemisGUIApp(wx.App):
             # has no effect. So we call it after the Show() to be sure it works.
             wx.CallAfter(self.main_frame.Maximize)
             wx.CallAfter(self.main_frame.SetSize, wx.Display(0).GetClientArea())
+
+            if self.main_data.role == "meteor" and self.main_data.stage_bare:
+                try:
+                    metadata_issues = find_microscope_configuration_issues(
+                        self.main_data.stage_bare.getMetadata(), ODEMIS_ADVANCED_FLAG
+                    )
+                except Exception:
+                    logging.exception("Failed to check stage-bare metadata for microscope misconfiguration")
+                else:
+                    if metadata_issues:
+                        warning = (
+                            "The microscope file is likely mis-configured: "
+                            f"{', '.join(metadata_issues)}. Contact Delmic support."
+                        )
+                        wx.CallAfter(
+                            show_message,
+                            self.main_frame,
+                            "Microscope configuration warning",
+                            warning,
+                            timeout=10.0,
+                            level=logging.WARNING,
+                        )
 
         except Exception:
             self.excepthook(*sys.exc_info())
