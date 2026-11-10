@@ -23,24 +23,32 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 import glob
 import logging
 import os
+import threading
 import time
 import unittest
 from copy import deepcopy
+from concurrent.futures import CancelledError, Future, wait
+from concurrent.futures._base import CANCELLED, RUNNING
+from unittest import mock
 
 import numpy
 
 import odemis
 from odemis import model
+from odemis.acq._futures import MillingFuture
 from odemis.acq.feature import (
     CryoFeature,
     FEATURE_ACTIVE,
     FEATURE_DEACTIVE,
 )
-from odemis.acq.milling import DEFAULT_MILLING_TASKS_PATH
-from odemis.acq.milling.millmng import MillingWorkflowTask, get_associated_tasks, run_automated_milling, status_map
+from odemis.acq.milling import DEFAULT_MILLING_TASKS_PATH, millmng
+from odemis.acq.milling.millmng import (
+    AutomatedMillingManager, MillingWorkflowTask, get_associated_tasks, run_automated_milling, status_map,
+)
 from odemis.acq.milling.tasks import load_milling_tasks
-from odemis.acq.stream import FIBStream, SEMStream
-from odemis.util import testing
+from odemis.acq.stream import FIBStream, SEMStream, StaticSEMStream
+from odemis.driver import simulated
+from odemis.util import executeAsyncTask, testing
 from odemis.acq.move import Posture
 from odemis.acq.move import MeteorTFS3PostureManager, MicroscopePostureManager
 
@@ -85,6 +93,107 @@ class TestAssociatedMillingTasks(unittest.TestCase):
                       get_associated_tasks(MillingWorkflowTask.RoughMilling, tasks))
         self.assertNotIn(correlation,
                          get_associated_tasks(MillingWorkflowTask.Polishing, tasks))
+
+
+class TestMillingReferenceAcquisition(unittest.TestCase):
+    """Check reference acquisition failures and cancellation without a hardware backend."""
+
+    def test_partial_acquisition_preserves_error(self):
+        """Report the original FIB timeout when only the SEM image was acquired."""
+        image = model.DataArray(numpy.zeros((8, 8), dtype=numpy.uint8))
+        manager = AutomatedMillingManager.__new__(AutomatedMillingManager)
+        manager.sem_stream = StaticSEMStream("SEM", image)
+        manager.fib_stream = StaticSEMStream("FIB", image)
+        manager._future = model.ProgressiveFuture()
+        manager._future._task_lock = threading.Lock()
+        manager._future._task_state = RUNNING
+        error = IOError("Acquisition of stream FIB timed out")
+        result = model.InstantaneousFuture(result=([image], error))
+        feature = CryoFeature("Feature-1", {}, {})
+        with mock.patch.object(millmng, "acquire", return_value=result):
+            with self.assertRaises(IOError) as caught:
+                manager._acquire_reference_images(feature)
+        self.assertIs(caught.exception, error)
+
+    def test_canceled_workflow_does_not_start_next_task(self):
+        """Do not move hardware after a workflow cancellation request."""
+        stage = simulated.Stage("stage", "stage-bare", axes={"x"})
+        self.addCleanup(stage.terminate)
+        manager = AutomatedMillingManager.__new__(AutomatedMillingManager)
+        manager._future = MillingFuture()
+        manager._future._task_lock = threading.Lock()
+        manager._future._task_state = CANCELLED
+        with self.assertRaises(CancelledError):
+            manager._run_subtask(stage.moveAbs, {"x": 1e-3})
+        self.assertEqual(stage.position.value["x"], 0)
+
+
+class TestMillingFuture(unittest.TestCase):
+    """Check that cancellation completion follows the milling worker's cleanup."""
+
+    def test_cancellation_waits_for_cleanup(self):
+        """Keep results and callbacks pending while canceled milling restores settings."""
+        future = MillingFuture()
+        started, stop, cleanup, release = (threading.Event() for _ in range(4))
+        completed = []
+        future.add_done_callback(completed.append)
+
+        def task() -> None:
+            """Simulate milling that must restore settings before acknowledging cancellation."""
+            started.set()
+            stop.wait(3)
+            try:
+                raise CancelledError()
+            finally:
+                cleanup.set()
+                release.wait(3)
+
+        def cancel(task_future: Future) -> bool:
+            """Request that the simulated milling worker stop.
+
+            :param task_future: Future associated with the worker.
+            :returns: Whether cancellation was accepted.
+            """
+            stop.set()
+            return True
+
+        future.task_canceller = cancel
+        worker = executeAsyncTask(future, future.run_task, args=(task,))
+        try:
+            self.assertTrue(started.wait(3))
+            self.assertTrue(future.cancel())
+            self.assertTrue(cleanup.wait(3))
+            self.assertFalse(future.done())
+            self.assertFalse(completed)
+        finally:
+            release.set()
+        with self.assertRaises(CancelledError):
+            future.result(timeout=3)
+        worker.join(3)
+        self.assertEqual(completed, [future])
+        self.assertEqual(wait([future], timeout=0).done, {future})
+
+    def test_cancellation_before_worker_start(self):
+        """Run cleanup even when cancellation is requested before the worker starts."""
+        future = MillingFuture()
+        cleanup = threading.Event()
+
+        def cancel(task_future: Future) -> bool:
+            """Accept cancellation before the worker starts.
+
+            :param task_future: Future associated with the worker.
+            :returns: Whether cancellation was accepted.
+            """
+            return True
+
+        future.task_canceller = cancel
+        self.assertTrue(future.cancel())
+        self.assertFalse(future.done())
+        worker = executeAsyncTask(future, future.run_task, args=(cleanup.set,))
+        with self.assertRaises(CancelledError):
+            future.result(timeout=3)
+        worker.join(3)
+        self.assertTrue(cleanup.is_set())
 
 
 # NOTE: Require xt simulator to be running

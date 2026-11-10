@@ -72,6 +72,22 @@ class MillingPatternParameters(ABC):
         """generate the milling pattern for the microscope"""
         pass
 
+    def get_bounds(self) -> Tuple[float, float, float, float]:
+        """Return the bounds of the generated rectangles, including rotation.
+
+        :returns: Left, bottom, right, and top coordinates relative to the reference image.
+        """
+        bounds = []
+        for rectangle in self.generate():
+            x, y = rectangle.center.value
+            cosine = abs(math.cos(rectangle.rotation.value))
+            sine = abs(math.sin(rectangle.rotation.value))
+            half_width = (rectangle.width.value * cosine + rectangle.height.value * sine) / 2
+            half_height = (rectangle.width.value * sine + rectangle.height.value * cosine) / 2
+            bounds.append((x - half_width, y - half_height, x + half_width, y + half_height))
+        return (min(bound[0] for bound in bounds), min(bound[1] for bound in bounds),
+                max(bound[2] for bound in bounds), max(bound[3] for bound in bounds))
+
 
 class RectanglePatternParameters(MillingPatternParameters):
     """Represents rectangle pattern parameters"""

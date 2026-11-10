@@ -28,6 +28,7 @@ import odemis.gui.test as test
 from odemis import model
 from odemis.acq.feature import CryoFeature, MIN_MILLING_ALIGNMENT_AREA_PIXELS
 from odemis.acq.milling import DEFAULT_MILLING_TASKS_PATH
+from odemis.acq.milling.millmng import MillingWorkflowTask
 from odemis.acq.milling.patterns import RectanglePatternParameters
 from odemis.acq.milling.tasks import load_milling_tasks
 from odemis.acq.stream import StaticSEMStream
@@ -193,6 +194,26 @@ class MillingTaskPanelTestCase(test.GuiTestCase):
                 set(panel.pattern_parameters),
                 {"width", "height", "depth", "spacing", "spot_size_correction"},
             )
+
+    def test_pattern_bounds_use_saved_reference_image(self):
+        """Reject a shape outside the saved image even if the active stream is larger."""
+        feature = CryoFeature(name="Feature", stage_position={}, fm_focus_position={})
+        feature.reference_image = model.DataArray(numpy.zeros((8, 8)), metadata={
+            model.MD_PIXEL_SIZE: (56e-6, 56e-6), model.MD_POS: (0, 0)})
+        active_image = model.DataArray(numpy.zeros((8, 8)), metadata={
+            model.MD_PIXEL_SIZE: (112e-6, 112e-6), model.MD_POS: (0, 0)})
+        self.controller.acq_cont = SimpleNamespace(stream=StaticSEMStream("Active image", active_image))
+        self.controller._tab_data = SimpleNamespace(main=SimpleNamespace(
+            currentFeature=model.VigilantAttribute(feature)))
+        self.controller.valid_patterns = model.BooleanVA(True)
+        shape = SimpleNamespace(points=model.ListVA([(300e-6, 0), (310e-6, 0)]))
+        self.controller._on_shapes_update([shape])
+        test.gui_loop()
+        self.assertFalse(self.controller.valid_patterns.value)
+        shape.points.value = [(0, 0), (75e-6, 75e-6)]
+        self.controller._on_shapes_update([shape])
+        test.gui_loop()
+        self.assertTrue(self.controller.valid_patterns.value)
 
     def test_edit_ruler_parameters_updates_pattern_and_preview(self) -> None:
         """Apply ruler control edits and redraw the preview."""
@@ -1620,8 +1641,11 @@ class MillingValidationTestCase(unittest.TestCase):
         self.controller._tab_data.main.features.value = features
         self.feature_list.IsChecked.side_effect = lambda index: index != 1
         automation = AutomatedMillingController.__new__(AutomatedMillingController)
+        automation.task_list = [MillingWorkflowTask.RoughMilling]
         automation._tab_data = self.controller._tab_data
         automation._panel = self.controller._panel
+        automation._panel.workflow_task_chk_list = Mock()
+        automation._panel.workflow_task_chk_list.IsChecked.return_value = True
         with patch("odemis.gui.cont.milling.fibsemos.FIBSEMOS_INSTALLED", True), \
              patch("odemis.gui.cont.milling.wx.MessageBox") as message:
             automation._run_automated_milling(None)
@@ -1630,6 +1654,30 @@ class MillingValidationTestCase(unittest.TestCase):
         self.assertIn("SAVE POSITION", text)
         self.assertNotIn("Unchecked", text)
         self.assertNotIn("Recorded", text)
+
+    def test_invalid_pattern_in_later_feature_prevents_automation(self):
+        """Validate the whole checked queue before starting any feature."""
+        features = [CryoFeature(name, {}, {}) for name in ("Valid", "Outside")]
+        for feature in features:
+            feature.system_state = {"recorded": True}
+            feature.reference_image = model.DataArray(numpy.zeros((512, 512), dtype=numpy.uint8), metadata={
+                model.MD_PIXEL_SIZE: (1e-6, 1e-6),
+            })
+        features[1].milling_tasks["Rough Milling 01"].patterns[0].center.value = (300e-6, 0)
+        self.controller._tab_data.main.features.value = features
+        automation = AutomatedMillingController.__new__(AutomatedMillingController)
+        automation.task_list = [MillingWorkflowTask.RoughMilling]
+        automation._tab_data = self.controller._tab_data
+        automation._panel = self.controller._panel
+        automation._panel.workflow_task_chk_list = Mock()
+        automation._panel.workflow_task_chk_list.IsChecked.return_value = True
+
+        with patch("odemis.gui.cont.milling.fibsemos.FIBSEMOS_INSTALLED", True), \
+             patch("odemis.gui.cont.milling.wx.MessageBox") as message:
+            automation._run_automated_milling(None)
+
+        self.assertIn("Cannot mill Outside", message.call_args.args[0])
+        self.assertIn("outside its saved reference image", message.call_args.args[0])
 
     def test_valid_correction_is_accepted(self) -> None:
         """Accept a correction smaller than every graduation dimension."""

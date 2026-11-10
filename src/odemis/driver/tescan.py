@@ -55,6 +55,8 @@ TESCAN_PXL_LIMIT = 100
 PROBE_CURRENT_RANGE = (10e-12, 100e-9)
 
 DEFAULT_ION_PRESET = ""
+FIB_READY_TIMEOUT = 60.0  # Seconds allowed for a preset command or for FIB optics and procedures to settle.
+FIB_BUSY_FLAGS = (1 << 13) | (1 << 14)  # SharkSEM FIB optics and automatic procedure flags.
 
 MIN_MOVE_SIZE_LIN_MM = 10e-6  # 10e-9 m (delmic) --> 10e-6 mm (tescan)
 MIN_MOVE_SIZE_ROT_DEG = 0.05
@@ -191,12 +193,29 @@ class DeviceHandler:
 
         name: The name of the method to invoke. Using the SEM method name as canonical.
         """
-        def call_and_log_func(func, args, kwargs):
+        def call_and_log_func(func: Callable[..., Any], args: Tuple[Any, ...], kwargs: Dict[str, Any]) -> Any:
+            """Serialize an SDK call and allow slow FIB preset activation.
+
+            :param func: Resolved SDK method.
+            :param args: Positional arguments for the method.
+            :param kwargs: Keyword arguments for the method.
+            :returns: SDK response.
+            """
             logging.debug(f"SharkSEM: Calling {func.__name__} with args: {args} and kwargs: {kwargs}")
             # Use the shared device lock to synchronize access to the SharkSEM API.
             with self._call_lock:
-                ret = func(*args, **kwargs)
-            return ret
+                if name == "PresetSetEx" and self.device_type == DeviceType.ION:
+                    # Preset activation can outlast the normal polling timeout.
+                    # Hold the lock until the original socket timeout is restored.
+                    command_socket = self.device.connection.socket_c
+                    previous_timeout = command_socket.gettimeout()
+                    try:
+                        timeout = None if previous_timeout is None else max(previous_timeout, FIB_READY_TIMEOUT)
+                        command_socket.settimeout(timeout)
+                        return func(*args, **kwargs)
+                    finally:
+                        command_socket.settimeout(previous_timeout)
+                return func(*args, **kwargs)
 
         def method(*args, **kwargs):
             """
@@ -1030,21 +1049,50 @@ class Scanner(model.Emitter):
     def _onDwellTime(self, dwellTime):
         self.updateMetadata({model.MD_DWELL_TIME: dwellTime})
 
-    def _setBeamPreset(self, preset: str) -> str:
+    def _wait_for_fib_ready(self, timeout: float = FIB_READY_TIMEOUT) -> None:
+        """Wait for FIB optics and automatic procedures to become idle.
+
+        :param timeout: Maximum time to wait in seconds.
+        :raises TimeoutError: The FIB remains busy beyond the timeout.
+        :raises HwError: The API does not return a valid busy status.
         """
-        Set the name of the beam preset, which can be any arbitrary string. Sometimes the string contains information
-        about the current and voltage, but it is not enforced by TESCAN.
+        deadline = time.monotonic() + timeout
+        while True:
+            busy = self._device_handler.IsBusy(FIB_BUSY_FLAGS)
+            if busy == 0:
+                return
+            if busy != 1:
+                raise HwError(f"Could not read FIB busy status: {busy!r}")
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise TimeoutError(f"FIB optics or automatic procedure still busy after {timeout:g} seconds")
+            time.sleep(min(0.1, remaining))
+
+    def _setBeamPreset(self, preset: str) -> str:
+        """Activate a FIB preset and wait before restoring scan settings.
+
+        :param preset: Preset name, or an empty value to leave the beam unchanged.
+        :returns: The activated preset name.
+        :raises HwError: Preset activation fails or the busy status is unavailable.
+        :raises TimeoutError: The FIB does not become ready in time.
         """
         # Check if there is a non-empty preset set. Currently, the default at startup is an empty string.
         if preset:
             self._device_handler.ScStopScan()
             with self.parent._acq_progress_lock:
+                self._wait_for_fib_ready()
                 # Store scan rotation, dwell time and fov so we can revert it after.
                 scan_rotation = self._device_handler.GetImageRot()
                 dwell_time = self._device_handler.ScGetSpeed()
 
                 # Set the preset
-                self._device_handler.PresetSetEx(preset)
+                logging.debug("Activating FIB preset %s", preset)
+                result = self._device_handler.PresetSetEx(preset)
+                if result != 0:
+                    raise HwError(f"Could not activate FIB preset {preset!r}: status {result!r}")
+                # SharkSEM requires checking the FIB wait flags after preset activation.
+                # Large changes in current can leave the optics busy after the call returns.
+                self._wait_for_fib_ready()
 
                 # Somehow SharkSEM API resets the scan parameters after changing the preset.
                 # This is undesired for our use case, so restore it.
@@ -1259,7 +1307,8 @@ class Scanner(model.Emitter):
         phy_pos = (px_pos[0] * pxs[0], -px_pos[1] * pxs[1])  # - to invert Y
         return phy_pos
 
-    def _pollVAs(self):
+    def _pollVAs(self) -> None:
+        """Refresh imaging settings while retaining valid values after failed reads."""
         try:
             with self.parent._acquisition_init_lock:
                 logging.debug(f"Updating {self.name} FoV, voltage and current")
@@ -1268,6 +1317,9 @@ class Scanner(model.Emitter):
                 with self.parent._acq_progress_lock:
                     prev_volt = self.accelVoltage._value
                     new_volt = self._device_handler.HVGetVoltage()
+                    if new_volt is None or not math.isfinite(new_volt):
+                        logging.warning("Could not read %s voltage; keeping previous value %s V", self.name, prev_volt)
+                        return
                     if prev_volt != new_volt:
                         # Skip the setter
                         self.accelVoltage._value = new_volt
