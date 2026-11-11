@@ -146,6 +146,8 @@ class CryoAcquiController(object):
         # common VA's
         self._tab_data.filename.subscribe(self._on_filename, init=True)
         self._tab_data.streams.subscribe(self._on_streams_change, init=True)
+        # The streams listed depend on the posture (FM or SLM optics)
+        self._tab_data.main.posture_manager.current_posture.subscribe(self._on_posture_change)
         # TODO link .acquiStreams with a callback that is called
         # to check/uncheck items (?)
         self._tab_data.main.is_acquiring.subscribe(self._on_acquisition, init=True)
@@ -644,6 +646,27 @@ class CryoAcquiController(object):
 
         return data
 
+    def _is_stream_for_posture(self, s: Stream) -> bool:
+        """
+        Check whether a live stream matches the current posture: in SLM posture, only the SLM
+        fluorescence streams (z-stack focuser is the SLM focus) are relevant, otherwise only the FM ones.
+        :param s: the stream
+        :returns: True if the stream should be listed for acquisition
+        """
+        if not isinstance(s, FluoStream):
+            return True
+        main = self._tab_data.main
+        slm_focus = main.focus_coincident
+        is_slm_stream = slm_focus is not None and getattr(s, "zstack_focuser", None) is slm_focus
+        is_slm_posture = main.posture_manager.get_current_posture() == Posture.SLM_IMAGING
+        return is_slm_stream == is_slm_posture
+
+    def _on_posture_change(self, _posture: Posture) -> None:
+        """
+        Refresh the list of streams to acquire when the posture changes.
+        """
+        self._on_streams_change(self._tab_data.streams.value)
+
     @call_in_wx_main
     def _on_streams_change(self, streams):
         """
@@ -659,7 +682,7 @@ class CryoAcquiController(object):
         # iterating from right to left is chosen.
         for i in range(self._panel.streams_chk_list.GetCount() - 1, -1, -1):
             item_stream = self._panel.streams_chk_list.GetClientData(i)
-            if item_stream not in streams:
+            if item_stream not in streams or not self._is_stream_for_posture(item_stream):
                 self._panel.streams_chk_list.Delete(i)
                 if item_stream in self._acquiStreams.value:
                     self._acquiStreams.value.remove(item_stream)
@@ -679,9 +702,12 @@ class CryoAcquiController(object):
             for i in range(self._panel.streams_chk_list.GetCount())
         ]
         for i, s in enumerate(streams):
-            if s not in item_streams and not isinstance(s, StaticStream):
-                self._panel.streams_chk_list.Insert(s.name.value, i, s)
-                self._panel.streams_chk_list.Check(i)
+            if (s not in item_streams and not isinstance(s, StaticStream)
+                    and self._is_stream_for_posture(s)):
+                # The list may hold fewer items than .streams (streams of the other posture are hidden)
+                pos = min(i, self._panel.streams_chk_list.GetCount())
+                self._panel.streams_chk_list.Insert(s.name.value, pos, s)
+                self._panel.streams_chk_list.Check(pos)
                 self._acquiStreams.value.append(s)
                 # subscribe the name and wavelength VA's of this added stream
                 for va in self._get_wavelength_vas(s):
