@@ -305,7 +305,7 @@ class BackendContainer(model.Container):
             # Anything else means: microscope file or driver is borked => give up
             # Exception might have happened remotely, so log it nicely
             logging.error("Failed to instantiate the model due to component %s", name)
-            logging.error("Full traceback of the error follows", exc_info=1)
+            logging.error("Full traceback of the error follows", exc_info=True)
             try:
                 remote_tb = exp._pyroTraceback
                 logging.info("Remote exception %s", "".join(remote_tb))

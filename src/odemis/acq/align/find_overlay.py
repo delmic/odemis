@@ -292,7 +292,7 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan,
     except CancelledError:
         pass
     except Exception as exp:
-        logging.debug("Finding overlay failed", exc_info=1)
+        logging.debug("Finding overlay failed", exc_info=True)
         raise exp
     finally:
         _set_blanker(escan, True)
