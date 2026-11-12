@@ -1479,19 +1479,30 @@ def get_brightest_channel(sub_image_multi: numpy.ndarray) -> int:
     return int(numpy.argmax(channel_maxes))
 
 
-def compute_center_of_mass(image: numpy.ndarray,
-                           baseline_ratio: float = 0.95, roi_slice: tuple = None) -> Tuple[float, float, float]:
+def compute_center_of_mass(image: numpy.ndarray, baseline_ratio: float = 0.95) -> Tuple[float, float, float]:
     """
     Computes center of mass with baselining.
     Uses the brightest pixels (above the baseline percentile) as weights for center of mass calculation,
     effectively filtering background noise.
 
     :param image: Single-channel 3D sub-image as (Z, Y, X) array
-    :param baseline_ratio: Ratio for background separation (0-1). Values lower than the baseline
+    :param baseline_ratio: Ratio for background separation (0-1). Values at or below the baseline
         will be discarded.
     :returns: Tuple of (global_z, global_y, global_x) in pixel coordinates maintaining input order.
     """
     baseline = numpy.percentile(image, baseline_ratio * 100)
-    image_weights = numpy.where(image > baseline, image - baseline, 0)
+    intensities_above_baseline = image > baseline
+    if not intensities_above_baseline.any():
+        logging.warning(
+            "No intensities found above baseline. Reduce the exposure of your image, or lower the baseline ratio. "
+            "Falling back to center coordinate.")
+        z, y, x = image.shape
+        return (z - 1) / 2, (y - 1) / 2, (x - 1) / 2
+    image_weights = numpy.where(intensities_above_baseline, image - baseline, 0)
     com = scipy.ndimage.center_of_mass(numpy.asarray(image_weights))
+    if not numpy.isfinite(com).all():
+        logging.warning(
+            "Scipy's center of mass computation returned an unexpected value. Falling back to center coordinate.")
+        z, y, x = image.shape
+        return (z - 1) / 2, (y - 1) / 2, (x - 1) / 2
     return com
