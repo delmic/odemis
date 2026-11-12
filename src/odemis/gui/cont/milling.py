@@ -270,7 +270,6 @@ class FibucialMillingTaskController:
         :param panel: the frame which contains the 4 viewports
         :param tab: the tab object which controls the panel
         """
-        """Initialize the controller and bind UI actions for fibucial milling."""
         self._panel = panel
         self._tab = tab
         self._main_data_model = tab._main_data_model
@@ -280,6 +279,7 @@ class FibucialMillingTaskController:
         self._canvas = panel.vp_slm_fib_live.canvas
         self._editable_shape: Optional[EditableShape] = None
         self._va_connectors: List[VigilantAttributeConnector] = []
+        self._subscribed_vas: List[model.VigilantAttributeBase] = []
         self._updating_shapes = False
         self._mill_future: Optional[model.ProgressiveFuture] = None
 
@@ -289,12 +289,12 @@ class FibucialMillingTaskController:
             depth=1e-6,
             rotation=math.pi / 4,
             center=(0.0, 0.0),
-            name="fibucial")
+            name="Fibucial")
 
         self.milling_task = MillingTaskSettings(
             milling=self._default_milling_settings(),
             patterns=[self.cross_pattern],
-            name="fibucial",
+            name="Fibucial",
             selected=True)
         self.allow_milling_pattern_move = True
 
@@ -347,27 +347,32 @@ class FibucialMillingTaskController:
         panel = MillingTaskPanel(self._panel.pnl_slm_milling_task, task=task)
         self._panel.pnl_slm_milling_task._panel_sizer.Add(panel, border=10, flag=wx.EXPAND, proportion=0)
 
-        # Hide the auto-generated mode row for fibucial settings.
-        # Mode for single pattern is not usefull
-        mode_ctrl = panel.ctrl_dict.get("mode")
-        if mode_ctrl is not None:
-            item = panel.gb_sizer.GetItem(mode_ctrl)
+        # Hide the auto-generated rows which are not useful for the single fibucial cross:
+        # the mode, and the spot size correction.
+        for hidden_param in ("mode", "spot_size_correction"):
+            ctrl = panel.ctrl_dict.get(hidden_param)
+            if ctrl is None:
+                continue
+            item = panel.gb_sizer.GetItem(ctrl)
             if item is not None:
                 row = item.GetPos().GetRow()
                 label_item = panel.gb_sizer.FindItemAtPosition((row, 0))
                 if label_item is not None and label_item.GetWindow() is not None:
                     label_item.GetWindow().Hide()
-            mode_ctrl.Hide()
+            ctrl.Hide()
 
         for param in panel.pattern_parameters:
+            if param == "spot_size_correction":
+                continue
             _va_connector = VigilantAttributeConnector(
                 getattr(parameters, param),
                 panel.ctrl_dict[param],
                 events=wx.EVT_COMMAND_ENTER,
             )
             self._va_connectors.append(_va_connector)
-            # VA connector, bind events
-            getattr(parameters, param).subscribe(self._on_patterns)
+            va = getattr(parameters, param)
+            va.subscribe(self._on_patterns)
+            self._subscribed_vas.append(va)
 
         # milling parameters
         for param in milling_parameters:
@@ -383,8 +388,8 @@ class FibucialMillingTaskController:
                 events=evt,
             )
             self._va_connectors.append(_va_connector)
-            # VA connector, bind events
-            getattr(milling, param).subscribe(self._on_patterns)
+            val.subscribe(self._on_patterns)
+            self._subscribed_vas.append(val)
 
         self._panel.pnl_slm_milling_task.Layout()
 
@@ -535,18 +540,16 @@ class FibucialMillingTaskController:
         self.allow_milling_pattern_move = True
 
         if future is None:
-            self._panel.txt_slm_milling_est_time.SetLabel("Fibucial milling cancelled")
-            self._panel.Layout()
-            return
-
-        try:
-            future.result()
-            status = "fibucial milling completed"
-        except CancelledError:
-            status = "fibucial milling cancelled"
-        except Exception:
-            logging.exception("fibucial milling failed")
-            status = "fibucial milling failed"
+            status = "Fibucial milling cancelled"
+        else:
+            try:
+                future.result()
+                status = "Fibucial milling completed"
+            except CancelledError:
+                status = "Fibucial milling cancelled"
+            except Exception:
+                logging.exception("Fibucial milling failed")
+                status = "Fibucial milling failed"
 
         self._panel.txt_slm_milling_est_time.SetLabel(status)
         self._panel.Layout()
@@ -559,10 +562,9 @@ class FibucialMillingTaskController:
     def stop(self) -> None:
         """Tear down subscriptions and overlays on dialog close."""
         self._editable_shape = None
-        for param in ("width", "height", "depth"):
-            getattr(self.cross_pattern, param).unsubscribe(self._on_patterns)
-        for param in ("current", "align"):
-            getattr(self.milling_task.milling, param).unsubscribe(self._on_patterns)
+        for va in self._subscribed_vas:
+            va.unsubscribe(self._on_patterns)
+        self._subscribed_vas.clear()
         for connector in self._va_connectors:
             connector.disconnect()
         self._va_connectors.clear()
