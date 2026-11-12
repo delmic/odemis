@@ -1492,6 +1492,8 @@ def compute_center_of_mass(image: numpy.ndarray,
     :returns: Tuple of (global_z, global_y, global_x) in pixel coordinates maintaining input order.
     """
     baseline = numpy.percentile(image, baseline_ratio * 100)
-    image_weights = numpy.where(image > baseline, image - baseline, 0)
+    # Keep baseline-level pixels weighted when the percentile equals the maximum intensity, since
+    # apparently scipy's center of mass method returns nan values when passing an array of zeros.
+    image_weights = numpy.where(image >= baseline, numpy.maximum(image - baseline, 1), 0)
     com = scipy.ndimage.center_of_mass(numpy.asarray(image_weights))
     return com

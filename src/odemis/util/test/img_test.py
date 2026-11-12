@@ -2394,5 +2394,16 @@ class TestCenterOfMassTargeting(unittest.TestCase):
         self.assertGreaterEqual(com_y_crop, 5)
         self.assertLess(com_y_crop, 16)
 
+    def test_compute_center_of_mass_when_baseline_equals_max_intensity(self):
+        """Test that intensities at the baseline receive a nonzero weight."""
+        image = numpy.zeros((3, 5, 7))
+        image[2, 4, 6] = 42.0
+        image[2, 3, 5] = 42.0
+        image[2, 3, 4] = 42.0
+
+        com = img.compute_center_of_mass(image, baseline_ratio=0.99)
+
+        numpy.testing.assert_allclose(com, (2.0, 10 / 3, 5.0))
+
 if __name__ == "__main__":
     unittest.main()
