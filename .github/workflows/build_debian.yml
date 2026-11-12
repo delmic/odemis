@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        ubuntu_version: [20.04, 22.04, 24.04]
+        ubuntu_version: [22.04, 24.04, 26.04]
 
     container:
       image: ubuntu:${{ matrix.ubuntu_version }}

@@ -12,7 +12,7 @@ jobs:
       # Don't cancel all in-progress and queued jobs in the matrix if any job in the matrix fails
       fail-fast: false
       matrix:
-        version: ["18", "20", "22"]
+        version: ["22", "24", "26"]
     steps:
     - name: Execution of test-cases inside VM log
       env:
