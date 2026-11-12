@@ -557,13 +557,6 @@ class MeteorPostureManager(MicroscopePostureManager):
                 Posture.FIB_VIEW_FM: self._transform_from_slm_to_fib_view_fm,
                 Posture.TRENCHING: self._transform_from_slm_to_trenching,
             },
-            Posture.SLM_IMAGING: {
-                Posture.SEM_IMAGING: self._transform_from_slm_to_sem,
-                Posture.FM_IMAGING: self._transform_from_slm_to_fm,
-                Posture.MILLING: self._transform_from_slm_to_milling,
-                Posture.FIB_IMAGING: self._transform_from_slm_to_fib,
-                Posture.FIB_VIEW_FM: self._transform_from_slm_to_fib_view_fm,
-            },
             Posture.UNKNOWN: {
                 Posture.UNKNOWN: lambda x: x
             },
@@ -612,8 +605,6 @@ class MeteorPostureManager(MicroscopePostureManager):
                 return Posture.MILLING
             if self.at_fib_imaging_posture(position):
                 return Posture.FIB_IMAGING
-            if self.at_milling_posture(position):
-                return Posture.MILLING
             return Posture.SEM_IMAGING
         # None of the above -> unknown position
         return Posture.UNKNOWN
