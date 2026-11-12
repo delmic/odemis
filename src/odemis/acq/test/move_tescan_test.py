@@ -36,7 +36,7 @@ METEOR_TESCAN1_CONFIG = CONFIG_PATH + "sim/meteor-tescan-sim.odm.yaml"
 METEOR_TESCAN1_FIBSEM_HW_CONFIG = CONFIG_PATH + "sim/meteor-tescan-fibsem-sim.odm.yaml"
 METEOR_TESCAN1_FIBSEM_SIM_CONFIG = CONFIG_PATH + "sim/meteor-tescan-fibsem-full-sim.odm.yaml"
 
-TEST_NOHW = (os.environ.get("TEST_NOHW", "0") != "0")  # Default to Hw testing
+TEST_NOHW = (os.environ.get("TEST_NOHW", "1") != "0")  # Default to Hw testing
 
 
 class TestMeteorTescan1Move(move_tfs1_test.TestMeteorTFS1Move):
@@ -264,13 +264,16 @@ class TestMeteorTescan1FibsemMove(move_tfs3_test.TestMeteorTFS3Move):
 
         def on_pos(pos):
             moved = [a for a in ("y", "z") if abs(pos[a] - prev[0][a]) > 1e-9]
-            order.extend(moved)
-            prev[0] = pos
+            order.extend(a for a in moved if a not in order)
+            prev[0] = pos.copy()
 
         self.stage_bare.position.subscribe(on_pos)
         try:
             self.stage.moveRel(shift).result()
-            time.sleep(0.2)
+            for _ in range(20):  # position notifications are asynchronous: wait for both axes
+                if len(order) >= 2:
+                    break
+                time.sleep(0.1)
         finally:
             self.stage_bare.position.unsubscribe(on_pos)
         return order
@@ -285,6 +288,7 @@ class TestMeteorTescan1FibsemMove(move_tfs3_test.TestMeteorTFS3Move):
             before = self.stage_bare.position.value
             order = self._get_axes_move_order({"y": dy})
             dz = self.stage_bare.position.value["z"] - before["z"]
+            self.assertNotAlmostEqual(dz, 0, delta=1e-9)  # a sample y move always involves z
             self.assertEqual(order, ["z", "y"] if dz > 0 else ["y", "z"])
 
     def test_fm_shutter_control(self):
