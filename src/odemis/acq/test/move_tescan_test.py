@@ -257,6 +257,36 @@ class TestMeteorTescan1FibsemMove(move_tfs3_test.TestMeteorTFS3Move):
                 exp_bare_pos[axis] += m_bare[axis]
             testing.assert_pos_almost_equal(new_bare_pos, exp_bare_pos, atol=1e-6)
 
+    def _get_axes_move_order(self, shift: dict) -> list:
+        """Move the sample stage by shift, and return the order in which the stage-bare axes moved."""
+        order = []
+        prev = [self.stage_bare.position.value]
+
+        def on_pos(pos):
+            moved = [a for a in ("y", "z") if abs(pos[a] - prev[0][a]) > 1e-9]
+            order.extend(moved)
+            prev[0] = pos
+
+        self.stage_bare.position.subscribe(on_pos)
+        try:
+            self.stage.moveRel(shift).result()
+            time.sleep(0.2)
+        finally:
+            self.stage_bare.position.unsubscribe(on_pos)
+        return order
+
+    def test_slm_posture_move_order(self):
+        """In SLM posture, stage-bare z moves first when increasing, and last when decreasing."""
+        if Posture.SLM_IMAGING not in self.pm.postures:
+            self.skipTest("No SLM posture")
+        self.pm.switch_posture(Posture.SLM_IMAGING).result()
+
+        for dy in (200e-6, -200e-6):
+            before = self.stage_bare.position.value
+            order = self._get_axes_move_order({"y": dy})
+            dz = self.stage_bare.position.value["z"] - before["z"]
+            self.assertEqual(order, ["z", "y"] if dz > 0 else ["y", "z"])
+
     def test_fm_shutter_control(self):
         """Test shutter state changes during FM mode transitions."""
         if self.pm.shutter is None:
