@@ -9,6 +9,7 @@ import math
 import odemis.gui.cont.views as viewcont
 import wx
 from odemis import model
+from odemis.util import driver
 from odemis.acq.stream import FIBStream, FluoStream
 from odemis.gui.conf.data import get_local_vas
 from odemis.gui.cont.milling import FibucialMillingTaskController
@@ -157,12 +158,12 @@ class SLMAlignmentController:
         fib_offset = (fm_offset[0], fm_offset[1] / cos_angle)
 
         # fib_offset is a *relative* displacement expressed in the (possibly rotated)
-        # on-screen image coordinate system. Delegate to the ion beam's shiftBy(),
+        # on-screen image coordinate system. Delegate to driver.shiftBy(),
         # which takes care of inverting the displacement when the scan is rotated
         # by 180 degrees (the image is flipped), before combining it with the
         # current absolute beam shift.
         current_shift = self._main_data_model.ion_beam.shift.value
-        new_shift = self._main_data_model.ion_beam.shiftBy(fib_offset[0], fib_offset[1])
+        new_shift = driver.shiftBy(self._main_data_model.ion_beam, fib_offset[0], fib_offset[1])
 
         # TODO Refine the logging message after testing
         logging.debug(
