@@ -2382,7 +2382,7 @@ class TestCenterOfMassTargeting(unittest.TestCase):
         x_end = min(shape_x, target_x + pad_x + 1)
         roi = numpy.s_[:, y_start:y_end, x_start:x_end]
 
-        com = img.compute_center_of_mass(sub_image, baseline_ratio=0.95)
+        com = img.compute_center_of_mass(sub_image, baseline_ratio=0.98)
         com_y_crop = com[1] + roi[1].start
         com_x_crop = com[2] + roi[2].start
 
@@ -2393,6 +2393,13 @@ class TestCenterOfMassTargeting(unittest.TestCase):
         self.assertLess(com_x_crop, 16)
         self.assertGreaterEqual(com_y_crop, 5)
         self.assertLess(com_y_crop, 16)
+
+    def test_compute_center_of_mass_empty_weights(self):
+        """Test that empty weights return the image center coordinate."""
+        image = numpy.zeros((3, 3, 3))
+
+        com = img.compute_center_of_mass(image, baseline_ratio=0.98)
+        numpy.testing.assert_allclose(com, (1, 1, 1))
 
 if __name__ == "__main__":
     unittest.main()
