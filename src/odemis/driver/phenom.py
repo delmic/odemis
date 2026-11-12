@@ -34,7 +34,6 @@ import queue
 import re
 import suds
 from suds.client import Client
-import sys
 import threading
 import time
 import weakref
@@ -1867,12 +1866,8 @@ class ChamberPressure(model.Actuator):
             # Convert base64 (to raw bytes of uint128-be) to long int.
             # As it comes from HTTP, id[0] is already converted back to string, but
             # we need bytes for the base64 function => encode back to bytes.
-            # TODO: once Python 3-only, switch to decodebytes
-            s = base64.decodestring(holder.holderID.id[0].encode("ascii"))
-            if sys.version_info[0] >= 3:  # Python 3
-                holderID = reduce(lambda a, n: (a << 8) + n, (v for v in s), 0)
-            else:
-                holderID = reduce(lambda a, n: (a << 8) + n, (ord(v) for v in s), 0)
+            s = base64.decodebytes(holder.holderID.id[0].encode("ascii"))
+            holderID = reduce(lambda a, n: (a << 8) + n, (v for v in s), 0)
             val = (holderID, holder.holderType)
 
             logging.debug("Sample holder 0x%x of type %s has status %s",
