@@ -462,7 +462,7 @@
     role: null,
     dependencies: {"slave": "SLM LZ Axes"},
     init: {
-        backlash: {
+        forced_axes: {
             # Only the sign matters: positive direction moves last.
             "l": -1,
             "z": -1,
