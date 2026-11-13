@@ -228,6 +228,7 @@ class DevxX(object):
             wl, _, _ = self.GetSpecInfo()
 
         sn = self.GetSerialNumber()
+        self.sn = sn
         if channel in (None, 0):
             self.hwVersion = "%s v%s (s/n %s)" % (hwname, fw, sn)
         else:  # Sub channel
@@ -621,18 +622,20 @@ class DevxX(object):
 
 class GenericxX(model.Emitter, metaclass=ABCMeta):
 
-    def __init__(self, name, role, ports, **kwargs):
+    def __init__(self, name, role, ports, sn=None, **kwargs):
         """
         ports (string): pattern of the name of the serial ports to try to connect to
           find the devices. It can have a "glob", for example: "/dev/ttyUSB*"
+        sn (str or None): serial number of the (master) device to use. If None,
+          the first device found is used. Only supported by the HubxX.
         """
         model.Emitter.__init__(self, name, role, **kwargs)
         self._ports = ports
-        self._master, self._devices = self._getAvailableDevices(ports)
+        self._master, self._devices = self._getAvailableDevices(ports, sn)
         if not self._devices:
-            raise HwError("No Omicron xX device found for ports '%s', check "
+            raise HwError("No Omicron xX device%s found for ports '%s', check "
                           "that '%s' is turned on and connected to the computer."
-                          % (ports, name))
+                          % (" with serial number '%s'" % sn if sn else "", ports, name))
 
         spectra = [] # list of tuples: 99% low, 25% low, centre, 25% high, 99% high in m
         max_power = [] # list of float (W)
@@ -671,7 +674,7 @@ class GenericxX(model.Emitter, metaclass=ABCMeta):
 
     @classmethod
     @abstractmethod
-    def _getAvailableDevices(cls, ports):
+    def _getAvailableDevices(cls, ports, sn=None):
         """
         return:
          master (None or DevxX): the master device (if any)
@@ -744,12 +747,12 @@ class MultixX(GenericxX):
         ports (string): pattern of the name of the serial ports to try to connect to
           find the devices. It can have a "glob", for example: "/dev/ttyUSB*"
         """
-        super(MultixX, self).__init__(name, role, ports, **kwargs)
+        super(MultixX, self).__init__(name, role, ports, sn=None, **kwargs)
         # Hw version is different if multi-channel
         self._hwVersion = "Omicron %s" % ", ". join(d.hwVersion for d in self._devices)
 
     @classmethod
-    def _getAvailableDevices(cls, ports):
+    def _getAvailableDevices(cls, ports, sn=None):
         if ports.startswith("/dev/fake"):
             names = [ports]
         elif os.name == "nt":
@@ -796,19 +799,23 @@ class HubxX(GenericxX):
     as the LedHUB
     """
 
-    def __init__(self, name, role, port, **kwargs):
+    def __init__(self, name, role, port, sn=None, **kwargs):
         """
         port (string): name of the serial port to try to connect to
           find the device. It can have a "glob", for example: "/dev/ttyUSB*", in
-          which case it will pick the first lighthub it finds.
+          which case it will pick the first lighthub it finds (or the one
+          matching sn).
+        sn (str or None): serial number of the LedHUB to use. Allows to
+          distinguish multiple hubs, when using a glob for the port.
+          If None, the first hub found is used.
         """
-        super(HubxX, self).__init__(name, role, ports=port, **kwargs)
+        super(HubxX, self).__init__(name, role, ports=port, sn=sn, **kwargs)
         self._hwVersion = ("Omicron %s (%s)" %
                            (self._master.hwVersion,
                             ", ". join(d.hwVersion for d in self._devices)))
 
     @classmethod
-    def _getMasterDevices(cls, ports):
+    def _getMasterDevices(cls, ports, sn=None):
         if ports.startswith("/dev/fake"):
             names = [ports]
         elif os.name == "nt":
@@ -823,6 +830,10 @@ class HubxX(GenericxX):
             try:
                 acc = USBAccesser(n)
                 d = DevxX(acc, 0)
+                if sn is not None and d.sn != str(sn):
+                    logging.debug("Hub on port %s has S/N %s, looking for %s", n, d.sn, sn)
+                    acc.terminate()  # free the port, and continue searching
+                    continue
                 mdevs.append(d)
             except HwError as ex:
                 logging.info("Got HwError %s from device on port %s, will see if another device is ready", ex, n)
@@ -839,9 +850,8 @@ class HubxX(GenericxX):
         return mdevs
 
     @classmethod
-    def _getAvailableDevices(cls, ports):
-        mdevs = cls._getMasterDevices(ports)
-
+    def _getAvailableDevices(cls, ports, sn=None):
+        mdevs = cls._getMasterDevices(ports, sn)
         if len(mdevs) > 1:
             logging.warning("Multiple Omicron devices found on ports %s, will "
                             "only use port %s", ports, mdevs[0].acc.port)
@@ -872,7 +882,7 @@ class HubxX(GenericxX):
 
         ret = []
         for d in cls._getMasterDevices(ports):
-            ret.append(("Omicron Hub", {"port": d.acc.port}))
+            ret.append(("Omicron Hub", {"port": d.acc.port, "sn": d.sn}))
 
         return ret
 
