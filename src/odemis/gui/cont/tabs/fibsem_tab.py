@@ -54,7 +54,7 @@ from odemis.gui.util import call_in_wx_main
 from odemis.util.dataio import data_to_static_streams
 
 
-FIBSEM_POSTURES = [Posture.SEM_IMAGING, Posture.MILLING, Posture.FIB_IMAGING, Posture.TRENCHING]
+FIBSEM_POSTURES = [Posture.SEM_IMAGING, Posture.MILLING, Posture.FIB_IMAGING, Posture.TRENCHING, Posture.SLM_IMAGING]
 
 class FibsemTab(Tab):
 
@@ -194,6 +194,11 @@ class FibsemTab(Tab):
         milling_angle_degrees = math.degrees(self.pm.milling_angle.value)
         self.panel.ctrl_milling_angle.SetValue(milling_angle_degrees)
         self.pm.current_posture.subscribe(self._on_current_posture, init=True)
+
+        self._btn_slm_alignment = getattr(self.panel, "btn_slm_alignment", None)
+        if self._btn_slm_alignment is not None:
+            self._btn_slm_alignment.Show(Posture.SLM_IMAGING in self.pm.postures)
+            self._btn_slm_alignment.Bind(wx.EVT_BUTTON, self._on_slm_alignment)
 
         # Tilt field is in degrees, so convert from radians to integer degrees to prevent a lot of decimals from showing
         self.panel.ctrl_milling_angle.SetValueRange(*numpy.round(numpy.rad2deg(MILLING_RANGE)).astype(int))
@@ -417,11 +422,16 @@ class FibsemTab(Tab):
         self._update_angle_controls()
         # update the stage position buttons
         if self._posture_switch_future.done():
-            self.panel.btn_switch_sem_imaging.Enable(posture in FIBSEM_POSTURES)
-            self.panel.btn_switch_milling.Enable(posture in FIBSEM_POSTURES)
-            self.panel.btn_switch_trenching.Enable(posture in FIBSEM_POSTURES)
-            self.panel.lbl_trenching_angle.Show(posture == Posture.TRENCHING)
-            self.panel.ctrl_trenching_angle.Show(posture == Posture.TRENCHING)
+            slm_mode = posture == Posture.SLM_IMAGING
+            self.panel.btn_switch_sem_imaging.Enable(posture in FIBSEM_POSTURES and not slm_mode)
+            self.panel.btn_switch_milling.Enable(posture in FIBSEM_POSTURES and not slm_mode)
+            self.panel.btn_switch_trenching.Enable(posture in FIBSEM_POSTURES and not slm_mode)
+            self.panel.lbl_trenching_angle.Show(posture == Posture.TRENCHING and not slm_mode)
+            self.panel.ctrl_trenching_angle.Show(posture == Posture.TRENCHING and not slm_mode)
+
+            if self._btn_slm_alignment is not None:
+                self._btn_slm_alignment.Enable(slm_mode)
+                self._btn_slm_alignment.SetToolTip("" if slm_mode else "Enter SLM posture to run alignment")
 
             if posture == Posture.SEM_IMAGING:
                 self.panel.btn_switch_sem_imaging.SetValue(BTN_TOGGLE_COMPLETE)
@@ -516,6 +526,10 @@ class FibsemTab(Tab):
         except Exception:
             logging.exception("Failed to switch posture")
         self._on_current_posture(self.pm.current_posture.value)
+
+    def _on_slm_alignment(self, _: wx.Event) -> None:
+        """Open the SLM alignment workflow dialog."""
+        wx.CallAfter(self._acquisition_controller.open_slm_alignment_dialog)
 
     def terminate(self):
         self.pm.current_posture.unsubscribe(self._on_current_posture)

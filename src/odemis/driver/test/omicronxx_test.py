@@ -20,6 +20,7 @@ import time
 import unittest
 from typing import Any, List
 
+from odemis import model
 from odemis.driver import omicronxx
 
 logging.getLogger().setLevel(logging.DEBUG)
@@ -162,6 +163,13 @@ class TestMultixX(BaseGenericxX, unittest.TestCase):
 class TestHubxX(BaseGenericxX, unittest.TestCase):
     def setUp(self):
         self.dev = omicronxx.HubxX("test", "light", HUBPORT)
+
+    @unittest.skipUnless(TEST_NOHW, "Serial number is known only for the simulator")
+    def test_serial_number(self):
+        dev = omicronxx.HubxX("test sn", "light", HUBPORT, sn="123456.7")
+        dev.terminate()
+        with self.assertRaises(model.HwError):
+            omicronxx.HubxX("test sn", "light", HUBPORT, sn="wrong")
 
 
 if __name__ == "__main__":

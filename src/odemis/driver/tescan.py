@@ -105,6 +105,8 @@ FIB_NAME_MAP: Dict[str, str] = {
     "DtGetEnabled": "FibDtGetEnabled",
     "GetImageRot": "FibGetImageRot",
     "SetImageRot": "FibSetImageRot",
+    "GetImageShift": "FibGetImgShift",
+    "SetImageShift": "FibSetImgShift",
     # Not possible to control the FIB blanker
     "ScGetBlanker": None,
     "ScSetBlanker": None,
@@ -561,10 +563,13 @@ class SEM(model.HwComponent):
             metadata = dict(self._metadata)
             metadata.update(scanner.getMetadata())
             # If there is an image center set by the sample stage in the posture manager,
-            # make sure to update it with scanner translation.
+            # make sure to update it with scanner translation
             phy_pos = metadata.get(model.MD_POS, (0, 0))
             trans = scanner.pixelToPhy(pxs_pos)
             updated_phy_pos = (phy_pos[0] + trans[0], phy_pos[1] + trans[1])
+            # trans = self.pixelToPhy(pxs_pos)
+            # shifted_pos = (phy_pos[0] + trans[0], phy_pos[1] + trans[1])
+            # updated_phy_pos =  shifted_pos[0] - self.shift.value[0], shifted_pos[1] - self.shift.value[1]
 
             # update changed metadata
             metadata[model.MD_POS] = updated_phy_pos
@@ -718,6 +723,12 @@ class Scanner(model.Emitter):
         # TODO: compute a good depthOfField based on the current hfw
         # self.depthOfField = model.FloatContinuous(1e-6, range=(0, 1e9),
         #                                           unit="m", readonly=True)
+
+        shift_mm = self._device_handler.GetImageShift()
+        shift = tuple(v * 1e-3 for v in shift_mm)
+        self.shift = model.TupleContinuous(shift, ((-1e-3, -1e-3), (1e-3, 1e-3)), cls=(int, float), unit="m",
+                                           setter=self._setShift)
+        self.shift.subscribe(self._onShift, init=True)
 
         # (.resolution), .translation, .rotation, and .scaling are used to
         # define the conversion from coordinates to a region of interest.
@@ -955,6 +966,46 @@ class Scanner(model.Emitter):
                             name, value, rmin, rmax)
             rng = (min(rmin, value), max(rmax, value))
         return rng
+
+    def _setShift(self, value: Tuple[float, float]) -> Tuple[float, float]:
+        """
+        Set the absolute beam shift on the device.
+
+        If the requested value is outside of the hardware range, the Tescan
+        server silently clips it to the maximum limit (no exception is raised).
+        A warning is logged when the value actually set differs from the
+        request (clipping or limited resolution).
+
+        :param value: the x and y beam shift, in meters.
+        :return: the actual x and y beam shift read back from the device, in meters.
+        """
+        logging.debug("Set the absolute beam shift with value: %s m", value)
+
+        with self.parent._acq_progress_lock:
+            self._device_handler.SetImageShift(value[0] * 1e3, value[1] * 1e3)
+            shift_mm = self._device_handler.GetImageShift()
+
+        actual = tuple(v * 1e-3 for v in shift_mm)
+        if not all(math.isclose(a, r, abs_tol=1e-9) for a, r in zip(actual, value)):
+            logging.warning("Beam shift requested %s m but hardware set %s m "
+                            "(clipped to the hardware range or limited resolution)",
+                            value, actual)
+        return actual
+
+    def _updateShift(self) -> None:
+        """Update the shift VigilantAttribute with the current value from the Tescan device."""
+        prev_shift = self.shift.value
+        shift_mm = self._device_handler.GetImageShift()
+        logging.debug(f"Updating shift from Tescan device: {shift_mm}")
+        new_shift = tuple(v * 1e-3 for v in shift_mm)
+
+        if prev_shift != new_shift:
+            self.shift._value = new_shift
+            self.shift.notify(new_shift)
+
+    def _onShift(self, shift: Tuple[float, float]) -> None:
+        """Update the metadata when the shift value changes."""
+        self.updateMetadata({model.MD_BEAM_SHIFT: shift})
 
     def _setHorizontalFOV(self, value):
         # The requested value can deviate from the actual value, for instance when requesting above the maximum.
@@ -1245,6 +1296,8 @@ class Scanner(model.Emitter):
 
         rotation_degrees = math.degrees(value)
         self._device_handler.SetImageRot(rotation_degrees)
+        with self.parent._acq_progress_lock:
+            self._updateShift()
         return value
 
     def pixelToPhy(self, px_pos):
@@ -1286,6 +1339,8 @@ class Scanner(model.Emitter):
                     if prev_rotation != new_rotation:
                         self.rotation._value = new_rotation
                         self.rotation.notify(new_rotation)
+
+                    self._updateShift()
 
                     if self._device_handler.device_type == DeviceType.ELECTRON:
                         # if blanker is in auto, don't change its value

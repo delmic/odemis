@@ -60,7 +60,7 @@ from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.widgets import VigilantAttributeConnector
 
 SUPPORTED_POSTURES = [Posture.SEM_IMAGING, Posture.FM_IMAGING, Posture.MILLING, Posture.FIB_IMAGING,
-                      Posture.FIB_VIEW_FM, Posture.TRENCHING]
+                      Posture.FIB_VIEW_FM, Posture.TRENCHING, Posture.SLM_IMAGING]
 MILLING_REFERENCE_TOO_SMALL_MESSAGE = (
     "The reference image resolution is too low for milling alignment. "
     "Try acquiring a higher-resolution reference image."
@@ -169,8 +169,10 @@ class CryoFeatureController(object):
         feature: CryoFeature = self._tab_data_model.main.currentFeature.value
         if feature:
             current_posture = self.pm.get_current_posture()
+            # In SLM posture, the focus position is the sample stage z
+            focuser = self._main_data_model.get_posture_focuser()
             feature.fm_focus_position.value = {**feature.fm_focus_position.value,
-                                               current_posture: self._main_data_model.focus.position.value}
+                                               current_posture: {"z": focuser.position.value["z"]}}
 
     def _on_btn_go_to_feature(self, _):
         """
@@ -202,15 +204,21 @@ class CryoFeatureController(object):
         stage_position = get_feature_position_at_posture(pm=self.pm, feature=feature, posture=current_posture)
         # Older projects may contain posture metadata that is not a movable stage axis.
         stage_position = {axis: value for axis, value in stage_position.items() if axis in self.pm.stage.axes}
-        fm_focus_position = feature.get_fm_focus_position(current_posture, self._main_data_model.focus)
+        focuser = self._main_data_model.get_posture_focuser()
+        fm_focus_position = feature.get_fm_focus_position(current_posture, focuser)
 
         # move to feature position
         logging.info(f"Moving to position: {stage_position}, focus: {fm_focus_position}, posture: {current_posture}")
+        if fm_focus_position and current_posture in FM_POSTURES and focuser is self.pm.stage:
+            # In SLM posture, the focus is the sample stage z: a single move, to not conflict with the stage move
+            self.pm.stage.moveAbs({**stage_position, **fm_focus_position})
+            return
+
         self.pm.stage.moveAbs(stage_position)
 
         # if fm mode, move focus too
         if fm_focus_position and current_posture in FM_POSTURES:
-            self._main_data_model.focus.moveAbs(fm_focus_position)
+            focuser.moveAbs(fm_focus_position)
 
         return
 
@@ -288,7 +296,7 @@ class CryoFeatureController(object):
                 feature_sample_pos = (sample_pos["x"], sample_pos["y"])
             else:
                 current_posture = self.pm.get_current_posture()
-                if current_posture in (Posture.MILLING, Posture.TRENCHING):
+                if current_posture in (Posture.MILLING, Posture.TRENCHING, Posture.SLM_IMAGING):
                     sample_pos = self.pm.to_sample_stage_from_stage_position(
                         self.pm.stage.position.value, posture=current_posture)
                     feature_sample_pos = (sample_pos["x"], sample_pos["y"])
@@ -433,13 +441,13 @@ class CryoFeatureController(object):
             self._panel.btn_use_current_z.Enable(enable)
         if self.acqui_mode is guimod.AcquiMode.FIBSEM:
             current_posture = self.pm.get_current_posture()
-            save_position_postures = (Posture.MILLING, Posture.TRENCHING)
+            save_position_postures = (Posture.MILLING, Posture.TRENCHING, Posture.SLM_IMAGING)
             # TODO: check if current position is near the feature position, if not, disable and show warning to user
             # TODO: acquire a new fib image for the reference, dont use the existing.
             self._panel.btn_feature_save_position.Enable(enable and current_posture in save_position_postures)
             if current_posture not in save_position_postures:
                 self._panel.btn_feature_save_position.SetToolTip(
-                    "Move to the milling or trenching posture to save the position."
+                    "Move to the milling, trenching or SLM imaging posture to save the position."
                 )
             else:
                 self._panel.btn_feature_save_position.SetToolTip("")
@@ -607,7 +615,8 @@ class CryoFeatureController(object):
         feature = self._tab_data_model.main.currentFeature.value
         if feature is None:
             return
-        focus = feature.get_fm_focus_position(self.pm.get_current_posture(), self._main_data_model.focus)
+        focus = feature.get_fm_focus_position(self.pm.get_current_posture(),
+                                              self._main_data_model.get_posture_focuser())
         if focus is not None:
             self._panel.ctrl_feature_z.SetValue(focus["z"])
 

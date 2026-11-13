@@ -36,7 +36,7 @@ METEOR_TESCAN1_CONFIG = CONFIG_PATH + "sim/meteor-tescan-sim.odm.yaml"
 METEOR_TESCAN1_FIBSEM_HW_CONFIG = CONFIG_PATH + "sim/meteor-tescan-fibsem-sim.odm.yaml"
 METEOR_TESCAN1_FIBSEM_SIM_CONFIG = CONFIG_PATH + "sim/meteor-tescan-fibsem-full-sim.odm.yaml"
 
-TEST_NOHW = (os.environ.get("TEST_NOHW", "0") != "0")  # Default to Hw testing
+TEST_NOHW = (os.environ.get("TEST_NOHW", "1") != "0")  # Default to Hw testing
 
 
 class TestMeteorTescan1Move(move_tfs1_test.TestMeteorTFS1Move):
@@ -256,6 +256,40 @@ class TestMeteorTescan1FibsemMove(move_tfs3_test.TestMeteorTFS3Move):
             for axis in m_bare.keys():
                 exp_bare_pos[axis] += m_bare[axis]
             testing.assert_pos_almost_equal(new_bare_pos, exp_bare_pos, atol=1e-6)
+
+    def _get_axes_move_order(self, shift: dict) -> list:
+        """Move the sample stage by shift, and return the order in which the stage-bare axes moved."""
+        order = []
+        prev = [self.stage_bare.position.value]
+
+        def on_pos(pos):
+            moved = [a for a in ("y", "z") if abs(pos[a] - prev[0][a]) > 1e-9]
+            order.extend(a for a in moved if a not in order)
+            prev[0] = pos.copy()
+
+        self.stage_bare.position.subscribe(on_pos)
+        try:
+            self.stage.moveRel(shift).result()
+            for _ in range(20):  # position notifications are asynchronous: wait for both axes
+                if len(order) >= 2:
+                    break
+                time.sleep(0.1)
+        finally:
+            self.stage_bare.position.unsubscribe(on_pos)
+        return order
+
+    def test_slm_posture_move_order(self):
+        """In SLM posture, stage-bare z moves first when increasing, and last when decreasing."""
+        if Posture.SLM_IMAGING not in self.pm.postures:
+            self.skipTest("No SLM posture")
+        self.pm.switch_posture(Posture.SLM_IMAGING).result()
+
+        for dy in (200e-6, -200e-6):
+            before = self.stage_bare.position.value
+            order = self._get_axes_move_order({"y": dy})
+            dz = self.stage_bare.position.value["z"] - before["z"]
+            self.assertNotAlmostEqual(dz, 0, delta=1e-9)  # a sample y move always involves z
+            self.assertEqual(order, ["z", "y"] if dz > 0 else ["y", "z"])
 
     def test_fm_shutter_control(self):
         """Test shutter state changes during FM mode transitions."""

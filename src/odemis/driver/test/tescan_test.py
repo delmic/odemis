@@ -421,7 +421,6 @@ class BaseSEMTest(object):
         time.sleep(6)  # Wait for value refresh
         self.assertAlmostEqual(orig_rotation, ebeam.rotation.value)
 
-
     def test_blanker(self):
         """
         Check it's possible to blank/unblank
@@ -952,6 +951,25 @@ class BaseFIBTest(object):
 #        print gc.get_referrers(self.camera)
 #        gc.collect()
         pass
+
+    def test_beam_shift_set_get(self) -> None:
+        """
+        Verify setting ion-beam shift is reflected by both VA and hardware readback.
+        """
+        ion_beam = self.scanner
+        original_shift = ion_beam.shift.value
+        target_shift = (5e-6, -5e-6)  # m
+
+        try:
+            ion_beam.shift.value = target_shift
+            time.sleep(1)
+
+            testing.assert_tuple_almost_equal(ion_beam.shift.value, target_shift, delta=1e-7)
+
+            hw_shift = tuple(v * 1e-3 for v in ion_beam._device_handler.GetImageShift())
+            testing.assert_tuple_almost_equal(hw_shift, target_shift, delta=1e-7)
+        finally:
+            ion_beam.shift.value = original_shift
 
 
 class TestFIB(BaseFIBTest, unittest.TestCase):

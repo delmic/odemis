@@ -26,6 +26,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 import collections
 import logging
 import math
+from enum import Enum
 from typing import List
 
 import numpy
@@ -163,14 +164,19 @@ class LocalizationTab(Tab):
         self.tab_data_model.views.value[0].stream_tree.flat.subscribe(self._on_overview_visible)
 
         # Current posture indicator initialization
-        self.bmp_fm_imaging = getBitmap("icon/ico_meteorimaging_green.png")
-        self.bmp_fib_view_fm = getBitmap("icon/ico_meteor_fib_view_fm_green.png")
+        self.posture_to_bmp = {
+            Posture.FM_IMAGING: getBitmap("icon/ico_meteorimaging_green.png"),
+            Posture.FIB_VIEW_FM: getBitmap("icon/ico_meteor_fib_view_fm_green.png"),
+            Posture.SLM_IMAGING: getBitmap("icon/ico_slm_imaging_green.png")
+        }
 
         # The stage is in the FM referential, but we care about the stage-bare
         # in the SEM referential to move between positions
         self._allowed_targets = [Posture.FM_IMAGING]
         if Posture.FIB_VIEW_FM in self.main_data.posture_manager.postures:
             self._allowed_targets.append(Posture.FIB_VIEW_FM)
+        if Posture.SLM_IMAGING in self.main_data.posture_manager.postures:
+            self._allowed_targets.append(Posture.SLM_IMAGING)
         self._stage = self.tab_data_model.main.stage_bare
 
         if len(self._allowed_targets) <= 1:
@@ -319,6 +325,11 @@ class LocalizationTab(Tab):
 
     def _onAutofocus(self, active):
         if active:
+            if self._is_slm_posture():
+                logging.info("Autofocus is disabled in SLM posture")
+                self.tab_data_model.autofocus_active.value = False
+                return
+
             # Determine which stream is active
             try:
                 self.curr_s = self.tab_data_model.streams.value[0]
@@ -373,10 +384,28 @@ class LocalizationTab(Tab):
         else:
             f = self.curr_s.focuser
 
-        f_enable = all((updated, f))
+        f_enable = all((updated, f)) and not self._is_slm_posture()
         if not f_enable:
             self.tab_data_model.autofocus_active.value = False
         wx.CallAfter(self.tb.enable_button, TOOL_AUTO_FOCUS, f_enable)
+        self._update_autofocus_tooltip()
+
+    def _is_slm_posture(self) -> bool:
+        """
+        :returns: True if the microscope is currently in the SLM imaging posture
+        """
+        return self.main_data.posture_manager.current_posture.value == Posture.SLM_IMAGING
+
+    @call_in_wx_main
+    def _update_autofocus_tooltip(self) -> None:
+        """
+        Explain in the autofocus tool tip why it is disabled in SLM posture
+        """
+        if self._is_slm_posture():
+            tooltip = "Autofocus is disabled for SLM posture"
+        else:
+            tooltip = "Apply autofocus"
+        self.tb.get_button(TOOL_AUTO_FOCUS).SetToolTip(tooltip)
 
     @call_in_wx_main
     def _remove_deleted_acquired_streams(self, streams):
@@ -417,6 +446,8 @@ class LocalizationTab(Tab):
             # Add milling angle suffix to stream's name if it was acquired at the milling angle.
             if pm.current_posture.value == Posture.FIB_VIEW_FM:
                 s.name.value = f"{s.name.value} at {math.degrees(pm.milling_angle.value):0.0f}°"
+            if pm.current_posture.value == Posture.SLM_IMAGING:
+                s.name.value = f"{s.name.value} (SLM)"
             if self.tab_data_model.main.currentFeature.value:
                 self.tab_data_model.main.currentFeature.value.streams.value.append(s)
             self.tab_data_model.streams.value.insert(0, s)  # TODO: let addFeatureStream do that
@@ -456,13 +487,16 @@ class LocalizationTab(Tab):
             tooltip="Localization can only be performed in FM mode",
         )
         self._acquisition_controller._update_overview_acquisition_button()
+        # Autofocus availability depends on the posture
+        curr_s = getattr(self, "curr_s", None)
+        if curr_s:
+            self._on_stream_update(curr_s.should_update.value)
+        else:
+            self._update_autofocus_tooltip()
         # Update the current posture read-only indicator if needed
-        if posture == Posture.FIB_VIEW_FM:
-            self.panel.lbl_current_posture.SetLabel(Posture.FIB_VIEW_FM.value)
-            self.panel.bmp_current_posture.SetBitmap(self.bmp_fib_view_fm)
-        elif posture == Posture.FM_IMAGING:
-            self.panel.lbl_current_posture.SetLabel(Posture.FM_IMAGING.value)
-            self.panel.bmp_current_posture.SetBitmap(self.bmp_fm_imaging)
+        if posture in self._allowed_targets:
+            self.panel.lbl_current_posture.SetLabel(posture.value)
+            self.panel.bmp_current_posture.SetBitmap(self.posture_to_bmp.get(posture))
         else:
             logging.info(f"Unknown posture {posture} for localization")
 
