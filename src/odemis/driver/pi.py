@@ -30,7 +30,6 @@ from odemis.model import isasync
 from odemis.util import driver, to_str_escape
 import os
 import serial
-import sys
 import threading
 import time
 
@@ -210,7 +209,7 @@ class PIRedStone(object):
         if not report.startswith(prefix):
             raise IOError("Report prefix unexpected after '%s': '%s'." % (com, report))
 
-        report = report.decode('latin1') if sys.version_info[0] >= 3 else report
+        report = report.decode('latin1')
         return report.lstrip(prefix).rstrip(suffix)
 
     def recoverTimeout(self):

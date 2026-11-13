@@ -26,7 +26,6 @@ USA.
 import collections
 import copy
 import itertools
-import sys
 from abc import ABCMeta, abstractmethod
 from typing import (
     Any,
@@ -45,23 +44,7 @@ from typing import (
 import numpy
 
 
-if sys.version_info < (3, 7, 4):
-    from collections import UserList as _UserList
-
-    class UserList(_UserList):
-        """
-        Backport of bugfix for when using Python v3.7.3 or lower.
-        For more informations see: https://bugs.python.org/issue27639
-
-        """
-
-        def __getitem__(self, i):
-            if isinstance(i, slice):
-                return self.__class__(self.data[i])
-            return self.data[i]
-
-else:
-    from collections import UserList
+from collections import UserList
 
 
 Edge = Tuple[int, int]

@@ -21,7 +21,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 import math
 import os
-import sys
 import unittest
 
 import numpy
@@ -166,9 +165,6 @@ class TestVectorAcquisition(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        if sys.version_info < (3, 9):
-            raise unittest.SkipTest("semnidaq does not work for Ubuntu 20.04 or lower")
-
         testing.start_backend(SPARC2_HWSYNC_CONFIG)
 
         # Find CCD & SEM components

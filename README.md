@@ -7,8 +7,8 @@ Odemis (_Open Delmic Microscope Software_) is the open-source microscopy softwar
 Delmic's mission is to empower companies and researchers by helping them achieve results that can be trusted implicitly with powerful and user-friendly solutions.
 
 ## Requirements
-* Linux (tested on Ubuntu 20.04, 22.04, 24.04 x86)
-* Python (v3.8+)
+* Linux (tested on Ubuntu 22.04, 24.04, 26.04 x86)
+* Python (v3.10+)
 * Special (forked) version of Pyro4 from Delmic
 
 Note: the viewer part is also tested to run on Windows (10+).

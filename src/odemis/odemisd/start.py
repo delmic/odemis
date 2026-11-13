@@ -310,10 +310,7 @@ class BackendStarter(object):
         returns (list of strings, list of strings): out, err
         """
         # To be able to directly pass the bytes to the output (display)
-        if sys.version_info.major >= 3:
-            raw_output = sys.stdout.buffer
-        else:  # Python 2
-            raw_output = sys.stdout
+        raw_output = sys.stdout.buffer
 
         def read_file(f, store):
             try:
