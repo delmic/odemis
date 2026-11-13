@@ -38,7 +38,7 @@ log = logging.getLogger()  # for compatibility only
 
 def logging_remote_exception(msg, *args):
     """ Same as logging.exception, but also display remote exception info from Pyro """
-    logging.error(msg, exc_info=1, *args)
+    logging.error(msg, exc_info=True, *args)
 
     try:
         ex_type, ex_value, ex_tb = sys.exc_info()

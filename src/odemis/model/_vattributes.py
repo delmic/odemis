@@ -679,7 +679,7 @@ def _call_with_notifier(func):
             try:
                 self._notifier(self)
             except WeakRefLostError:
-                logging.debug("No more notifier %s for %s", self._notifier, self._notifier.c, exc_info=1)
+                logging.debug("No more notifier %s for %s", self._notifier, self._notifier.c, exc_info=True)
                 pass
         return res
     return newfunc
