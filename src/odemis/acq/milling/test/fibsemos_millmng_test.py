@@ -21,8 +21,13 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 import logging
 import os
+import threading
 import time
 import unittest
+from copy import deepcopy
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import patch
 
 import odemis
 import numpy
@@ -70,7 +75,7 @@ class TestFibsemOSMillingManager(unittest.TestCase):
         )
         cls.feature.system_state = capture_system_state()
         hfw = cls.feature.system_state["ion-beam"]["horizontalFoV"][0]
-        cls.feature.reference_image = model.DataArray(numpy.zeros(shape=(1024, 1536)), metadata={
+        cls.feature.reference_image = model.DataArray(numpy.zeros(shape=(1024, 1536), dtype=numpy.uint16), metadata={
             model.MD_PIXEL_SIZE: (hfw / 1536, hfw / 1536), model.MD_DESCRIPTION: "FIB",
         })
 
@@ -108,6 +113,110 @@ class TestFibsemOSMillingManager(unittest.TestCase):
 
         self.assertTrue(f.cancelled())
         self.assertTrue(f.done())
+
+
+class TestDemoFibsemOSMillingManager(TestFibsemOSMillingManager):
+    """Run the real milling manager against the local full simulator."""
+
+    MIC_CONFIG = str(Path(CONFIG_PATH) / "sim/meteor-tescan-fibsem-full-sim.odm.yaml")
+
+    @classmethod
+    def setUpClass(cls: type) -> None:
+        """Start the local simulator and prepare a feature reference."""
+        try:
+            from fibsem.microscopes.odemis_microscope import OdemisDemoMicroscope
+        except ImportError as error:
+            raise unittest.SkipTest(f"fibsemOS Demo adapter is unavailable: {error}")
+        cls.demo_class = OdemisDemoMicroscope
+        super().setUpClass()
+        cls.addClassCleanup(testing.stop_backend)
+
+    def setUp(self) -> None:
+        """Create an independent manager and output directory for each run."""
+        delays = patch.dict(os.environ, {"FIBSEM_SIM_NO_DELAY": "1"})
+        delays.start()
+        self.addCleanup(delays.stop)
+        output = TemporaryDirectory(prefix="odemis-demo-milling-")
+        self.addCleanup(output.cleanup)
+        self.output_path = output.name
+        self.manager = fibsemos.FibsemOSMillingTaskManager()
+        self.tasks = deepcopy(list(self.milling_tasks.values()))
+        for task in self.tasks:
+            task.selected = True
+        self.milling_started = threading.Event()
+
+    def tearDown(self) -> None:
+        """Wait for worker cleanup before releasing the test resources."""
+        if self.manager._active:
+            self.manager.cancel(self.manager._future)
+        self._wait_until_idle()
+
+    def _start_milling(self) -> model.ProgressiveFuture:
+        """Start the configured tasks through the real manager.
+
+        :returns: Future associated with the milling run.
+        """
+        return self.manager.async_run(
+            future=model.ProgressiveFuture(), tasks=self.tasks,
+            feature=self.feature, path=self.output_path)
+
+    def _wait_until_idle(self) -> None:
+        """Wait briefly for the milling worker to finish its cleanup."""
+        deadline = time.monotonic() + 5
+        while self.manager._active and time.monotonic() < deadline:
+            time.sleep(0.01)
+        self.assertFalse(self.manager._active)
+
+    def _mark_running(self, progress: dict) -> None:
+        """Record that the simulator has started executing a pattern.
+
+        :param progress: Progress update emitted by the simulator.
+        """
+        if progress.get("progress", {}).get("state") == "update":
+            self.milling_started.set()
+
+    def test_fibsemos_milling_manager(self):
+        """Complete every default task without aligning independent images."""
+        original_state = capture_system_state()
+        self.assertIsInstance(self.manager.microscope, self.demo_class)
+        self._start_milling().result(timeout=10)
+        self.assertTrue(self.manager.milling_stages)
+        self.assertTrue(all(not stage.alignment.enabled for stage in self.manager.milling_stages))
+        self.assertTrue(all(task.milling.align.value for task in self.tasks))
+        self.assertEqual(self.manager.microscope.get_milling_state().name, "IDLE")
+        self.assertEqual(self.manager.microscope.milling_system.patterns, [])
+        self.assertEqual(capture_system_state(), original_state)
+
+    def test_cancel_milling(self):
+        """Stop an active run and allow the same manager to run again."""
+        self.manager.microscope.milling_progress_signal.connect(self._mark_running)
+        with patch.dict(os.environ, {"FIBSEM_SIM_NO_DELAY": "0"}):
+            future = self._start_milling()
+            self.assertTrue(self.milling_started.wait(5))
+            self.assertTrue(future.cancel())
+            self._wait_until_idle()
+        self.assertTrue(future.cancelled())
+        self.assertEqual(self.manager.microscope.milling_system.patterns, [])
+        self._start_milling().result(timeout=10)
+
+    def test_unknown_backend(self):
+        """Reject an unknown explicitly configured milling backend."""
+        component = model.getComponent(role="fibsem")
+        metadata = component.getMetadata()
+        self.addCleanup(component.updateMetadata, metadata)
+        calibration = dict(metadata[model.MD_CALIB], milling_backend="unknown")
+        component.updateMetadata({model.MD_CALIB: calibration})
+        with self.assertRaisesRegex(ValueError, "Milling backend 'unknown'"):
+            fibsemos.create_fibsemos_microscope()
+
+    def test_stage_selection_without_override(self):
+        """Use stage calibration when the component has no backend override."""
+        for role, calibration in (("fibsem", {}), ("stage-bare", {"version": "unknown"})):
+            component = model.getComponent(role=role)
+            self.addCleanup(component.updateMetadata, component.getMetadata())
+            component.updateMetadata({model.MD_CALIB: calibration})
+        with self.assertRaisesRegex(ValueError, "Stage version unknown"):
+            fibsemos.create_fibsemos_microscope()
 
 
 if __name__ == "__main__":

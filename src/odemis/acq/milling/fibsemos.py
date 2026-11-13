@@ -29,7 +29,7 @@ from concurrent import futures
 from concurrent.futures import CancelledError
 from copy import deepcopy
 from inspect import signature
-from typing import List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, List, Optional, Tuple
 
 from odemis import model
 from odemis.acq.feature import (
@@ -57,6 +57,10 @@ from odemis.acq.milling.tasks import (
     MillingTaskSettings,
 )
 from odemis.util import executeAsyncTask
+
+if TYPE_CHECKING:
+    from fibsem.microscope import FibsemMicroscope
+    from fibsem.microscopes.odemis_microscope import OdemisDemoMicroscope
 
 # Check if fibsemOS is available
 try:
@@ -285,8 +289,34 @@ def create_fibsemos_tescan_microscope() -> 'OdemisTescanMicroscope':
 
     return microscope
 
-def create_fibsemos_microscope() -> Union['OdemisThermoMicroscope', 'OdemisTescanMicroscope']:
-    """Create and return a fibsemOS microscope instance matching the detected stage version."""
+
+def create_fibsemos_demo_microscope() -> 'OdemisDemoMicroscope':
+    """Create an independent fibsemOS milling simulator.
+
+    :returns: Initialized Demo microscope.
+    :raises ImportError: The installed fibsemOS lacks the Demo adapter.
+    """
+    from fibsem.microscopes.odemis_microscope import OdemisDemoMicroscope
+
+    config = load_microscope_configuration()
+    return OdemisDemoMicroscope(config.system)
+
+
+def create_fibsemos_microscope() -> 'FibsemMicroscope':
+    """Select the milling backend from component metadata or the stage version.
+
+    :returns: Initialized microscope for milling.
+    :raises ValueError: The milling backend or stage version is unsupported.
+    :raises ImportError: The selected Demo adapter is unavailable.
+    """
+    fibsem = model.getComponent(role="fibsem")
+    calibration = fibsem.getMetadata().get(model.MD_CALIB, {})
+    milling_backend = calibration.get("milling_backend")
+    if milling_backend == "fibsemos-demo":
+        return create_fibsemos_demo_microscope()
+    if milling_backend is not None:
+        raise ValueError(f"Milling backend {milling_backend!r} is not supported")
+
     stage_bare = model.getComponent(role="stage-bare")
     stage_md = stage_bare.getMetadata()
     md_calib = stage_md.get(model.MD_CALIB, {})
@@ -749,6 +779,9 @@ class FibsemOSMillingTaskManager:
         alignment_area = constrain_milling_alignment_area(feature.milling_alignment_area.value, reference_image.shape)
         feature.milling_alignment_area.value = alignment_area
         milling_stages = convert_milling_tasks_to_milling_stages(tasks, alignment_area=alignment_area)
+        if not getattr(self.microscope, "supports_milling_alignment", True):
+            for stage in milling_stages:
+                stage.alignment.enabled = False
         estimated_dur = estimate_total_milling_time(milling_stages) + 30
 
         with self._lock:
