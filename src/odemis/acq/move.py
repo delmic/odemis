@@ -134,7 +134,7 @@ _CAMERA_ROTATION_COR = {
 # In SLM posture, a sample-stage Y move is a mix of stage-bare y and z. When z increases it must move
 # before y, and when z decreases it must move after y.
 _STAGE_MOVE_ORDER = {
-    Posture.SLM_IMAGING: {"z": 1},
+    Posture.SLM_IMAGING: {"z": -1},
 }
 
 
