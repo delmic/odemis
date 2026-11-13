@@ -914,11 +914,10 @@ class CryoFeatureAcquisitionTask(object):
                     # recalculate the zlevels based on the zparms
                     # we need the zmin, zmax, zstep, and the new focus position
                     zmin, zmax, zstep = self.zparams["zmin"], self.zparams["zmax"], self.zparams["zstep"]
-                    levels = generate_zlevels(focuser=self.focus, zrange=(zmin, zmax), zstep=zstep)
 
                     # Only use zstack for the optical streams (not SEM), as that's the ones
                     # the user is interested in on the METEOR.
-                    zlevels = {s: levels for s in self.streams}
+                    zlevels = self._generate_zlevels(zmin, zmax, zstep)
                     logging.warning(f"The zlevels for feature {site.name.value} are {zlevels}")
 
                     self._future.running_subf = acquireZStack(
@@ -1041,9 +1040,10 @@ class CryoFeatureAcquisitionTask(object):
 
     def _generate_zlevels(self, zmin: float, zmax: float, zstep: float) -> Dict[Stream, List[float]]:
         """Generate the zlevels for the zstack acquisition in the required format."""
-        # calculate the zlevels for the zstack acquisition
-        levels = generate_zlevels(self.focus, (zmin, zmax), zstep)
-        zlevels = {s: levels for s in self.streams}
+        # calculate the zlevels for the zstack acquisition, relative to the z-stack focuser of each stream
+        zlevels = {}
+        for s in self.streams:
+            zlevels[s] = generate_zlevels(s.zstack_focuser, (zmin, zmax), zstep)
         logging.debug(f"Generated zlevels for the zstack acquisition: {zlevels}")
         return zlevels
 

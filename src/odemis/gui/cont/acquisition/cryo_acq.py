@@ -146,6 +146,8 @@ class CryoAcquiController(object):
         # common VA's
         self._tab_data.filename.subscribe(self._on_filename, init=True)
         self._tab_data.streams.subscribe(self._on_streams_change, init=True)
+        # The streams listed depend on the posture (FM or SLM optics)
+        self._tab_data.main.posture_manager.current_posture.subscribe(self._on_posture_change)
         # TODO link .acquiStreams with a callback that is called
         # to check/uncheck items (?)
         self._tab_data.main.is_acquiring.subscribe(self._on_acquisition, init=True)
@@ -310,7 +312,7 @@ class CryoAcquiController(object):
             self._tab.tab_data_model.select_current_position_feature()
 
         # store the focuser position
-        self._good_focus_pos = self._tab_data.main.focus.position.value["z"]
+        self._store_focus_positions()
 
         # NOTE: acquisition manager expects all streams to be paused before starting.
         # this cannot be done in the is_acquiring callback as it can be delayed
@@ -347,6 +349,28 @@ class CryoAcquiController(object):
         self._acq_future.add_done_callback(self._on_acquisition_done)
         self._panel.Layout()
 
+    def _store_focus_positions(self) -> None:
+        """
+        Remember the position of the focus component moved by the acquisition, to restore it afterwards.
+        In FM imaging and FIB-view FM postures, it is the optical focus. In SLM posture, it is the
+        SLM focus, which only moves during a z-stack (the sample z is not restored).
+        """
+        main = self._tab_data.main
+        posture = main.posture_manager.get_current_posture()
+        focusers = []
+        if posture in (Posture.FM_IMAGING, Posture.FIB_VIEW_FM):
+            focusers = [main.focus]
+        elif posture == Posture.SLM_IMAGING and self._zStackActive.value and main.focus_coincident:
+            focusers = [main.focus_coincident]
+        self._good_focus_pos = [(f, f.position.value["z"]) for f in focusers]
+
+    def _restore_focus_positions(self) -> None:
+        """
+        Move the optical focus components back to the position stored before the acquisition.
+        """
+        for f, z in self._good_focus_pos:
+            f.moveAbs({"z": z})
+
     @call_in_wx_main
     def _on_acquisition_done(self, future):
         """
@@ -356,7 +380,7 @@ class CryoAcquiController(object):
         self._acq_future = None
         self._gauge_future_conn = None
         self._tab_data.main.is_acquiring.value = False
-        self._tab_data.main.focus.moveAbs({"z": self._good_focus_pos})
+        self._restore_focus_positions()
 
         # try to get the acquisition data
         try:
@@ -387,7 +411,7 @@ class CryoAcquiController(object):
     def _acquire_at_features(self, _: wx.Event):
         """Acquire at the features using the current imaging settings."""
         # store the focuser position
-        self._good_focus_pos = self._tab_data.main.focus.position.value["z"]
+        self._store_focus_positions()
 
         # NOTE: acquisition manager expects all streams to be paused before starting.
         # this cannot be done in the is_acquiring callback as it can be delayed
@@ -405,7 +429,7 @@ class CryoAcquiController(object):
 
         filename = self._filename.value
         stage = self._tab_data.main.stage_bare
-        focus = self._tab_data.main.focus
+        focus = self._tab_data.main.get_posture_focuser()
         acq_streams = self._acquiStreams.value
         features = self._get_selected_features()
         acq_time = self._get_acq_time()
@@ -473,7 +497,7 @@ class CryoAcquiController(object):
         self._acq_future = None
         self._gauge_future_conn = None
         self._tab_data.main.is_acquiring.value = False
-        self._tab_data.main.focus.moveAbs({"z": self._good_focus_pos})
+        self._restore_focus_positions()
 
         try:
             self._reset_acquisition_gui(state=ST_FINISHED)
@@ -622,6 +646,27 @@ class CryoAcquiController(object):
 
         return data
 
+    def _is_stream_for_posture(self, s: Stream) -> bool:
+        """
+        Check whether a live stream matches the current posture: in SLM posture, only the SLM
+        fluorescence streams (z-stack focuser is the SLM focus) are relevant, otherwise only the FM ones.
+        :param s: the stream
+        :returns: True if the stream should be listed for acquisition
+        """
+        if not isinstance(s, FluoStream):
+            return True
+        main = self._tab_data.main
+        slm_focus = main.focus_coincident
+        is_slm_stream = slm_focus is not None and getattr(s, "zstack_focuser", None) is slm_focus
+        is_slm_posture = main.posture_manager.get_current_posture() == Posture.SLM_IMAGING
+        return is_slm_stream == is_slm_posture
+
+    def _on_posture_change(self, _posture: Posture) -> None:
+        """
+        Refresh the list of streams to acquire when the posture changes.
+        """
+        self._on_streams_change(self._tab_data.streams.value)
+
     @call_in_wx_main
     def _on_streams_change(self, streams):
         """
@@ -637,7 +682,7 @@ class CryoAcquiController(object):
         # iterating from right to left is chosen.
         for i in range(self._panel.streams_chk_list.GetCount() - 1, -1, -1):
             item_stream = self._panel.streams_chk_list.GetClientData(i)
-            if item_stream not in streams:
+            if item_stream not in streams or not self._is_stream_for_posture(item_stream):
                 self._panel.streams_chk_list.Delete(i)
                 if item_stream in self._acquiStreams.value:
                     self._acquiStreams.value.remove(item_stream)
@@ -657,9 +702,12 @@ class CryoAcquiController(object):
             for i in range(self._panel.streams_chk_list.GetCount())
         ]
         for i, s in enumerate(streams):
-            if s not in item_streams and not isinstance(s, StaticStream):
-                self._panel.streams_chk_list.Insert(s.name.value, i, s)
-                self._panel.streams_chk_list.Check(i)
+            if (s not in item_streams and not isinstance(s, StaticStream)
+                    and self._is_stream_for_posture(s)):
+                # The list may hold fewer items than .streams (streams of the other posture are hidden)
+                pos = min(i, self._panel.streams_chk_list.GetCount())
+                self._panel.streams_chk_list.Insert(s.name.value, pos, s)
+                self._panel.streams_chk_list.Check(pos)
                 self._acquiStreams.value.append(s)
                 # subscribe the name and wavelength VA's of this added stream
                 for va in self._get_wavelength_vas(s):
@@ -808,9 +856,12 @@ class CryoAcquiController(object):
             return
 
         try:
-            levels = generate_zlevels(self._tab_data.main.focus,
-                                      (self._tab_data.zMin.value, self._tab_data.zMax.value),
-                                      self._tab_data.zStep.value)
+            # Each stream moves along its own z-stack focuser (eg, the SLM focus in SLM posture)
+            streams = [s for s in self._acquiStreams.value
+                       if isinstance(s, (FluoStream, BrightfieldStream))]
+            zrange = (self._tab_data.zMin.value, self._tab_data.zMax.value)
+            levels = {s: generate_zlevels(s.zstack_focuser, zrange, self._tab_data.zStep.value)
+                      for s in streams}
         except (ValueError, IndexError, ZeroDivisionError, KeyError) as ex:
             # This is usually due to invalid z-stack parameters => forbid acquiring
             logging.warning("Could not generate z-levels for z-stack: %s", ex)
@@ -820,8 +871,7 @@ class CryoAcquiController(object):
             self._zstack_error = None
             # Only use zstack for the optical streams (not SEM), as that's the ones
             # the user is interested in on the METEOR.
-            self._zlevels = {s: levels for s in self._acquiStreams.value
-                             if isinstance(s, (FluoStream, BrightfieldStream))}
+            self._zlevels = levels
 
         # update the time, taking the zstack into account
         self._update_acquisition_time()

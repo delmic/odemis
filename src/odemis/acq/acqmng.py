@@ -136,7 +136,7 @@ class ZStackAcquisitionTask(object):
         self._zstep_duration = {}
         for s, z in zlevels.items():
             if len(z) > 1:
-                self._zstep_duration[s] = guessActuatorMoveDuration(s.focuser, axis="z", distance=abs(z[0] - z[1]))
+                self._zstep_duration[s] = guessActuatorMoveDuration(s.zstack_focuser, axis="z", distance=abs(z[0] - z[1]))
 
     def cancel(self, _):
         """
@@ -203,7 +203,7 @@ class ZStackAcquisitionTask(object):
                 # for each stream, iterate through zlevels
                 for i, z in enumerate(self._zlevels[stream]):
                     # move the focuser
-                    self._actuator_f = stream.focuser.moveAbs({"z": z})
+                    self._actuator_f = stream.zstack_focuser.moveAbs({"z": z})
                     self._actuator_f.result()
 
                     # check if cancellation happened while the actuator future is working
@@ -275,9 +275,9 @@ def estimateZStackAcquisitionTime(streams, zlevels):
             acq_time += s.estimateAcquisitionTime()
     for s in streams:
         zs = zlevels.get(s, [0])  # concider that streams without zlevels are acquired at a single z
-        if len(zs) > 1 and s.focuser:
+        if len(zs) > 1 and s.zstack_focuser:
             zstep = abs(zs[0] - zs[1])
-            tot_zstep_time = (len(zs) - 1) * guessActuatorMoveDuration(s.focuser, axis="z", distance=zstep)
+            tot_zstep_time = (len(zs) - 1) * guessActuatorMoveDuration(s.zstack_focuser, axis="z", distance=zstep)
             acq_time += tot_zstep_time
 
     return acq_time
