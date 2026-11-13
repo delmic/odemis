@@ -225,6 +225,32 @@ def load_project(project_dir: os.PathLike) -> dict:
     return {"overviews": overviews, "features": features}
 
 
+def reconcile_overviews(overviews: List[Dict[str, Any]], project_dir: os.PathLike) -> List[Dict[str, Any]]:
+    """
+    Update the overview list to match the files actually present in the project directory, as the user
+    might have renamed or removed overview files. Entries whose file doesn't exist are dropped, and overview
+    files (with "overview" in their name) not referenced by the project are added.
+
+    :param overviews: overview entries, with absolute filenames
+    :param project_dir: the project directory
+    :return: the updated overview list (the one passed is not modified)
+    """
+    result = []
+    for o in overviews:
+        if Path(o[IMG_FILENAME]).is_file():
+            result.append(o)
+        else:
+            logging.info("Overview file %s not found, removing it from the project", o[IMG_FILENAME])
+
+    known = {Path(o[IMG_FILENAME]) for o in result}
+    for f in sorted(Path(project_dir).glob("*overview*.ome.tiff")):
+        if f.is_file() and f not in known:
+            logging.info("Detected new overview file %s, adding it to the project", f)
+            result.append({IMG_FILENAME: str(f)})
+
+    return result
+
+
 def serialize_project_data(main_data: "CryoMainGUIData") -> Dict:
     """
     Convert the in-memory project data with complex structure to a serialized form,
