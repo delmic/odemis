@@ -20,6 +20,7 @@ import math
 import os
 import time
 import unittest
+from unittest import mock
 
 import odemis
 from odemis import model
@@ -45,6 +46,10 @@ class TestMeteorTFS3Move(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
+        # Enable Odemis Advanced, to have access to the milling postures
+        cls.odemis_advanced_patcher = mock.patch("odemis.acq.move.ODEMIS_ADVANCED_FLAG", True)
+        cls.odemis_advanced_patcher.start()
+
         testing.start_backend(cls.MIC_CONFIG)
         cls.microscope = model.getMicroscope()
         cls.stage_bare = model.getComponent(role="stage-bare")
@@ -62,6 +67,10 @@ class TestMeteorTFS3Move(unittest.TestCase):
         cls.stage_md = cls.stage_bare.getMetadata()
         cls.stage_grid_centers = cls.stage_md[model.MD_SAMPLE_CENTERS]
         cls.stage_loading = cls.stage_md[model.MD_FAV_POS_DEACTIVE]
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.odemis_advanced_patcher.stop()
 
     def setUp(self):
         # reset to a known posture before each test
