@@ -185,21 +185,21 @@ class TestSparc2AutoFocus(unittest.TestCase):
 
         data = tiff.read_data(os.path.join(TEST_IMAGE_PATH, "brightlight-off-slit-spccd-simple.ome.tiff"))
         new_img = img.ensure2DImage(data[0])
-        self.ccd.set_image(new_img)
+        self.spccd.set_image(new_img)
 
         f = Sparc2AutoFocus("spec-fiber-focus", self.optmngr, [self.specline_spccd], True)
 
         time.sleep(5)
         data = tiff.read_data(os.path.join(TEST_IMAGE_PATH, "brightlight-on-slit-spccd-simple.ome.tiff"))
         new_img = img.ensure2DImage(data[0])
-        self.ccd.set_image(new_img)
+        self.spccd.set_image(new_img)
 
         res = f.result(timeout=1000)
         for (g, d), fpos in res.items():
             self.assertEqual(d.role, self.spccd.role)
             self.assertAlmostEqual(fpos, self._good_focus, 3)
 
-        self.assertEqual(len(res.keys()), len(self.spgr.axes["grating"].choices))
+        self.assertEqual(len(res.keys()), len(self.spgr_ded.axes["grating"].choices))
 
     @timeout(1000)
     def test_det_external(self):
@@ -262,13 +262,13 @@ class TestSparc2AutoFocus(unittest.TestCase):
 
         data = tiff.read_data(os.path.join(TEST_IMAGE_PATH, "brightlight-off-slit-spccd-simple.ome.tiff"))
         new_img = img.ensure2DImage(data[0])
-        self.ccd.set_image(new_img)
+        self.spccd.set_image(new_img)
         f = Sparc2AutoFocus("spec-fiber-focus", self.optmngr, specline_mul, True)
 
         time.sleep(5)
         data = tiff.read_data(os.path.join(TEST_IMAGE_PATH, "brightlight-on-slit-spccd-simple.ome.tiff"))
         new_img = img.ensure2DImage(data[0])
-        self.ccd.set_image(new_img)
+        self.spccd.set_image(new_img)
 
         res = f.result(timeout=900)
         for (g, d), fpos in res.items():
@@ -279,7 +279,7 @@ class TestSparc2AutoFocus(unittest.TestCase):
                 self.assertAlmostEqual(fpos, self._good_focus, 3)
 
         # We expect an entry for each combination grating/detector
-        self.assertEqual(len(res.keys()), len(self.spgr.axes["grating"].choices))
+        self.assertEqual(len(res.keys()), len(self.spgr_ded.axes["grating"].choices))
 
 
 class TestSparc2AutoFocus_2(unittest.TestCase):
@@ -326,20 +326,20 @@ class TestSparc2AutoFocus_2(unittest.TestCase):
 
         data = tiff.read_data(os.path.join(TEST_IMAGE_PATH, "brightlight-off-slit-spccd-simple.ome.tiff"))
         new_img = img.ensure2DImage(data[0])
-        self.spccd.set_image(new_img)
+        self.ccd.set_image(new_img)
         f = Sparc2AutoFocus("spec-focus", self.optmngr, [self.specline_ccd], True)
 
         time.sleep(5)
         data = tiff.read_data(os.path.join(TEST_IMAGE_PATH, "brightlight-on-slit-spccd-simple.ome.tiff"))
         new_img = img.ensure2DImage(data[0])
-        self.spccd.set_image(new_img)
+        self.ccd.set_image(new_img)
 
         res = f.result(timeout=900)
         for (g, d), fpos in res.items():
             self.assertEqual(d.role, self.ccd.role)
             self.assertAlmostEqual(fpos, self._good_focus, 3)
 
-        self.assertEqual(len(res.keys()), len(self.spgr_ded.axes["grating"].choices))
+        self.assertEqual(len(res.keys()), len(self.spgr.axes["grating"].choices))
 
     @timeout(100)
     def test_cancel(self):
@@ -376,13 +376,13 @@ class TestSparc2AutoFocus_2(unittest.TestCase):
 
         data = tiff.read_data(os.path.join(TEST_IMAGE_PATH, "brightlight-off-slit-spccd-simple.ome.tiff"))
         new_img = img.ensure2DImage(data[0])
-        self.spccd.set_image(new_img)
+        self.ccd.set_image(new_img)
         f = Sparc2AutoFocus("spec-focus", self.optmngr, specline_mul, True)
 
         time.sleep(5)
         data = tiff.read_data(os.path.join(TEST_IMAGE_PATH, "brightlight-on-slit-spccd-simple.ome.tiff"))
         new_img = img.ensure2DImage(data[0])
-        self.spccd.set_image(new_img)
+        self.ccd.set_image(new_img)
 
         res = f.result(timeout=900)
         for (g, d), fpos in res.items():
@@ -393,7 +393,7 @@ class TestSparc2AutoFocus_2(unittest.TestCase):
                 self.assertAlmostEqual(fpos, self._good_focus, 3)
 
         # We expect an entry for each combination grating/detector
-        self.assertEqual(len(res.keys()), len(self.spgr_ded.axes["grating"].choices))
+        self.assertEqual(len(res.keys()), len(self.spgr.axes["grating"].choices))
 
 
 class TestSparc2AutoFocus_3(unittest.TestCase):
@@ -436,7 +436,7 @@ class TestSparc2AutoFocus_3(unittest.TestCase):
         for (g, d), fpos in res.items():
             self.assertIn(d.role, {"ccd0", "sp-ccd1"})
 
-        self.assertEqual(len(res.keys()), 2*len(self.spgr_ded.axes["grating"].choices))
+        self.assertEqual(len(res.keys()), 2*len(self.spgr.axes["grating"].choices))
 
     def test_ded_spectrograph(self):
         """
