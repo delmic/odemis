@@ -269,7 +269,7 @@ class StreamView(View):
                         fpending[-1].result()
                         # TODO: display errors for each failed move (not just 1 over 3)
                     except Exception:
-                        logging.warning("Failed to apply focus move", exc_info=1)
+                        logging.warning("Failed to apply focus move", exc_info=True)
 
                 # Add more moves if there are already more
                 try:
@@ -302,7 +302,7 @@ class StreamView(View):
                         # but instead only do requests of size "big enough"
                         focuser.moveRelSync({"z": shift})
                 except Exception:
-                    logging.info("Failed to apply focus move", exc_info=1)
+                    logging.info("Failed to apply focus move", exc_info=True)
         except Exception:
             logging.exception("Focus mover thread failed")
 
