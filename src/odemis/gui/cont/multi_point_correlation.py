@@ -91,6 +91,8 @@ RIM_COR_DEFAULT = 0.495  # See MD_RIM_COR. This value works fine for 50x objecti
 # For coordinate conversions, we assume the pixels in 3D are isosymmetric
 # i.e. size in pixel[0]=pixel[1]=pixel[2].
 REFINE_SEARCH_RANGE = 1.5e-6  # m, search range for fiducial refinement
+# Only intensities higher than this baseline percentile will be used to determine the optimal fiducial position.
+REFINE_INTENSITY_BASELINE_RATIO = 0.98
 
 # Approximate rotation (phi, theta, psi) in degrees of the FM -> FIB transformation.
 # The FIB projection cannot tell a plane from its mirror image, so 3DCT may return either the correct solution
@@ -1169,7 +1171,7 @@ class CorrelationPointsController:
         multi_crop = raw_multi[(slice(None),) + roi]  # We search along all stack slices (first axis)
         # Find best channel and compute COM
         best_c = get_brightest_channel(multi_crop)
-        com = compute_center_of_mass(multi_crop[best_c], baseline_ratio=0.99)
+        com = compute_center_of_mass(multi_crop[best_c], baseline_ratio=REFINE_INTENSITY_BASELINE_RATIO)
         com_z = com[0]
         com_y_crop = com[1] + roi[1].start
         com_x_crop = com[2] + roi[2].start
