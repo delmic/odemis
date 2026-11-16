@@ -28,9 +28,9 @@ import math
 import numbers
 import threading
 import time
-from concurrent.futures._base import CancelledError, FINISHED
+from concurrent.futures._base import CancelledError, FINISHED, Future
 from concurrent import futures
-from typing import Dict, Union, Set
+from typing import Dict, Union, Set, Optional
 
 import numpy
 
@@ -1150,6 +1150,209 @@ class AntiBacklashActuator(model.Actuator):
     def reference(self, axes):
         f = self._dependency.reference(axes)
         return f
+
+
+class ForcedOrderActuator(model.Actuator):
+    """
+    This is a stage wrapper that takes a stage and ensures that, for each
+    "forced" axis, every move is executed either before or after the other
+    ("normal") axes are moved, depending on the direction of the move on
+    that axis. This is useful when several axes are mechanically linked.
+    """
+
+    def __init__(self, name: str, role: str, dependencies: dict, forced_axes: dict, **kwargs):
+        """
+        :param name: name of the component
+        :param role: role of the component
+        :param dependencies (dict str -> Actuator): dict containing one component, the actuator to wrap.
+        :param forced_axes (dict str -> float): for each axis which must always be
+         moved either first or last, the direction (via the sign) for
+         which it must be moved first. Axes not present in this dict are
+         "normal" axes: they are moved together, in between the "first"
+         and "last" axes.
+        """
+        if len(dependencies) != 1:
+            raise ValueError("ForcedOrderActuator needs 1 dependency")
+
+        for a, v in forced_axes.items():
+            if not isinstance(a, str):
+                raise ValueError("Forced axes key must be a string but got '%s'" % (a,))
+            if not isinstance(v, numbers.Real):
+                raise ValueError("Forced axes value of %s must be a number but got '%s'" % (a, v))
+
+        self._dependency = list(dependencies.values())[0]
+        self._forced_axes = forced_axes
+        axes_def = {}
+        for an, ax in self._dependency.axes.items():
+            axes_def[an] = copy.deepcopy(ax)
+            axes_def[an].canUpdate = False  # moves are queued, not replaced
+
+        # look for axes in forced_axes not existing in the dep
+        missing = set(forced_axes.keys()) - set(axes_def.keys())
+        if missing:
+            raise ValueError("Dependency actuator doesn't have the axes %s" % (missing,))
+
+        model.Actuator.__init__(self, name, role, axes=axes_def,
+                                 dependencies=dependencies, **kwargs)
+
+        # will take care of executing axis moves asynchronously
+        self._executor = CancellableThreadPoolExecutor(max_workers=1)  # one task at a time
+
+        # Duplicate VAs which are just identical
+        self.position = self._dependency.position
+
+        if model.hasVA(self._dependency, "referenced"):
+            self.referenced = self._dependency.referenced
+        if model.hasVA(self._dependency, "speed"):
+            self.speed = self._dependency.speed
+
+    def terminate(self) -> None:
+        """Terminate the movement of the actuator"""
+        if self._executor:
+            self.stop()
+            self._executor.shutdown()
+            self._executor = None
+
+    def _doMoveRel(self, future: Future, shift: dict) -> None:
+        """
+        Perform a relative move of the actuator.
+        :param future: a Future to manage the move
+        :param shift: a dictionary of axis shifts
+        """
+        # separate the forced axes from the others
+        shift_forced = {an: s for an, s in shift.items() if an in self._forced_axes}
+        shift_normal = {an: s for an, s in shift.items() if an not in self._forced_axes}
+
+        # Separate the forced axes into first and last based on the direction of the move
+        shift_first = {an: s for an, s in shift_forced.items() if s * self._forced_axes[an] >= 0}
+        shift_last = {an: s for an, s in shift_forced.items() if s * self._forced_axes[an] < 0}
+
+        if shift_first:
+            logging.debug("Move the position of %s by %s", self._dependency, shift_first)
+            self._runDependencyMove(future, self._dependency.moveRel, shift_first)
+
+        if shift_normal:
+            logging.debug("Move the position of %s by %s", self._dependency, shift_normal)
+            self._runDependencyMove(future, self._dependency.moveRel, shift_normal)
+
+        if shift_last:
+            logging.debug("Move the position of %s by %s", self._dependency, shift_last)
+            self._runDependencyMove(future, self._dependency.moveRel, shift_last)
+
+    def _doMoveAbs(self, future: Future, pos: dict) -> None:
+        """
+        Perform an absolute move of the actuator.
+        :param future: a Future to manage the move
+        :param pos: a dictionary of axis positions
+        """
+        # separate the forced axes from the others
+        pos_forced = {an: v for an, v in pos.items() if an in self._forced_axes}
+        pos_normal = {an: v for an, v in pos.items() if an not in self._forced_axes}
+
+        cur_pos = self._dependency.position.value
+        shift_forced = {an: v - cur_pos[an] for an, v in pos_forced.items()}
+        # Separate the forced axes into first and last based on the direction of the move
+        pos_first = {an: v for an, v in pos_forced.items() if shift_forced[an] * self._forced_axes[an] >= 0}
+        pos_last = {an: v for an, v in pos_forced.items() if shift_forced[an] * self._forced_axes[an] < 0}
+
+        if pos_first:
+            logging.debug("Move %s to position %s", self._dependency, pos_first)
+            self._runDependencyMove(future, self._dependency.moveAbs, pos_first)
+        if pos_normal:
+            logging.debug(" Move %s to position %s", self._dependency, pos_normal)
+            self._runDependencyMove(future, self._dependency.moveAbs, pos_normal)
+
+        if pos_last:
+            logging.debug(" Move %s to position %s", self._dependency, pos_last)
+            self._runDependencyMove(future, self._dependency.moveAbs, pos_last)
+
+    def _runDependencyMove(self, future: Future, func, arg) -> None:
+        """
+        Start a dependency move and wait for it.
+        :param future: the future of the request
+        :param func: the dependency method starting the move
+        :param arg: the argument of func
+        :raise CancelledError: if the request was cancelled
+        """
+        with future._moving_lock:
+            if future._must_stop.is_set():
+                raise CancelledError()
+            future._running_subf = func(arg)
+        try:
+            future._running_subf.result()
+        except Exception as e:
+            if not isinstance(e, CancelledError):
+                logging.exception("Exception during move: %s", e)
+            raise
+
+    def _createFuture(self) -> CancellableFuture:
+        """
+        Create a cancellable future able to carry the dependency sub-future.
+        :return: a future that can be used to manage a move
+        """
+        f = CancellableFuture()
+        f._moving_lock = threading.Lock()  # taken while starting/cancelling the sub-future
+        f._must_stop = threading.Event()  # set when cancellation is requested
+        f._running_subf = None
+        f.task_canceller = self._cancelMovement
+        return f
+
+    @isasync
+    def moveRel(self, shift: dict, update: bool=False) -> Future:
+        if not shift:
+            return model.InstantaneousFuture()
+        self._checkMoveRel(shift)
+
+        f = self._createFuture()
+        f = self._executor.submitf(f, self._doMoveRel, f, shift)
+        return f
+
+    @isasync
+    def moveAbs(self, pos: dict, update: bool=False) -> Future:
+        if not pos:
+            return model.InstantaneousFuture()
+        self._checkMoveAbs(pos)
+
+        f = self._createFuture()
+        f = self._executor.submitf(f, self._doMoveAbs, f, pos)
+        return f
+
+    def _cancelMovement(self, future: Future) -> bool:
+        """
+        Cancel a request, serialized with the start of dependency moves.
+        :param future: the future of the request to cancel
+        :return: True, as the running request will stop at the next phase at the latest
+        """
+        # Set before taking the lock, so that phases about to start see it
+        future._must_stop.set()
+        with future._moving_lock:
+            if future._running_subf is not None:
+                future._running_subf.cancel()
+                self._dependency.stop()
+        return True
+
+    def stop(self, axes: Optional[dict]=None) -> None:
+        if self._executor:
+            self._executor.cancel()
+
+        self._dependency.stop(axes=axes)
+
+    @isasync
+    def reference(self, axes: Set[str]) -> Future:
+        """
+        Queue referencing after previously requested moves.
+        :param axes: set of axes which should be referenced
+        """
+        if not axes:
+            return model.InstantaneousFuture()
+        self._checkReference(axes)
+        f = self._createFuture()
+        f = self._executor.submitf(f, self._doReference, f, axes)
+        return f
+
+    def _doReference(self, future: Future, axes: Set[str]) -> None:
+        """Queue the reference request after any in-flight movements."""
+        self._runDependencyMove(future, self._dependency.reference, axes)
 
 
 class LinearActuator(model.Actuator):
