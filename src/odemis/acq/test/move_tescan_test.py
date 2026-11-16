@@ -20,6 +20,7 @@ import math
 import os
 import time
 import unittest
+from unittest import mock
 
 import odemis
 from odemis import model
@@ -180,6 +181,10 @@ class TestMeteorTescan1FibsemMove(move_tfs3_test.TestMeteorTFS3Move):
 
     @classmethod
     def setUpClass(cls):
+        # Enable Odemis Advanced, to have access to the milling postures
+        cls.odemis_advanced_patcher = mock.patch("odemis.acq.move.ODEMIS_ADVANCED_FLAG", True)
+        cls.odemis_advanced_patcher.start()
+
         testing.start_backend(cls.MIC_CONFIG)
         cls.microscope = model.getMicroscope()
         cls.pm : MeteorTescan1PostureManager = MicroscopePostureManager(microscope=cls.microscope)

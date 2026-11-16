@@ -35,6 +35,7 @@ import numpy
 import scipy
 
 from odemis import model, util
+from odemis.gui.conf.licences import ODEMIS_ADVANCED_FLAG
 from odemis.util import executeAsyncTask
 from odemis.util.driver import ATOL_ROTATION_POS, isInRange, isNearPosition
 from odemis.util.transform import get_rotation_transforms
@@ -183,6 +184,10 @@ class MicroscopePostureManager:
         ValueError exception
         """
         f = model.CancellableFuture()
+        if target_posture not in self.postures:
+            f.set_exception(ValueError(f"Posture {target_posture} is not available (Odemis Advanced "
+                                       "licence or microscope configuration missing)"))
+            return f
         f.task_canceller = self._cancel_switch_posture
         f._task_state = RUNNING
         f._task_lock = threading.Lock()
@@ -1639,12 +1644,13 @@ class MeteorTFS3PostureManager(MeteorTFS1PostureManager):
 
         self.postures = [Posture.SEM_IMAGING, Posture.FM_IMAGING]
         # These positions are "optional", and only used with Odemis advanced
-        if model.MD_FAV_MILL_POS_ACTIVE in stage_md:
-            self.postures.append(Posture.MILLING)
-        if model.MD_FAV_FIB_POS_ACTIVE in stage_md:
-            self.postures.append(Posture.FIB_IMAGING)
-        if model.MD_FAV_MILL_POS_ACTIVE in stage_md and self.has_fib_view_fm_objective:
-            self.postures.append(Posture.FIB_VIEW_FM)
+        if ODEMIS_ADVANCED_FLAG:
+            if model.MD_FAV_MILL_POS_ACTIVE in stage_md:
+                self.postures.append(Posture.MILLING)
+            if model.MD_FAV_FIB_POS_ACTIVE in stage_md:
+                self.postures.append(Posture.FIB_IMAGING)
+            if model.MD_FAV_MILL_POS_ACTIVE in stage_md and self.has_fib_view_fm_objective:
+                self.postures.append(Posture.FIB_VIEW_FM)
 
         # Hack warning: during initialization of the transforms, the offset is computed by calling
         # to_posture(), which calls _transform_from_sem_to_fm() for the SEM->FM transform. If
@@ -2191,11 +2197,13 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
 
         # Automatic conversion to sample-stage axes
         self.postures = [Posture.SEM_IMAGING, Posture.FM_IMAGING]
-        if model.MD_FAV_MILL_POS_ACTIVE in stage_md:
-            self.postures.append(Posture.MILLING)
-            self.postures.append(Posture.TRENCHING)
-        if model.MD_FAV_MILL_POS_ACTIVE in stage_md and self.has_fib_view_fm_objective:
-            self.postures.append(Posture.FIB_VIEW_FM)
+        # The milling-related postures are only available with Odemis advanced
+        if ODEMIS_ADVANCED_FLAG:
+            if model.MD_FAV_MILL_POS_ACTIVE in stage_md:
+                self.postures.append(Posture.MILLING)
+                self.postures.append(Posture.TRENCHING)
+            if model.MD_FAV_MILL_POS_ACTIVE in stage_md and self.has_fib_view_fm_objective:
+                self.postures.append(Posture.FIB_VIEW_FM)
 
         self.linked_axes = ["y", "z"]
         # The setter of self.milling_angle sets the milling angle metadata, which is used to update the transformation parameters.
