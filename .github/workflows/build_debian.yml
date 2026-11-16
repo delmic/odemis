@@ -30,11 +30,21 @@ jobs:
         path: /var/cache/apt/archives
         key: apt-cache-${{ runner.os }}-${{ matrix.ubuntu_version }}
 
+    - name: Configure APT to retry downloads
+      run: echo 'Acquire::Retries "5"; Acquire::http::Timeout "30";' > /etc/apt/apt.conf.d/80-retries
+
     - name: Install build dependencies
-      run: |
-        apt-get update
-        apt-get install -y devscripts equivs
-        mk-build-deps -i -r -t "apt-get -y --no-install-recommends" debian/control
+      # Retry the whole step, as network issues sometimes cause temporary failures
+      uses: nick-fields/retry@v3
+      with:
+        timeout_minutes: 20
+        max_attempts: 3
+        retry_wait_seconds: 30
+        command: |
+          set -e
+          apt-get update --error-on=any
+          apt-get install -y devscripts equivs
+          mk-build-deps -i -r -t "apt-get -y --no-install-recommends" debian/control
 
     - name: Make a fake datacollector key
       run: |
