@@ -56,10 +56,10 @@ from odemis.acq.stream import (
     Stream,
 )
 from odemis.gui import conf
-from odemis.gui.cont.cryo_project import save_project, IMG_FILENAME, IMG_IN_FILE_IDS, add_image
+from odemis.gui.cont.cryo_project import save_project, add_image
 from odemis.gui.model import TabName
 from odemis.gui import model as guimod
-from odemis.gui.conf.licences import ODEMIS_ADVANCED_FLAG, LICENCE_CORRELATION_ENABLED
+from odemis.util.licences import ODEMIS_ADVANCED_FLAG, LICENCE_CORRELATION_ENABLED
 from odemis.gui.cont.acquisition._constants import VAS_NO_ACQUISITION_EFFECT
 from odemis.gui.cont.acquisition.overview_stream_acq import (
     OverviewStreamAcquiController, CorrelationDialogController,

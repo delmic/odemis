@@ -35,8 +35,9 @@ import numpy
 import scipy
 
 from odemis import model, util
+from odemis.util.licences import ODEMIS_ADVANCED_FLAG
 from odemis.util import executeAsyncTask
-from odemis.util.driver import ATOL_ROTATION_POS, isInRange, isNearPosition
+from odemis.util.driver import isInRange, isNearPosition
 from odemis.util.transform import get_rotation_transforms
 
 MAX_SUBMOVE_DURATION = 90  # s
@@ -1286,6 +1287,9 @@ class MeteorPostureManager(MicroscopePostureManager):
         # From unknown position we never allow moves, except to the loading position, which we handled above.
         elif source_posture == Posture.UNKNOWN:
             return False
+        # Check if the hardware or license allows for the posture.
+        if target_posture not in self.postures:
+            return False
         # For FIB-view FM we only allow to go to and from the milling posture.
         elif source_posture != Posture.MILLING and target_posture == Posture.FIB_VIEW_FM:
             return False
@@ -1608,7 +1612,7 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
         finally:
             try:
                 self._update_posture(self.stage.position.value)
-                self._enforce_scan_rotation(target_posture)
+                self._enforce_scan_rotation(self.current_posture.value)
             except Exception as e:
                 logging.warning("Failed to update posture after move: %s", e)
 
@@ -1639,12 +1643,13 @@ class MeteorTFS3PostureManager(MeteorTFS1PostureManager):
 
         self.postures = [Posture.SEM_IMAGING, Posture.FM_IMAGING]
         # These positions are "optional", and only used with Odemis advanced
-        if model.MD_FAV_MILL_POS_ACTIVE in stage_md:
-            self.postures.append(Posture.MILLING)
-        if model.MD_FAV_FIB_POS_ACTIVE in stage_md:
-            self.postures.append(Posture.FIB_IMAGING)
-        if model.MD_FAV_MILL_POS_ACTIVE in stage_md and self.has_fib_view_fm_objective:
-            self.postures.append(Posture.FIB_VIEW_FM)
+        if ODEMIS_ADVANCED_FLAG:
+            if model.MD_FAV_MILL_POS_ACTIVE in stage_md:
+                self.postures.append(Posture.MILLING)
+            if model.MD_FAV_FIB_POS_ACTIVE in stage_md:
+                self.postures.append(Posture.FIB_IMAGING)
+            if model.MD_FAV_MILL_POS_ACTIVE in stage_md and self.has_fib_view_fm_objective:
+                self.postures.append(Posture.FIB_VIEW_FM)
 
         # Hack warning: during initialization of the transforms, the offset is computed by calling
         # to_posture(), which calls _transform_from_sem_to_fm() for the SEM->FM transform. If
@@ -2145,7 +2150,7 @@ class MeteorZeiss1PostureManager(MeteorPostureManager):
         finally:
             try:
                 self._update_posture(self.stage.position.value)
-                self._enforce_scan_rotation(target_posture)
+                self._enforce_scan_rotation(self.current_posture.value)
             except Exception as e:
                 logging.warning("Failed to update posture after move: %s", e)
 
@@ -2191,11 +2196,13 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
 
         # Automatic conversion to sample-stage axes
         self.postures = [Posture.SEM_IMAGING, Posture.FM_IMAGING]
-        if model.MD_FAV_MILL_POS_ACTIVE in stage_md:
-            self.postures.append(Posture.MILLING)
-            self.postures.append(Posture.TRENCHING)
-        if model.MD_FAV_MILL_POS_ACTIVE in stage_md and self.has_fib_view_fm_objective:
-            self.postures.append(Posture.FIB_VIEW_FM)
+        # The milling-related postures are only available with Odemis advanced
+        if ODEMIS_ADVANCED_FLAG:
+            if model.MD_FAV_MILL_POS_ACTIVE in stage_md:
+                self.postures.append(Posture.MILLING)
+                self.postures.append(Posture.TRENCHING)
+            if model.MD_FAV_MILL_POS_ACTIVE in stage_md and self.has_fib_view_fm_objective:
+                self.postures.append(Posture.FIB_VIEW_FM)
 
         self.linked_axes = ["y", "z"]
         # The setter of self.milling_angle sets the milling angle metadata, which is used to update the transformation parameters.
@@ -2837,7 +2844,7 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
         finally:
             try:
                 self._update_posture(self.stage.position.value)
-                self._enforce_scan_rotation(target_posture)
+                self._enforce_scan_rotation(self.current_posture.value)
             except Exception as e:
                 logging.warning("Failed to update posture after move: %s", e)
 
@@ -3095,7 +3102,7 @@ class MeteorJeol1PostureManager(MeteorPostureManager):
         finally:
             try:
                 self._update_posture(self.stage.position.value)
-                self._enforce_scan_rotation(target_posture)
+                self._enforce_scan_rotation(self.current_posture.value)
             except Exception as e:
                 logging.warning("Failed to update posture after move: %s", e)
 
