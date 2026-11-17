@@ -53,7 +53,7 @@ from odemis.acq.milling.system_state import capture_system_state, validate_syste
 from odemis.acq.move import Posture, FM_POSTURES
 from odemis.gui import model as guimod
 from odemis.gui.comp.popup import show_message
-from odemis.gui.conf.licences import LICENCE_MILLING_ENABLED
+from odemis.util.licences import LICENCE_MILLING_ENABLED
 from odemis.gui.cont.cryo_project import get_feature_dir, sanitize_feature_name, save_project, trash_feature_dir
 from odemis.gui.model import TOOL_FEATURE, TOOL_NONE
 from odemis.gui.util import call_in_wx_main
