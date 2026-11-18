@@ -26,8 +26,6 @@ Odemis module can invoke to capture a labelled data sample. Serialisation
 happens asynchronously in a background daemon thread; the caller returns
 immediately.
 """
-from __future__ import annotations
-
 import configparser
 import json
 import logging

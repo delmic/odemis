@@ -30,7 +30,6 @@ from odemis.util.weak import WeakMethod, WeakRefLostError
 import os
 import threading
 import types
-import sys
 import zmq
 from scipy.spatial import distance
 
@@ -715,10 +714,6 @@ class _NotifyingList(list):
     __imul__ = _call_with_notifier(list.__imul__)
     __setitem__ = _call_with_notifier(list.__setitem__)
     __delitem__ = _call_with_notifier(list.__delitem__)
-    if sys.version_info[0] < 3:
-        # unused since Python 3 (setitem and delitem are used)
-        __setslice__ = _call_with_notifier(list.__setslice__)
-        __delslice__ = _call_with_notifier(list.__delslice__)
 
     append = _call_with_notifier(list.append)
     extend = _call_with_notifier(list.extend)

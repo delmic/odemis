@@ -32,13 +32,7 @@ from ._static import *
 from ._sync import *
 from ._projection import *
 
-import sys
-import abc
-
-if sys.version_info >= (3, 4):
-    ABC = abc.ABC
-else:
-    ABC = abc.ABCMeta('ABC', (object,), {'__slots__': ()})
+from abc import ABC
 
 # Generic cross-cut types
 class OpticalStream(ABC):

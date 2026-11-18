@@ -20,7 +20,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 import logging
 import os
-import sys
 import unittest
 
 import odemis
@@ -33,9 +32,6 @@ CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share
 SPARC2_HWSYNC_CONFIG = CONFIG_PATH + "sim/sparc2-nidaq-sim.odm.yaml"
 
 
-# Skip if ubuntu is 20.04 or lower, as nidaqmx does not work there
-# Check using the python version, because that's easier than checking the OS version
-@unittest.skipIf(sys.version_info < (3, 9), "nidaqmx does not work for Ubuntu 20.04 or lower")
 class SPARC2HwSyncTestCase(BaseSPARCTestCase):
     """
     Tests to be run with a (simulated) SPARCv2 using a hardware trigger between the

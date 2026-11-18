@@ -865,9 +865,8 @@ class BugreporterFrame(wx.Frame):
                      "dialog-info")
         notif.show()
 
-        # On Ubuntu 18.04, with wxPython 4.0.1, the notification immediately hides
-        # if the application is closed. So we just hide the window, and wait a little
-        # while (5 s) before closing the window.
+        # On Ubuntu, with wxPython, the notification immediately hides if the application is closed.
+        # So first just hide the window, and wait a little while (5 s) before closing the window.
         self.Hide()
         wx.CallLater(5 * 1000, self.Destroy)
 

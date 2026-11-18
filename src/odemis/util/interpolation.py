@@ -79,8 +79,8 @@ def interpolate_z_stack(da: model.DataArray,
     logging.info(f"Interpolating z-stack from {pixelsize_in:.2e} to {pixelsize_out:.2e} with method {method}")
     interpolated = z_interpolation(da, pixelsize_in, pixelsize_out, method=method)
 
-    # add back channel dimension # Note: axis = (0, 1) not supported on 20.04
-    interpolated = numpy.expand_dims(numpy.expand_dims(interpolated, axis=0), axis=0)
+    # add back the channel and time dimensions
+    interpolated = numpy.expand_dims(interpolated, axis=(0, 1))
 
     # update metadata
     md = copy.deepcopy(da.metadata)

@@ -7,7 +7,7 @@ Include docstrings for all functions and classes, using the reStructuredText fie
 Do not put the type information in the docstring (it is in the type hints).
 Do not use any other inline formatting markers (no backticks, no asterisks, no Markdown) in docstrings.
 
-Code should be valid for Python 3.8 and above.
+Code should be valid for Python 3.10 and above.
 
 For file paths, use `pathlib.Path`, unless interfacing with existing code that uses `os.path` strings.
 

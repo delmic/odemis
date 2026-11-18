@@ -67,10 +67,7 @@ T = TypeVar("T")
 # helper functions
 def pairwise(iterable: Iterable[T]) -> Iterable[Tuple[T, T]]:
     """s -> (s0,s1), (s1,s2), (s2, s3), ..."""
-    # will be added to itertools in Python 3.10
-    a, b = itertools.tee(iterable)
-    next(b, None)
-    return zip(a, b)
+    return itertools.pairwise(iterable)
 
 
 def get_best_dtype_for_acc(idtype, count):

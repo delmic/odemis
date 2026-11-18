@@ -26,7 +26,6 @@ from enum import Enum
 from typing import Deque, List, Optional, Tuple, Union
 
 import numpy
-import scipy
 import wx
 from scipy.spatial import cKDTree
 from shapely.geometry import Point, Polygon
@@ -34,8 +33,6 @@ from shapely.geometry import Point, Polygon
 from odemis import model, util
 from odemis.gui.comp.overlay.base import Vec, WorldOverlay
 
-scipy_version = tuple(map(int, scipy.__version__.split(".")))
-scipy_old_ckdtree = scipy_version < (1, 6, 0)
 # The number of undo actions stored in the stack
 UNDO_STACK_DEPTH = 25
 # Named tuple for elements stored in undo and redo stacks
@@ -299,15 +296,8 @@ class ShapesOverlay(WorldOverlay):
 
         if v_centers:
             v_centers_kdtree = cKDTree(v_centers)
-            # NOTE: Starting SciPy v1.6.0 the `n_jobs` argument will be renamed `workers`
-            # Ubuntu 20.04: v1.3.3 -> n_jobs
-            # Ubuntu 22.04: v1.8.0 -> workers or n_jobs
-            # Ubuntu 24.04: v1.11.4 -> workers
             # Query the 4 nearest centers to the given view position
-            if scipy_old_ckdtree:
-                distances, indices = v_centers_kdtree.query(numpy.array(v_pos), k=4, n_jobs=-1)
-            else:
-                distances, indices = v_centers_kdtree.query(numpy.array(v_pos), k=4, workers=-1)
+            distances, indices = v_centers_kdtree.query(numpy.array(v_pos), k=4, workers=-1)
             # Position in physical coordinates because shape points are in physical coordinates
             p_pos = self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size())
             pos = Point(p_pos)
