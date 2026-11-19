@@ -32,10 +32,11 @@ from cam_test_abs import (VirtualStaticTestCam, VirtualTestCam,
                           VirtualTestSynchronized)
 from odemis import model
 from odemis.driver import andorcam2
+from odemis.util import driver
 
 logging.basicConfig(level=logging.DEBUG,
                     format="%(asctime)s  %(levelname)-7s %(module)-15s: %(message)s",
-                    # force=True  # Overwrite the default logging set by importing other module (Py 3.8+)
+                    force=True  # Overwrite the logging configuration, even if already set by an imported module
                     )
 
 # Export TEST_NOHW=1 to force using only the simulator and skipping test cases
@@ -100,6 +101,63 @@ class TestAndorCam2(VirtualTestCam, unittest.TestCase):
     """
     camera_type = CLASS
     camera_kwargs = KWARGS
+
+    def test_memory(self):
+        """
+        Test that the camera does not leak memory when acquiring images
+        """
+        self.camera.exposureTime.value = self.camera.exposureTime.range[0]
+
+        # Use the camera once to initialize it, and avoid counting the initialization memory usage
+        im = self.camera.data.get()
+
+        m_start = driver.readMemoryUsage()
+        t_end = time.time() + 30
+        data_size = 0
+        for i in range(200):
+            if time.time() > t_end:
+                self.fail("Expected to acquire 200 images in < 30s, but only got %d" % i)
+            im = self.camera.data.get()
+            data_size += im.nbytes
+
+        m_end = driver.readMemoryUsage()
+        logging.info("Memory usage after %d frames: %s MB, %s MB received", i + 1, (m_end - m_start) / 1024**2, data_size / 1024**2)
+        # Should be less than a third the total data size, as the frames should be released after a while
+        self.assertLess(m_end - m_start, data_size / 3,
+                        f"Expected memory usage to be less than {(data_size / 3) / 1024**2} MB, "
+                        f"but got {(m_end - m_start) / 1024**2} MB")
+
+    def test_memory_sub(self):
+        """
+        Test that the camera does not leak memory when acquiring images
+        """
+        self.camera.exposureTime.value = self.camera.exposureTime.range[0]
+
+        # Use the camera once to initialize it, and avoid counting the initialization memory usage
+        im = self.camera.data.get()
+
+        m_start = driver.readMemoryUsage()
+        n_frames = 200
+        self.left = n_frames
+        self.camera.data.subscribe(self.receive_image)
+
+        for i in range(30):
+            # end early if it's already finished
+            if self.left == 0:
+                break
+            time.sleep(1)
+
+        self.camera.data.unsubscribe(self.receive_image)
+        self.assertEqual(self.left, 0, "Expected to receive %d images, but got %d" % (n_frames, n_frames - self.left))
+
+        res = self.camera.resolution.value
+        data_size = n_frames * res[0] * res[1] * 2  # assuming 16 bits pixel
+
+        m_end = driver.readMemoryUsage()
+        logging.info("Memory usage: %s MB, %s MB received", (m_end - m_start) / 1024**2, data_size / 1024**2)
+        self.assertLess(m_end - m_start, data_size / 3,
+                        f"Expected memory usage to be less than {(data_size / 3) / 1024**2} MB, "
+                        f"but got {(m_end - m_start) / 1024**2} MB")
 
 
 class TestAndorCam2HwTrigger(unittest.TestCase):
