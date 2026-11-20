@@ -2216,8 +2216,7 @@ class AndorCam2(model.DigitalCamera):
         size (2-tuple of int): width, height
         return an ndarray
         """
-        p = cast(cbuffer, POINTER(c_uint16))
-        ndbuffer = numpy.ctypeslib.as_array(p, (size[1], size[0])) # numpy shape is H, W
+        ndbuffer = numpy.ctypeslib.as_array(cbuffer).reshape(size[1], size[0])  # numpy shape is H, W
         dataarray = model.DataArray(ndbuffer, metadata)
         return dataarray
 
@@ -3448,13 +3447,12 @@ class FakeAndorV2DLL(object):
         return self.GetMostRecentImage16(cbuffer, size)
 
     def GetMostRecentImage16(self, cbuffer, size):
-        p = cast(cbuffer, POINTER(c_uint16))
         res = ((self.roi[1] - self.roi[0] + 1) // self.binning[0],
                (self.roi[3] - self.roi[2] + 1) // self.binning[1])
         if res[0] * res[1] != size.value:
             raise ValueError("res %s != size %d" % (res, size.value))
         # TODO: simulate binning by summing data and clipping
-        ndbuffer = numpy.ctypeslib.as_array(p, (res[1], res[0]))
+        ndbuffer = numpy.ctypeslib.as_array(cbuffer).reshape(res[1], res[0])
         ndbuffer[...] = self._data[self.roi[2] - 1:self.roi[3]:self.binning[1],
                                    self.roi[0] - 1:self.roi[1]:self.binning[0]]
 
