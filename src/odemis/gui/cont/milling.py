@@ -29,7 +29,6 @@ This module contains classes to control the actions related to the milling.
 import logging
 import os
 from concurrent.futures import CancelledError
-from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
 import wx
@@ -1543,6 +1542,7 @@ class AutomatedMillingController:
         self._panel.txt_automated_milling_est_time.Hide()
         self._panel.txt_automated_milling_left_time.Show()
         self._panel.gauge_automated_milling.Show()
+        self._panel.btn_automated_milling_cancel.Enable()
         self._panel.btn_automated_milling_cancel.Show()
         self._tab_data.main.is_acquiring.value = True
         self._tab_data.main.is_milling.value = True
@@ -1564,12 +1564,16 @@ class AutomatedMillingController:
         )
 
         @call_in_wx_main
-        def _update_progress(future, start, end):
+        def _update_progress(future: model.ProgressiveFuture, elapsed: float, remaining: float) -> None:
+            """Display milling progress using elapsed and remaining durations.
+
+            :param future: Milling future supplying the status and current feature.
+            :param elapsed: Elapsed milling duration in seconds.
+            :param remaining: Estimated duration left in seconds.
+            """
             if hasattr(future, "msg"):
-                startdt = datetime.fromtimestamp(start).strftime('%Y-%m-%d_%H-%M-%S')
-                enddt = datetime.fromtimestamp(end).strftime('%Y-%m-%d_%H-%M-%S')
-                now = datetime.now().timestamp()
-                logging.info(f"automated milling update: {future.msg}, {startdt}, {enddt}, {end-now} seconds remaining")
+                logging.info("Automated milling update: %s, %.1f s elapsed, %.1f s remaining",
+                             future.msg, elapsed, remaining)
                 self._panel.txt_automated_milling_status.SetLabel(future.msg)
 
             if hasattr(future, "current_feature"):
@@ -1611,9 +1615,13 @@ class AutomatedMillingController:
         self._panel.txt_automated_milling_est_time.SetLabel(milling_status_txt)
         self._panel.txt_automated_milling_status.SetLabel(milling_status_txt)
 
-    def _cancel_automated_milling(self, _):
-        """
-        called when the button "Cancel" is pressed
+    def _cancel_automated_milling(self, evt: wx.Event) -> None:
+        """Request cancellation while keeping controls busy until cleanup finishes.
+
+        :param evt: Event from the automated milling cancel button.
         """
         logging.debug("Cancelling automated milling.")
-        self.automation_future.cancel()
+        if self.automation_future.cancel():
+            self.automation_future.msg = "Canceling milling..."
+            self._panel.txt_automated_milling_status.SetLabel(self.automation_future.msg)
+            self._panel.btn_automated_milling_cancel.Disable()

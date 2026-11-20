@@ -22,6 +22,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 import json
 import logging
 import math
+import threading
 import unittest
 from concurrent import futures
 from copy import deepcopy
@@ -703,10 +704,9 @@ class TestMillingAPICompatibility(unittest.TestCase):
 
     def setUp(self):
         self.microscope = TescanMicroscopeStub()
-        for name in ("get", "set", "run_milling", "stop_milling"):
+        for name in ("get", "set", "run_milling", "stop_milling", "finish_milling"):
             setattr(self.microscope, name, mock.Mock())
         self.microscope.get.return_value = (1e-6, 2e-6)
-        self.microscope.connection = mock.Mock()
         self.rect = SimpleNamespace(left=0.25, top=0.25, width=0.5, height=0.5)
         self.stage = SimpleNamespace(name="Test stage", alignment=SimpleNamespace(rect=self.rect),
                                      milling=SimpleNamespace(milling_channel="ION"), imaging=SimpleNamespace())
@@ -727,15 +727,17 @@ class TestMillingAPICompatibility(unittest.TestCase):
                                                                  microscope_state=self.recorded_microscope_state))
 
     def _strategy(self, microscope: TescanMicroscopeStub, stage: SimpleNamespace,
-                  asynch: bool = False) -> None:
-        """Emulate the strategy interface shared by supported fibsemOS versions.
+                  asynch: bool = False, stop_event: Optional[threading.Event] = None) -> None:
+        """Emulate the cancellable fibsemOS strategy interface.
 
         :param microscope: External microscope stub used for milling.
         :param stage: Milling stage containing the converted reference image.
         :param asynch: Whether to run milling asynchronously.
+        :param stop_event: Event shared with the manager's cancellation callback.
         """
         self.assertIs(stage.reference_image, self.ref_image)
         self.assertFalse(asynch)
+        self.assertIs(stop_event, self.manager._stop_event)
         microscope.run_milling()
 
     def _local_converter(self, image: model.DataArray, system_state: dict,
@@ -796,7 +798,7 @@ class TestMillingAPICompatibility(unittest.TestCase):
                 self.assertEqual(self.feature.reference_image.shape, (6, 8))
                 self.capture.assert_called_once_with()
                 self.restore.assert_called_once_with(self.restoration_state)
-                self.microscope.connection.DrawBeam.UnloadLayer.assert_called()
+                self.microscope.finish_milling.assert_called_with(imaging_current=None, imaging_voltage=30e3)
                 self.microscope.set.assert_called_with("shift", value=(1e-6, 2e-6), beam_type="ION")
                 self.assertFalse(self.manager._active)
 
@@ -891,12 +893,38 @@ class TestMillingAPICompatibility(unittest.TestCase):
 
     def test_cleanup_failure_preserves_milling_error(self):
         """A pattern cleanup error must not replace the original milling error."""
-        self.microscope.connection.DrawBeam.UnloadLayer.side_effect = RuntimeError("Cleanup failed")
+        self.microscope.finish_milling.side_effect = RuntimeError("Cleanup failed")
         strategy = mock.create_autospec(self._strategy, side_effect=TypeError("Milling failed"))
         with self.assertRaisesRegex(TypeError, "Milling failed"):
             self._run_with_api(strategy)
         self.restore.assert_called_once_with(self.restoration_state)
         self.microscope.set.assert_called_once_with("shift", value=(1e-6, 2e-6), beam_type="ION")
+        self.assertFalse(self.manager._active)
+
+    def test_strategy_cancellation_restores_state(self):
+        """Translate cooperative cancellation and restore settings without starting another stage."""
+        strategy = mock.create_autospec(self._strategy, side_effect=fibsemos.OperationCancelledError())
+        with self.assertRaises(futures.CancelledError):
+            self._run_with_api(strategy, stages=2)
+        strategy.assert_called_once()
+        self.microscope.run_milling.assert_not_called()
+        self.microscope.stop_milling.assert_called_once_with()
+        self.restore.assert_called_once_with(self.restoration_state)
+        self.assertFalse(self.manager._active)
+
+    def test_cancellation_during_final_stage(self):
+        """Report cancellation even when the final strategy returns normally after stopping."""
+        def cancel_milling() -> None:
+            """Request cancellation while the external milling operation is running."""
+            self.assertTrue(self.manager.cancel(self.manager._future))
+            self.assertTrue(self.manager._stop_event.is_set())
+
+        self.microscope.run_milling.side_effect = cancel_milling
+        strategy = mock.create_autospec(self._strategy, side_effect=self._strategy)
+        with self.assertRaises(futures.CancelledError):
+            self._run_with_api(strategy)
+        self.microscope.finish_milling.assert_called_once_with(imaging_current=None, imaging_voltage=30e3)
+        self.restore.assert_called_once_with(self.restoration_state)
         self.assertFalse(self.manager._active)
 
     def test_restoration_failure_is_reported(self):
