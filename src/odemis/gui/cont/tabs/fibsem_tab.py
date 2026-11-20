@@ -32,6 +32,7 @@ import odemis.gui.cont.views as viewcont
 import odemis.gui.model as guimod
 import odemis.gui.util as guiutil
 from odemis import model
+from odemis.acq.milling import is_milling_enabled
 from odemis.acq.move import Posture, MILLING_RANGE
 from odemis.acq.stream import (
     FIBStream,
@@ -43,7 +44,6 @@ from odemis.acq.stream import (
 from odemis.gui import conf
 from odemis.gui.comp.buttons import BTN_TOGGLE_COMPLETE, BTN_TOGGLE_OFF, BTN_TOGGLE_PROGRESS
 from odemis.gui.conf.data import get_local_vas
-from odemis.util.licences import LICENCE_FIBSEM_ENABLED, LICENCE_MILLING_ENABLED
 from odemis.gui.cont import milling, settings
 from odemis.gui.cont.acquisition.cryo_acq import CryoAcquiController
 from odemis.gui.cont.features import CryoFeatureController
@@ -52,6 +52,7 @@ from odemis.gui.cont.tabs.tab import Tab
 from odemis.gui.model import TabName, TOOL_ACT_ZOOM_FIT
 from odemis.gui.util import call_in_wx_main
 from odemis.util.dataio import data_to_static_streams
+from odemis.util.licences import LICENCE_FIBSEM_ENABLED
 
 
 FIBSEM_POSTURES = [Posture.SEM_IMAGING, Posture.MILLING, Posture.FIB_IMAGING, Posture.TRENCHING]
@@ -218,7 +219,7 @@ class FibsemTab(Tab):
         """Hide/Disable milling controls when fib view is not selected"""
         # is_fib_view = issubclass(view.stream_classes, FIBStream)
         is_fib_view = view == self.panel.vp_secom_br.view
-        self.panel.fp_milling.Show(is_fib_view and LICENCE_MILLING_ENABLED)
+        self.panel.fp_milling.Show(is_fib_view and is_milling_enabled())
         # TODO: activate the corresponding channel on xtui
 
         self.tab_data_model.is_sem_active_view = view == self.panel.vp_secom_tl.view
@@ -235,7 +236,7 @@ class FibsemTab(Tab):
         live = issubclass(view.stream_classes, LiveStream)
         self.panel.fp_secom_streams.Show(live)
         self.panel.fp_acquisitions.Show(live)
-        self.panel.fp_automation.Show(not live and LICENCE_MILLING_ENABLED)
+        self.panel.fp_automation.Show(not live and is_milling_enabled())
         self.panel.fp_acquired.Show(not live)
 
     def _update_current_stream(self, view) -> None:

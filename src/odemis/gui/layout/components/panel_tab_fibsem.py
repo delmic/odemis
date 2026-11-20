@@ -1057,54 +1057,6 @@ class PnlTabFibsem(wx.Panel):
                 border=self._theme.spacing_standard,
             )
 
-            self.btn_run_milling = create_text_button(
-                controls_panel,
-                LABEL_MILL,
-                height=48,
-                text_colour=self._theme.button_text,
-                contrast_text_colour=self._theme.button_text_contrast,
-                face_colour="blue",
-                icon="ico_milling.png",
-                font_size=self._theme.font_size_primary_action,
-                contrast=True,
-            )
-            self.btn_run_milling.Hide()
-            controls_sizer.Add(
-                self.btn_run_milling,
-                flag=wx.ALL | wx.EXPAND,
-                border=self._theme.spacing_standard,
-            )
-
-            self.txt_milling_est_time = create_label(
-                controls_panel,
-                LABEL_ESTIMATED_TIME,
-                self._theme.text_primary,
-            )
-            self.txt_milling_est_time.Hide()
-            controls_sizer.Add(
-                self.txt_milling_est_time,
-                flag=wx.TOP | wx.LEFT,
-                border=17,
-            )
-            controls_sizer.Add(
-                self._build_milling_progress_row(controls_panel),
-                flag=wx.EXPAND,
-            )
-
-            self.btn_milling_cancel = create_text_button(
-                controls_panel,
-                LABEL_CANCEL,
-                height=24,
-                text_colour=self._theme.button_text,
-                contrast_text_colour=self._theme.button_text_contrast,
-            )
-            self.btn_milling_cancel.Hide()
-            controls_sizer.Add(
-                self.btn_milling_cancel,
-                flag=wx.TOP,
-                border=12,
-            )
-
         controls_panel.SetSizer(controls_sizer)
         self.fp_milling.add_item(controls_panel)
 
@@ -1117,41 +1069,6 @@ class PnlTabFibsem(wx.Panel):
         self.pnl_patterns.SetForegroundColour(self._theme.button_text)
         self.pnl_patterns.SetBackgroundColour(self._theme.section_header)
         self.fp_milling.add_item(self.pnl_patterns)
-
-    def _build_milling_progress_row(self, parent: wx.Window) -> wx.Sizer:
-        """Build milling-series progress controls.
-
-        :param parent: Parent window.
-        :returns: Milling-series progress row.
-        """
-        with hbox() as sizer:
-            with vbox() as gauge_sizer:
-                self.gauge_milling_series = wx.Gauge(
-                    parent,
-                    range=100,
-                    size=(-1, 10),
-                    style=wx.GA_SMOOTH,
-                )
-                self.gauge_milling_series.Hide()
-                gauge_sizer.Add(
-                    self.gauge_milling_series,
-                    proportion=1,
-                    flag=wx.TOP,
-                    border=self._theme.spacing_standard,
-                )
-
-                self.txt_milling_series_left_time = create_label(
-                    parent, "", self._theme.text_primary
-                )
-                self.txt_milling_series_left_time.Hide()
-                gauge_sizer.Add(
-                    self.txt_milling_series_left_time,
-                    proportion=1,
-                    flag=wx.TOP,
-                    border=self._theme.spacing_standard,
-                )
-            sizer.Add(gauge_sizer, flag=wx.TOP, border=-8)
-        return sizer
 
 
 if __name__ == "__main__":

@@ -49,11 +49,11 @@ from odemis.acq.feature import (
     constrain_milling_alignment_area,
     get_feature_position_at_posture,
 )
+from odemis.acq.milling import is_milling_enabled
 from odemis.acq.milling.system_state import capture_system_state, validate_system_state
 from odemis.acq.move import Posture, FM_POSTURES
 from odemis.gui import model as guimod
 from odemis.gui.comp.popup import show_message
-from odemis.util.licences import LICENCE_MILLING_ENABLED
 from odemis.gui.cont.cryo_project import get_feature_dir, sanitize_feature_name, save_project, trash_feature_dir
 from odemis.gui.model import TOOL_FEATURE, TOOL_NONE
 from odemis.gui.util import call_in_wx_main
@@ -127,7 +127,7 @@ class CryoFeatureController(object):
             self.pm.current_posture.subscribe(self._update_ctrl_feature_z)
         if fibsem_mode:
             self._panel.btn_feature_save_position.Bind(wx.EVT_BUTTON, self.save_milling_position)
-            self._panel.btn_feature_save_position.Show(LICENCE_MILLING_ENABLED)
+            self._panel.btn_feature_save_position.Show(is_milling_enabled())
             self.pm.current_posture.subscribe(self._on_posture_change)
 
         # Track previous posture so we can detect FM → SEM/FIB transitions.

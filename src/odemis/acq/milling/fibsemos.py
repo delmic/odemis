@@ -92,7 +92,7 @@ try:
     from fibsem.utils import load_microscope_configuration
     FIBSEMOS_INSTALLED = True
 except ImportError as e:
-    logging.warning(f"fibsemOS is not installed or not available: {e}")
+    logging.info(f"fibsemOS is not installed or not available: {e}")
     FIBSEMOS_INSTALLED = False
     # Hack to let _RectanglePatternGroup load without fibsemOS.
     RectanglePattern = object

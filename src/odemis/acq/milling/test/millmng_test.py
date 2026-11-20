@@ -41,7 +41,7 @@ from odemis.acq.feature import (
     FEATURE_ACTIVE,
     FEATURE_DEACTIVE,
 )
-from odemis.acq.milling import DEFAULT_MILLING_TASKS_PATH, millmng
+from odemis.acq.milling import DEFAULT_MILLING_TASKS_PATH, fibsemos, millmng
 from odemis.acq.milling.millmng import (
     AutomatedMillingManager, MillingWorkflowTask, get_associated_tasks, run_automated_milling, status_map,
 )
@@ -97,6 +97,14 @@ class TestAssociatedMillingTasks(unittest.TestCase):
 
 class TestMillingReferenceAcquisition(unittest.TestCase):
     """Check reference acquisition failures and cancellation without a hardware backend."""
+
+    def test_no_fibsemos_fails_before_moving(self):
+        """Refuse to start automated milling without fibsemOS, before any hardware move."""
+        stage = simulated.Stage("stage", "stage-bare", axes={"x"})
+        self.addCleanup(stage.terminate)
+        with mock.patch.object(millmng, "FIBSEMOS_INSTALLED", False):
+            with self.assertRaises(RuntimeError):
+                run_automated_milling([], stage, None, None, [])
 
     def test_partial_acquisition_preserves_error(self):
         """Report the original FIB timeout when only the SEM image was acquired."""
@@ -197,6 +205,7 @@ class TestMillingFuture(unittest.TestCase):
 
 
 # NOTE: Require xt simulator to be running
+@unittest.skipUnless(fibsemos.FIBSEMOS_INSTALLED, "fibsemOS is not installed")
 class TestAutomatedMillingManager(unittest.TestCase):
 
     """
