@@ -1,5 +1,6 @@
 # This microscope file uses simplified simulated stage and not the realistic one.
 # The acquisition happens through a simulated SEM & FIB.
+# Milling uses the independent fibsemOS Demo simulator.
 
 "METEOR TESCAN FIBSEM Full-Sim": {
     class: Microscope,
@@ -23,6 +24,11 @@
 "FIB": {
     class: simsem.SimSEM,
     role: fibsem,
+    metadata: {
+        CALIB: {
+            "milling_backend": "fibsemos-demo",
+        },
+    },
     init: {
         image: "sparc-etd-gold-balls.h5", # any large 16 bit image is fine
     },
