@@ -1,7 +1,9 @@
 """
 Created on 8 Jan 2025
 
-Copyright © 2025 Delmic
+@author: Alexéy Ilyushkin
+
+Copyright © 2025-2026 Alexéy Ilyushkin, Delmic
 
 This file is part of Odemis.
 
@@ -38,7 +40,12 @@ try:
     from tdct.util import multi_channel_get_z_guass
     TDCT_INSTALLED = True
 except ImportError:
-    logging.warning("3DCT package is not installed, please install to enabled correlation.")
+    logging.info("3DCT is unavailable; using Odemis correlation.")
+
+# Prefer 3DCT when installed; otherwise use Odemis correlation.
+# Set False to use Odemis correlation even when 3DCT is installed, then restart Odemis.
+USE_TDCT = True
+
 
 def _convert_das_to_numpy_stack(das: List[model.DataArray]) -> numpy.ndarray:
     """Convert a list of DataArrays to a numpy stack.
@@ -134,7 +141,9 @@ def run_tdct_correlation(fib_coords: numpy.ndarray,
                            path: str,
                            rotation_init: Optional[Sequence[float]] = None,
                            restrict_rotations: Optional[float] = None) -> Dict[str, Any]:
-    """Run 3DCT Multi-point correlation between FIB and FM images.
+    """Run multipoint correlation, preferring 3DCT when enabled and installed.
+
+    Odemis correlation is used when USE_TDCT is False or 3DCT is unavailable.
     The 2D projection cannot distinguish a plane from its mirror image (theta and -theta), so with
     the default initialisation the solver may return either of the two. To select one, a rough
     initial rotation can be provided: the optimiser then only searches around it.
@@ -150,7 +159,7 @@ def run_tdct_correlation(fib_coords: numpy.ndarray,
     :param restrict_rotations: size of the neighbourhood around rotation_init in which the
         initial guesses are drawn (Cayley-Klein units, 0.1 ~ 15 deg, 0.2 ~ 30 deg). If None, the 3DCT default (0.1) is used.
         Only used when rotation_init is set. It is not a hard bound on the final rotation.
-    :return: the correlation results
+    :returns: the correlation results
         output:
             error:
                 delta_2d: reprojection error between 3D and 2D coordinates
@@ -166,7 +175,17 @@ def run_tdct_correlation(fib_coords: numpy.ndarray,
                 rotation_quaternion: transformation rotation (quaternion)
                 scale: transformation scale
                 translation_around_rotation_center: transformation translation
+    :raises ValueError: if Odemis correlation receives invalid inputs.
+    :raises RuntimeError: if the Odemis solver fails to converge.
     """
+
+    if not (USE_TDCT and TDCT_INSTALLED):
+        from odemis.acq.align.correlation import run_correlation as correlate
+
+        return correlate(
+            fib_coords, fm_coords, poi_coords, fib_image, fm_image, path,
+            rotation_init=rotation_init, restrict_rotations=restrict_rotations,
+        )
 
     # fib coordinates need to be x, y, z for 3DCT
     if fib_coords.shape[-1] == 2:
