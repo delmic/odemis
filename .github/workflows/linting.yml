@@ -47,9 +47,17 @@ jobs:
           done
 
       - name: Install pngcheck
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y pngcheck
+        # Retry, as network issues sometimes cause temporary failures
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          retry_wait_seconds: 30
+          command: |
+            set -e
+            echo 'Acquire::Retries "5"; Acquire::http::Timeout "30";' | sudo tee /etc/apt/apt.conf.d/80-retries
+            sudo apt-get update --error-on=any
+            sudo apt-get install -y pngcheck
 
       - name: Check PNG files have no metadata
         run: |
