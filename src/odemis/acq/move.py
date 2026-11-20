@@ -28,15 +28,15 @@ import threading
 from abc import abstractmethod
 from concurrent.futures import CancelledError, Future
 from concurrent.futures._base import CANCELLED, FINISHED, RUNNING
+from dataclasses import dataclass
 from enum import Enum
 from typing import Dict, Union, Optional, Sequence, List, Tuple
 
 import numpy
-import scipy
 
 from odemis import model, util
 from odemis.util import executeAsyncTask
-from odemis.util.driver import ATOL_ROTATION_POS, isInRange, isNearPosition
+from odemis.util.driver import ATOL_ROTATION_POS, estimate_distance, isInRange, isNearPosition
 from odemis.util.transform import get_rotation_transforms
 
 MAX_SUBMOVE_DURATION = 90  # s
@@ -72,14 +72,45 @@ class Posture(str, Enum):
 FM_POSTURES = {Posture.FM_IMAGING, Posture.FIB_VIEW_FM}
 
 RTOL_PROGRESS = 0.3
-# Compensation factor for a rotational move to take the same amount of time as a linear move
-ROT_DIST_SCALING_FACTOR = 0.06  # m/rad, 1° ~ 1mm
 SAFETY_MARGIN_5DOF = 100e-6  # m
 SAFETY_MARGIN_3DOF = 200e-6  # m
 
 # The possible axes for linear and rotational movements
 LINEAR_AXES = {'x', 'y', 'z', 'm'}
 ROTATION_AXES = {'rx', 'ry', 'rz', 'rm'}
+
+
+@dataclass
+class MoveSegment:
+    """
+    One step of a larger movement: a single component moving from a start to an end position.
+    """
+    component: model.HwComponent
+    start: Dict[str, float]
+    end: Dict[str, float]
+
+    def length(self) -> float:
+        """
+        :return: the estimated distance between the start and end positions (>= 0)
+        """
+        return estimate_distance(self.start, self.end)
+
+    def progress(self, current: Dict[str, float]) -> Optional[float]:
+        """
+        Compute how far the component is on the way between start and end.
+        :param current: the current position of the component
+        :return: the ratio of progress (0 <= float <= 1), or None if the current position is
+        too far from the line between start and end (ie, not on this path)
+        """
+        total_length = self.length()
+        if total_length == 0:  # start == end
+            return 1.0
+        from_start = estimate_distance(self.start, current)
+        to_end = estimate_distance(current, self.end)
+        # On the path if from_start + to_end is about the total length
+        if util.almost_equal(from_start + to_end, total_length, rtol=RTOL_PROGRESS):
+            return min(from_start / total_length, 1.0)  # clip in case slightly > 1
+        return None
 
 # Tolerance for the difference between the current position and the target position
 # these should only be used for TFS1MeteorPostureManager _transform_from_sem_to_fm / _transform_from_fm_to_sem
@@ -199,57 +230,6 @@ class MicroscopePostureManager:
         :param target: target posture
         """
         pass
-
-    def get_movement_progress(self, current_pos: Dict[str, float], start_pos: Dict[str, float],
-                              end_pos: Dict[str, float]) -> Union[float, None]:
-        """
-        Compute the position on the path between start and end positions of a stage movement (such as Posture.LOADING to Posture.IMAGING)
-        If it’s too far from the line between the start and end positions, then it’s considered out of the path.
-        :param current_pos: (dict str->float) Current position of the stage
-        :param start_pos: (dict str->float) A position to start the movement from
-        :param end_pos: (dict str->float) A position to end the movement to
-        :return: (0<=float<=1, or None) Ratio of the progress, None if it's too far away from of the path
-        """
-        # Get distance for current point in respect to start and end
-        from_start = self._get_distance(start_pos, current_pos)
-        to_end = self._get_distance(current_pos, end_pos)
-        total_length = self._get_distance(start_pos, end_pos)
-        if total_length == 0:  # same value
-            return 1
-        # Check if current position is on the line from start to end position
-        # That would happen if start_to_current +  current_to_start = total_distance from start to end
-        if util.almost_equal((from_start + to_end), total_length, rtol=RTOL_PROGRESS):
-            return min(from_start / total_length, 1.0)  # Clip in case from_start slightly > total_length
-        else:
-            return None
-
-    def _get_distance(self, start: dict, end: dict) -> float:
-        """
-        Calculate the difference between two 3D postures with x, y, z, m, rx, ry, rz, rm axes
-        or a subset of these axes. If there are no common axes between the two passed
-        postures, an error would be raised. The scaling factor of the rotation error is in meter.
-        start, end (dict -> float): a 3D posture
-        return (float >= 0): the difference between two 3D postures.
-        """
-        axes = start.keys() & end.keys()
-        lin_axes = axes & LINEAR_AXES  # only the axes found on both points
-        rot_axes = axes & ROTATION_AXES  # only the axes found on both points
-        if not lin_axes and not rot_axes:
-            raise ValueError("No common axes found between the two postures")
-
-        lin_error = 0
-        # for the linear error
-        if lin_axes:
-            sp = numpy.array([start[a] for a in sorted(lin_axes)])
-            ep = numpy.array([end[a] for a in sorted(lin_axes)])
-            lin_error = scipy.spatial.distance.euclidean(ep, sp)
-
-        # for the rotation error: just the sum of all rotations
-        rot_dist = sum(abs(util.rot_shortest_move(start[a], end[a])) for a in rot_axes)
-        # Convert to a value which has the same order of magnitude as linear distances (in a microscope)
-        rot_error = ROT_DIST_SCALING_FACTOR * rot_dist
-
-        return lin_error + rot_error
 
     def check_stage_metadata(self, required_keys: set):
         """
@@ -554,8 +534,8 @@ class MeteorPostureManager(MicroscopePostureManager):
             logging.warning("Cannot detect current grid in posture %s: %s", current_posture, ex)
             return None
 
-        distance_to_grid1 = self._get_distance(current_position, grid1_pos)
-        distance_to_grid2 = self._get_distance(current_position, grid2_pos)
+        distance_to_grid1 = estimate_distance(current_position, grid1_pos)
+        distance_to_grid2 = estimate_distance(current_position, grid2_pos)
 
         return Posture.GRID_1 if distance_to_grid2 > distance_to_grid1 else Posture.GRID_2
 
