@@ -823,6 +823,17 @@ class TUCAM_ELEMENT(Structure):
 BUFFER_CALLBACK  = CFUNCTYPE(c_void_p)
 CONTEXT_CALLBACK = CFUNCTYPE(c_void_p)
 
+SDK_INIT_TIMEOUT_MS = 5000  # cameras can take a few seconds to be detected after power on
+FIND_CAMERA_RETRIES = 5  # number of attempts to find a camera
+FIND_CAMERA_RETRY_DELAY = 2  # s
+
+# The SDK is global to the process: it must be initialized once, and uninitialized
+# only when the last camera is released.
+_sdk_lock = threading.Lock()
+_sdk_users = 0
+_sdk_nr_cameras = 0
+
+
 class TUCamDLL:
     def __init__(self):
         try:
@@ -1210,11 +1221,68 @@ class TUCamDLL:
 
         # Path where the library will store the camera current settings
         config_path = tempfile.gettempdir()  # Always writable, and always forgotten next run => perfect!
-        init_args = TUCAM_INIT(0, config_path.encode('utf-8'))
-        self.TUCAM_Api_Init(pointer(init_args), 1000)  # timeout 1s
-        self._nrCameras = init_args.uiCamCount
+        self._config_path = config_path
+        self._nrCameras = 0
+        self._sdk_acquired = False
+        self._acquire_sdk()
 
         self._lock = threading.Lock()
+
+    def _init_sdk(self) -> None:
+        """
+        Initialize the SDK and read the number of cameras detected.
+        """
+        init_args = TUCAM_INIT(0, self._config_path.encode('utf-8'))
+        self.TUCAM_Api_Init(pointer(init_args), SDK_INIT_TIMEOUT_MS)
+        self._nrCameras = init_args.uiCamCount
+
+    def _acquire_sdk(self) -> None:
+        """
+        Take a reference on the SDK, which is initialized process-wide only by the first user.
+        The SDK is global, so initializing/uninitializing it for each camera would break the
+        other cameras already in use.
+        """
+        global _sdk_users, _sdk_nr_cameras
+        with _sdk_lock:
+            if _sdk_users == 0:
+                self._init_sdk()
+                _sdk_nr_cameras = self._nrCameras
+            else:
+                self._nrCameras = _sdk_nr_cameras
+            _sdk_users += 1
+            self._sdk_acquired = True
+
+    def uninit(self) -> None:
+        """
+        Release the reference on the SDK. The SDK is only uninitialized when the last user
+        releases it. Safe to call multiple times.
+        """
+        global _sdk_users
+        with _sdk_lock:
+            if not self._sdk_acquired:
+                return
+            self._sdk_acquired = False
+            _sdk_users -= 1
+            if _sdk_users == 0:
+                self.TUCAM_Api_Uninit()
+
+    def _refresh_cameras(self) -> bool:
+        """
+        Re-enumerate the cameras (to detect cameras which were slow to appear). Only possible
+        if no other camera uses the SDK.
+        :return: True if the enumeration was refreshed.
+        """
+        global _sdk_nr_cameras
+        with _sdk_lock:
+            if _sdk_users != 1 or not self._sdk_acquired:
+                return False
+            try:
+                self.TUCAM_Api_Uninit()
+            except Exception as ex:
+                logging.debug("Ignoring Api_Uninit() failure: %s", ex)
+            self._init_sdk()
+            _sdk_nr_cameras = self._nrCameras
+            return True
 
     @staticmethod
     def _errcheck(result, func, args):
@@ -1459,6 +1527,24 @@ class TUCamDLL:
             logging.debug("Open camera succeeded, Idx=%d" % idx)
 
     def find_camera(self, sn: Optional[str] = None) -> None:
+        """
+        Same as _find_camera_once(), but retries a few times (re-enumerating the cameras if
+        possible), as a camera can take several seconds to be detected after being powered on.
+        :raises TUCamError: if no matching camera could be opened.
+        """
+        for i in range(FIND_CAMERA_RETRIES):
+            try:
+                self._find_camera_once(sn)
+                return
+            except TUCamError as ex:
+                if i == FIND_CAMERA_RETRIES - 1:
+                    raise
+                logging.info("Failed to find Tucsen camera %s (attempt %d/%d): %s",
+                             sn, i + 1, FIND_CAMERA_RETRIES, ex)
+                time.sleep(FIND_CAMERA_RETRY_DELAY)
+                self._refresh_cameras()
+
+    def _find_camera_once(self, sn: Optional[str] = None) -> None:
         """
         Open the camera with the given serial number. The cameras are opened one at a time
         to read their serial number, and the non-matching ones are closed immediately.
@@ -1866,6 +1952,9 @@ class FakeTUCamDLL:
         self._capture_lock = threading.Lock()
 
     def TUCAM_Api_Uninit(self):
+        pass
+
+    def uninit(self) -> None:
         pass
 
     def open_camera(self, idx: int):
@@ -2310,7 +2399,7 @@ class TUCam(model.DigitalCamera):
             except TUCamError as ex:
                 logging.debug("Ignoring close_camera() failure: %s", ex)
             try:
-                self._dll.TUCAM_Api_Uninit()
+                self._dll.uninit()
             except Exception as ex:
                 # library throws weird exceptions if init failed. ignore this.
                 logging.debug("Ignoring Api_Uninit() failure: %s", ex)
