@@ -43,7 +43,7 @@ from odemis.acq.stream import (
 from odemis.gui import conf
 from odemis.gui.comp.buttons import BTN_TOGGLE_COMPLETE, BTN_TOGGLE_OFF, BTN_TOGGLE_PROGRESS
 from odemis.gui.conf.data import get_local_vas
-from odemis.gui.conf.licences import LICENCE_FIBSEM_ENABLED, LICENCE_MILLING_ENABLED
+from odemis.util.licences import LICENCE_FIBSEM_ENABLED, LICENCE_MILLING_ENABLED
 from odemis.gui.cont import milling, settings
 from odemis.gui.cont.acquisition.cryo_acq import CryoAcquiController
 from odemis.gui.cont.features import CryoFeatureController
