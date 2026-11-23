@@ -331,7 +331,12 @@ def _apply_spot_size_correction(dimension: float, correction: float, dimension_n
 
 
 def _convert_rectangle_pattern(p: RectanglePatternParameters) -> 'RectanglePattern':
-    """Convert an Odemis rectangle pattern to a fibsemOS RectanglePattern."""
+    """Convert a rectangle while preserving its counterclockwise physical rotation.
+
+    :param p: Rectangle pattern to convert.
+    :returns: fibsemOS rectangle with its rotation converted to degrees.
+    :raises ValueError: If spot size correction makes a scan dimension non-positive.
+    """
     correction = p.spot_size_correction.value
     return RectanglePattern(
         width=_apply_spot_size_correction(p.width.value, correction, "rectangle width"),
