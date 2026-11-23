@@ -531,10 +531,6 @@ class FibsemTab(Tab):
         """Open the SLM alignment workflow dialog."""
         wx.CallAfter(self._acquisition_controller.open_slm_alignment_dialog)
 
-    def _on_slm_alignment(self, _: wx.Event) -> None:
-        """Open the SLM alignment workflow dialog."""
-        wx.CallAfter(self._acquisition_controller.open_slm_alignment_dialog)
-
     def terminate(self):
         self.pm.current_posture.unsubscribe(self._on_current_posture)
         # make sure the streams are stopped

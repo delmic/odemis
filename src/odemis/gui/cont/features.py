@@ -206,7 +206,6 @@ class CryoFeatureController(object):
         stage_position = {axis: value for axis, value in stage_position.items() if axis in self.pm.stage.axes}
         focuser = self._main_data_model.get_posture_focuser()
         fm_focus_position = feature.get_fm_focus_position(current_posture, focuser)
-        fm_focus_position = feature.get_fm_focus_position(current_posture, self._main_data_model.focus)
 
         # move to feature position
         logging.info(f"Moving to position: {stage_position}, focus: {fm_focus_position}, posture: {current_posture}")
