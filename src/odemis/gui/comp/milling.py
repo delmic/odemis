@@ -56,11 +56,21 @@ class MillingTaskPanel(wx.Panel):
         self.task = task
 
         # header
-        title = self._add_side_label(task.name)
+        # Set the font before adding it to the sizer, so that the sizer uses the right best size,
+        # and span both columns so that the name is not limited by the label column width.
+        title = wx.StaticText(self._panel, -1, task.name)
         font = title.GetFont()
         font.SetWeight(wx.FONTWEIGHT_BOLD)
         font.SetPointSize(font.GetPointSize() + 1)
         title.SetFont(font)
+        # GTK keeps the size measured with the default font: force measuring again with the bold font
+        title.SetLabel(task.name)
+        text_w, text_h = title.GetTextExtent(task.name)
+        best = title.GetBestSize()
+        title.SetMinSize((max(best.width, text_w) + 10, max(best.height, text_h)))
+        # EXPAND: the label takes the full width of the two columns, even if its measured size is off
+        self.gb_sizer.Add(title, (self.num_rows, 0), span=(1, 2),
+                          flag=wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
         self.num_rows += 1
 
         # map of control fields
