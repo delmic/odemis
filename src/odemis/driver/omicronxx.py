@@ -67,6 +67,9 @@ class USBAccesser(object):
         raise IOError: if port cannot be used
         """
         self.port = port
+        # Initialized early, so that terminate() (via __del__) works even if opening fails
+        self._serial = None
+        self._file = None
         self._serial = self._openSerialPort(port)
         self.flushInput() # can have some \x00 bytes at the beginning
         self.driver = driver.getSerialDriver(port)
@@ -186,7 +189,7 @@ class DevxX(object):
 #     Note: On USB, the device sends (by default) regularly "ad-hoc" messages,
 #       to indicate new values.
 
-    def __init__(self, acc, channel=None):
+    def __init__(self, acc, channel=None, req_sn=None):
         """
         acc (USBAccesser): an opened connection
         channel (None or 0 <= int): If None, will expect to drive directly a
@@ -194,7 +197,10 @@ class DevxX(object):
           drive the channel corresponding to the given number. If 0, will
           expect to just get enough information on the channels provided by the
           device (it will provide .channels with the available channel numbers).
+        req_sn (None or str): if not None, the serial number the device must have.
+          It's checked before any state-changing command is sent to the device.
         raise IOError if no device answering or not a xX device
+        raise LookupError if req_sn is specified and the device has a different one
         """
         self.acc = acc
         self._channel = channel
@@ -229,6 +235,8 @@ class DevxX(object):
 
         sn = self.GetSerialNumber()
         self.sn = sn
+        if req_sn is not None and sn != str(req_sn):
+            raise LookupError("Device on port %s has S/N %s, not %s" % (acc.port, sn, req_sn))
         if channel in (None, 0):
             self.hwVersion = "%s v%s (s/n %s)" % (hwname, fw, sn)
         else:  # Sub channel
@@ -829,9 +837,10 @@ class HubxX(GenericxX):
             # Get the "master" device
             try:
                 acc = USBAccesser(n)
-                d = DevxX(acc, 0)
-                if sn is not None and d.sn != str(sn):
-                    logging.debug("Hub on port %s has S/N %s, looking for %s", n, d.sn, sn)
+                try:
+                    d = DevxX(acc, 0, sn)
+                except LookupError as ex:
+                    logging.debug("%s, looking for %s", ex, sn)
                     acc.terminate()  # free the port, and continue searching
                     continue
                 mdevs.append(d)
