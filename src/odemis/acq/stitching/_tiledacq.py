@@ -62,7 +62,6 @@ from odemis.acq.stream import (
     util,
 )
 from odemis.model import DataArray
-from odemis.util import dataio as udataio
 from odemis.util import img, linalg, rect_intersect
 from odemis.util.focus import MeasureOpticalFocus
 from odemis.util.img import assembleZCube
@@ -246,7 +245,7 @@ class TiledAcquisitionTask(object):
             if not filename:
                 raise ValueError("Filename is not found on log path.")
             self._exporter = dataio.find_fittest_converter(filename)
-            self._fn_bs, self._fn_ext = udataio.splitext(filename)
+            self._fn_bs, self._fn_ext = dataio.splitext(filename)
             self._log_dir = os.path.dirname(self._log_path)
             self._save_executor = ThreadPoolExecutor(max_workers=5)
 

@@ -156,9 +156,7 @@ class AnchoredEstimator(object):
                         logging.warning("Cannot save drift corrector images: filename is empty in log path %s", self._log_path)
                     else:
                         exporter = dataio.find_fittest_converter(log_path.name)
-                        # Imported here to avoid a circular import (odemis.util.dataio imports odemis.acq.stream)
-                        from odemis.util.dataio import splitext
-                        root, ext = splitext(self._log_path)
+                        root, ext = dataio.splitext(self._log_path)
                         exporter.export(f"{root}{self._image_counter:05d}{ext}", data)
                         self._image_counter += 1
                 except Exception:

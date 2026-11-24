@@ -24,6 +24,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 import importlib
 import logging
 import os
+from typing import Tuple
 
 from ._base import *
 from odemis.dataio import tiff
@@ -38,7 +39,7 @@ from odemis.dataio import tiff
 #  if it doesn't support writing, then is has no .export(), and if it doesn't
 #  support reading, then it has not read_data().
 _iomodules = ["tiff", "stiff", "hdf5", "png", "csv", "catmaid", "ij_tiff"]
-__all__ = _iomodules + ["get_available_formats", "get_converter", "find_fittest_converter"]
+__all__ = _iomodules + ["get_available_formats", "get_converter", "find_fittest_converter", "splitext"]
 
 
 def get_available_formats(mode=os.O_RDWR, allowlossy=False):
@@ -146,3 +147,25 @@ def find_fittest_converter(filename, default=tiff, mode=os.O_WRONLY, allowlossy=
         conv = default
 
     return conv
+
+
+def splitext(path: os.PathLike) -> Tuple[str, str]:
+    """
+    Split a pathname into basename + ext (.XXX).
+    Does pretty much the same as os.path.splitext, but handles "double" extensions
+    like ".ome.tiff".
+    """
+    path = str(path)
+    root, ext = os.path.splitext(path)
+
+    # See if there is a longer extension in the known formats
+    fmts = get_available_formats(mode=os.O_RDWR, allowlossy=True)
+    # Note, this one-liner also works, but brain-teasers are not good code:
+    # max((fe for fes in fmts.values() for fe in fes if path.endswith(fe)), key=len)
+    for fmtexts in fmts.values():
+        for fmtext in fmtexts:
+            if path.endswith(fmtext) and len(fmtext) > len(ext):
+                ext = fmtext
+
+    root = path[:len(path) - len(ext)]
+    return root, ext

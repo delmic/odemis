@@ -25,11 +25,9 @@ import logging
 import math
 import os
 import threading
-import time
 from concurrent import futures
 from concurrent.futures._base import CANCELLED, FINISHED, RUNNING, CancelledError
 from enum import Enum
-from pathlib import Path
 from typing import Dict, List, Tuple, Optional, Callable
 
 from odemis import model
@@ -46,13 +44,13 @@ from odemis.acq.milling import DEFAULT_MILLING_TASKS_PATH
 from odemis.acq.move import Posture, MicroscopePostureManager
 from odemis.acq.stitching._tiledacq import SAFE_REL_RANGE_DEFAULT
 from odemis.acq.stream import Stream, StaticFluoStream, StaticSEMStream, StaticFIBStream
-from odemis.dataio import find_fittest_converter
+from odemis.dataio import find_fittest_converter, splitext
 from odemis.gui.cont.cryo_project import IMG_FILENAME, IMG_IN_FILE_IDS, add_image
 from odemis.model import MD_IN_FILE_INDEX
-from odemis.util import dataio, executeAsyncTask
+from odemis.util import executeAsyncTask
 from odemis.util.comp import generate_zlevels
 from odemis.util import datacollector
-from odemis.util.dataio import data_to_static_streams, open_acquisition, splitext
+from odemis.util.dataio import data_to_static_streams, open_acquisition
 from odemis.util.driver import estimate_stage_movement_time
 from odemis.util.filename import create_filename
 

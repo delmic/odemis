@@ -57,7 +57,6 @@ from odemis.gui.conf.util import label_to_human
 from odemis.gui.plugin import Plugin, AcquisitionDialog
 from odemis.gui.util import call_in_wx_main, formats_to_wildcards
 from odemis.util import limit_invocation
-from odemis.util.dataio import splitext
 from odemis.util.filename import guess_pattern, create_filename, update_counter
 import os
 import queue

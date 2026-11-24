@@ -24,8 +24,8 @@ import logging
 import os
 from typing import Optional
 
-from odemis.dataio import tiff
-from odemis.util.dataio import open_acquisition, splitext
+from odemis.dataio import tiff, splitext
+from odemis.util.dataio import open_acquisition
 from odemis.util.interpolation import multi_channel_interpolation
 
 logging.getLogger().setLevel(level=logging.INFO)

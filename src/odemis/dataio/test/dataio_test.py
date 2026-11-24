@@ -18,7 +18,6 @@ import os
 import re
 import unittest
 import warnings
-from unittest.case import skip
 
 from odemis import dataio
 from odemis.dataio import (find_fittest_converter, get_available_formats,
@@ -48,7 +47,7 @@ class TestDataIO(unittest.TestCase):
 
         # including lossy formats
         all_fmts = get_available_formats(os.O_RDWR, allowlossy=True)
-        self.assertEqual(len(dataio.__all__), len(all_fmts) + 3)
+        self.assertEqual(len(dataio.__all__), len(all_fmts) + 4)
 
     def test_get_converter(self):
         fmts = get_available_formats()

@@ -26,7 +26,7 @@ import wx
 from odemis.gui.model import TabName
 from odemis.gui.plugin import Plugin
 from odemis.model import Microscope
-from odemis.util.dataio import splitext
+from odemis.dataio import splitext
 
 
 class SaveDriftCorrectorImgPlugin(Plugin):

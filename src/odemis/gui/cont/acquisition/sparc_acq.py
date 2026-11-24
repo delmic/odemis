@@ -42,6 +42,7 @@ from odemis.acq import acqmng, stream
 from odemis.model import UNDEFINED_ROI
 from odemis.acq.stream import ScannedTCSettingsStream, ScannedTemporalSettingsStream, \
     TemporalSpectrumSettingsStream, AngularSpectrumSettingsStream
+from odemis.dataio import splitext
 from odemis.gui import conf
 from odemis.gui.model import TabName
 from odemis.gui.comp import popup
@@ -51,7 +52,6 @@ from odemis.gui.util import call_in_wx_main, wxlimit_invocation
 from odemis.gui.util.widgets import ProgressiveFutureConnector, EllipsisAnimator
 from odemis.gui.win.acquisition import ShowAcquisitionFileDialog
 from odemis.util import units
-from odemis.util.dataio import splitext
 from odemis.util.filename import guess_pattern, create_filename, update_counter
 
 
