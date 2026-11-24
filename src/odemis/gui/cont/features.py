@@ -26,9 +26,7 @@ import math
 import os
 from pathlib import Path
 import threading
-from typing import Optional
-
-from typing import Dict
+from typing import Dict, List, Optional
 
 import wx
 
@@ -712,7 +710,7 @@ class CryoFeatureController(object):
         else:
             return feature.fm_focus_position.value
 
-    def _collect_features_in_thread(self, features: list[CryoFeature]) -> None:
+    def _collect_features_in_thread(self, features: List[CryoFeature]) -> None:
         """
         Launch collect_feature_data for all features with collect=True in a background thread.
         :param features: List of features for which to collect data
