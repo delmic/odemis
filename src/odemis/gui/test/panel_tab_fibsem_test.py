@@ -107,6 +107,7 @@ class PnlTabFibsemTest(unittest.TestCase):
             "fp_automation",
             "workflow_features_chk_list",
             "workflow_task_chk_list",
+            "chk_beams_off",
             "btn_run_automated_milling",
             "txt_automated_milling_est_time",
             "gauge_automated_milling",
@@ -157,6 +158,7 @@ class PnlTabFibsemTest(unittest.TestCase):
             wx.Colour(layout.theme.text_primary),
         )
         self.assertTrue(self.panel.chk_move_all_patterns.GetValue())
+        self.assertFalse(self.panel.chk_beams_off.IsChecked())
         self.assertTrue(self.panel.milling_task_chk_list.GetWindowStyleFlag() & wx.LB_EXTENDED)
         selection_tip = self.panel.milling_task_chk_list.GetToolTipText()
         self.assertIn("Ctrl+click to select multiple patterns", selection_tip)

@@ -877,6 +877,19 @@ class PnlTabFibsem(wx.Panel):
                 border=self._theme.spacing_standard,
             )
 
+            self.chk_beams_off = wx.CheckBox(panel, label="Turn off beams after milling")
+            self.chk_beams_off.SetForegroundColour(self._theme.text_primary)
+            self.chk_beams_off.SetValue(False)
+            self.chk_beams_off.SetToolTip(
+                "Turn off the electron and ion beams when automated milling completes or fails. "
+                "Leave them on if milling is canceled."
+            )
+            sizer.Add(
+                self.chk_beams_off,
+                flag=wx.LEFT | wx.RIGHT | wx.TOP | wx.EXPAND,
+                border=self._theme.spacing_standard,
+            )
+
             self.btn_run_automated_milling = create_text_button(
                 panel,
                 LABEL_MILL,

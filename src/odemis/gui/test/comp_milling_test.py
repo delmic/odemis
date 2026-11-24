@@ -14,6 +14,7 @@ See the LICENSE.txt file for details.
 import logging
 import math
 import unittest
+from concurrent.futures import CancelledError
 from types import SimpleNamespace
 from typing import Tuple
 from unittest.mock import Mock, call, patch
@@ -31,6 +32,7 @@ from odemis.acq.milling import DEFAULT_MILLING_TASKS_PATH
 from odemis.acq.milling.patterns import RectanglePatternParameters
 from odemis.acq.milling.tasks import load_milling_tasks
 from odemis.acq.stream import StaticSEMStream
+from odemis.driver.simulated import GenericComponent
 from odemis.gui.comp.overlay._constants import (
     MILLING_ALIGNMENT_AREA_COLOR,
     MILLING_OVERLAY_ACTIVE_OPACITY,
@@ -1703,6 +1705,23 @@ class MillingValidationTestCase(unittest.TestCase):
         )
         self.feature_list.IsChecked.return_value = False
         self.assertIsNone(self.controller._get_invalid_spot_size_correction())
+
+    def test_beam_shutoff_skips_cancellation(self):
+        """Turn off both beams after completion or failure, but not cancellation."""
+        automation = AutomatedMillingController.__new__(AutomatedMillingController)
+        automation._panel = Mock()
+        automation._panel.chk_beams_off.IsChecked.return_value = True
+        beams = [GenericComponent(role, role, vas={"power": {"value": True}}) for role in ("e-beam", "ion-beam")]
+        automation._tab_data = SimpleNamespace(main=SimpleNamespace(
+            ebeam=beams[0], ion_beam=beams[1],
+            is_acquiring=model.BooleanVA(True), is_milling=model.BooleanVA(True)))
+        for exception, expected in ((None, False), (RuntimeError("Milling error"), False), (CancelledError(), True)):
+            with self.subTest(exception=exception):
+                for beam in beams:
+                    beam.power.value = True
+                future = model.InstantaneousFuture(exception=exception)
+                AutomatedMillingController._on_automation_done.__wrapped__(automation, future)
+                self.assertEqual([beam.power.value for beam in beams], [expected, expected])
 
 
 class MillingReferenceStreamTestCase(unittest.TestCase):
