@@ -17,70 +17,52 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
-import copy
 import logging
-import math
-import os
-import statistics
 import threading
 import time
-from concurrent.futures import CancelledError, TimeoutError, ThreadPoolExecutor
+from concurrent.futures import CancelledError, TimeoutError
 from concurrent.futures._base import CANCELLED, FINISHED, PENDING, RUNNING
-from enum import Enum
-from itertools import groupby
 from typing import Dict, List, Optional, Tuple, Union
 
 import numpy
-import psutil
-from scipy.ndimage import binary_fill_holes
-from scipy.spatial import Delaunay
-from shapely.geometry import Polygon, box
 
-from odemis import dataio, model
-from odemis.acq import acqmng
-from odemis.acq.align.autofocus import MTD_EXHAUSTIVE, AutoFocus
+from odemis import model
 from odemis.acq.align.roi_autofocus import (
     autofocus_in_roi,
     estimate_autofocus_in_roi_time,
 )
 from odemis.acq.stitching._constants import (
     REGISTER_GLOBAL_SHIFT,
-    REGISTER_IDENTITY,
     WEAVER_MEAN,
 )
-from odemis.acq.stitching._simple import register, weave
+from odemis.acq.stitching._tiledacq_components import (  # noqa: F401 (some are re-exported)
+    START_INDEX,
+    FocusingMethod,
+    GridPlan,
+    ProgressEstimator,
+    Stitcher,
+    TaskContext,
+    TileAcquirer,
+    TileAcquirerBase,
+    TileHook,
+    TileSaver,
+    build_hooks,
+    get_da_fov,
+    get_fov,
+    guess_smallest_fov,
+)
 from odemis.acq.stream import (
     ARStream,
-    CLStream,
     EMStream,
     FluoStream,
-    MonochromatorSettingsStream,
     MultipleDetectorStream,
     SpectrumStream,
     Stream,
     executeAsyncTask,
-    util,
 )
-from odemis.model import DataArray
-from odemis.util import dataio as udataio
-from odemis.util import img, linalg, rect_intersect
-from odemis.util.focus import MeasureOpticalFocus
-from odemis.util.img import assembleZCube
+from odemis.util import rect_intersect
 from odemis.util.linalg import generate_triangulation_points
-from odemis.util.raster import get_polygon_grid_cells, point_in_polygon
 
-# TODO: Find a value that works fine with common cases
-# Ratio of the allowed difference of tile focus from good focus
-FOCUS_FIDELITY = 0.3
-# Limit focus range, half the margin will be used on each side of initial focus
-FOCUS_RANGE_MARGIN = 100e-6  # m
-# Indicate the number of tiles to skip during focus adjustment
-SKIP_TILES = 3
-# Starting index for the tile acquisition
-# Start with a non-existing tile index so that the first tile is always moved to and acquired
-START_INDEX = (-1, -1)
-
-MOVE_SPEED_DEFAULT = 100e-6  # m/s
 # Default range for the optical focus adjustment
 SAFE_REL_RANGE_DEFAULT = (-50e-6, 50e-6)  # m
 # Maximum distance is used to separate two focus points in overview acquisition using autofocus
@@ -88,326 +70,64 @@ SAFE_REL_RANGE_DEFAULT = (-50e-6, 50e-6)  # m
 MAX_DISTANCE_FOCUS_POINTS = 450e-06  # in m
 
 DEFAULT_FOV = (100e-6, 100e-6) # m
-STITCH_SPEED = 1e8  # px/s
-
-class FocusingMethod(Enum):
-    NONE = 0  # Never auto-focus
-    ALWAYS = 1  # Before every tile
-    # If the previous tile focus level is too far from the original level
-    ON_LOW_FOCUS_LEVEL = 2
-    # Acquisition is done at several zlevels, and they are merged to obtain a focused image
-    MAX_INTENSITY_PROJECTION = 3
 
 
-class TiledAcquisitionTask(object):
+class TiledAcquisitionTask:
     """
-    The goal of this task is to acquire a set of tiles then stitch them together
+    The goal of this task is to acquire a set of tiles then stitch them together.
+    It runs the acquisition loop, and delegates the actual work to collaborators
+    (see _tiledacq_components.py). Use create_tiled_acquisition_task() to build one from the
+    acquisition parameters.
     """
 
-    def __init__(self, streams, stage, region, overlap, settings_obs=None, log_path=None, future=None, zlevels=None,
-                 registrar=REGISTER_GLOBAL_SHIFT, weaver=WEAVER_MEAN, focusing_method=FocusingMethod.NONE,
-                 focus_points=None, focus_range=None, centered_acq=True):
+    def __init__(self, ctx: TaskContext, streams: List[Stream], plan: GridPlan, acquirer: TileAcquirerBase,
+                 hooks: List[TileHook], stitcher: Stitcher, saver: TileSaver, estimator: ProgressEstimator):
         """
+        :param ctx: the context, which holds the future of the task (None for estimation only).
+          It must be the one used to build the other parts.
         :param streams: (list of Streams) the streams to acquire
-        :param stage: (Actuator) the sample stage to move to the possible tiles locations
-        :param region: Either:
-            - (Tuple[float, float, float, float]) Bounding box as (xmin, ymin, xmax, ymax)
-            - (List[Tuple[float, float]]) List of (x, y) points defining a polygon
-        :param overlap: (float) the amount of overlap between each acquisition
-        :param settings_obs: (SettingsObserver or None) class that contains a list of all VAs
-            that should be saved as metadata
-        :param log_path: (string) directory and filename pattern to save acquired images for debugging
-        :param future: (ProgressiveFuture or None) future to track progress, pass None for estimation only
-        :param zlevels: (list(float) or None) focus z positions required zstack acquisition.
-           Currently, can only be used if focusing_method == MAX_INTENSITY_PROJECTION.
-           If focus_points is defined, zlevels is adjusted relative to the focus_points.
-        :param registrar: (REGISTER_* or None) type of registration method. If registrar and weaver are None, do not stitch.
-        :param weaver: (WEAVER_* or None) type of weaving method. If registrar and weaver are None, do not stitch.
-        :param focusing_method: (FocusingMethod) Defines when will the autofocuser be run.
-           The autofocuser uses the first stream with a .focuser.
-           If MAX_INTENSITY_PROJECTION is used, zlevels must be provided too.
-        :param focus_points: (list of tuples) list of focus points corresponding to the known (x, y, z) at good focus.
-              If None, the focus will not be adjusted based on the stage position.
-        :param focus_range: (tuple) tuple defining the focus range for good focus.
-        :param centered_acq: (bool) If True, center the acquisition area on the given region; any extra area is added
-            symmetrically to all sides of the bounding box. If False, the top-left of the acquisition area is aligned
-            with the top-left of the bounding box.
+        :param plan: which tiles to acquire, and how to move to them
+        :param acquirer: acquires the data of one tile
+        :param hooks: (list of TileHook) run, in order, around every tile
+        :param stitcher: sorts the data and stitches the tiles
+        :param saver: saves the tiles for debugging
+        :param estimator: estimates the time and memory
         """
-        self._future = future
+        self._ctx = ctx
         self._streams = streams
-        self._stage = stage
-        self._focus_points = focus_points
-        self._focus_range = focus_range
-        # Average time taken for each tile acquisition
-        self.average_acquisition_time = None
-        self._overlap = overlap
-        self._centered_acq = centered_acq
-        self._polygon = None
-        self._save_executor = None
-        if future is not None:
-            self._future.running_subf: future.Future = model.InstantaneousFuture()
-            self._future._task_lock = threading.Lock()
-            self._future._task_state = PENDING
-
-        # Convert the region input into a polygon
-        self._polygon = self._convert_region_to_polygon(region)
-        xmin, ymin, xmax, ymax = self._polygon.bounds
-        self._area_size = (xmax - xmin, ymax - ymin)
-
-        # Note: we used to change the stream horizontalFoV VA to the max, if available (eg, SEM).
-        # However, it's annoying if the caller actually cares about the FoV (eg,
-        # because it wants a large number of pixels, or there are artifacts at
-        # the largest FoV). In addition, it's quite easy to do for the caller anyway.
-        # Something like this:
-        # for stream in self._streams:
-        #     if model.hasVA(stream, "horizontalFoV"):
-        #         stream.horizontalFoV.value = stream.horizontalFoV.clip(max(self._area_size))
-
-        # Get the smallest field of view
-        self._sfov = self.guessSmallestFov(streams)
-        logging.debug("Smallest FoV: %s", self._sfov)
-
-        self._starting_pos, self._tile_indices = self._get_tile_coverage()
-        self._number_of_tiles = len(self._tile_indices)
-        logging.debug("Calculated number of tiles %s", self._number_of_tiles)
-
-        # save actual time take for tile acquisition, stage movement from one tile to another
-        # and stitching time for each tile. The keys tell the action, i.e. move or stitch and the time
-        # taken for the same action per each tile is saved as a list of floats
-        self._save_time: Dict[str, List[float]] = {}
-
-        # To check and adjust the focus in between tiles
-        if not isinstance(focusing_method, FocusingMethod):
-            raise ValueError(f"focusing_method should be of type FocusingMethod, but got {focusing_method}")
-        self._focusing_method = focusing_method
-        self._focus_stream = next((sd for sd in self._streams if sd.focuser is not None), None)
-        if self._focus_stream:
-            # save initial focus value to be used in the AutoFocus function
-            self._good_focus = self._focus_stream.focuser.position.value['z']
-            focuser_range = self._focus_stream.focuser.axes['z'].range
-            # Calculate the focus range by half the focus margin on each side of good focus
-            focus_rng = (self._good_focus - FOCUS_RANGE_MARGIN / 2, self._good_focus + FOCUS_RANGE_MARGIN / 2)
-            # Clip values with focuser_range
-            self._focus_rng = (max(focus_rng[0], focuser_range[0]), min((focus_rng[1], focuser_range[1])))
-            logging.debug("Calculated focus range ={}".format(self._focus_rng))
-
-            # used in re-focusing method
-            self._focus_points = numpy.array(focus_points) if focus_points else None
-            # triangulate focus points
-            self._tri_focus_points = None
-            if focus_points is not None:
-                if len(focus_points) >= 3:
-                    self._tri_focus_points = Delaunay(self._focus_points[:, :2])
-                elif len(focus_points) == 1:
-                    # Triangulation needs minimum three points to define a plane
-                    # When the number of focus points is less than three
-                    # The focus is set constant and based on a single focus point
-                    pass
-                else:
-                    raise ValueError(f"focus_points length {len(focus_points)} is not supported")
-
-        if focusing_method == FocusingMethod.MAX_INTENSITY_PROJECTION and not zlevels:
-            raise ValueError("MAX_INTENSITY_PROJECTION requires zlevels, but none passed")
-            # Note: we even allow if only one zlevels. It would not do MIP, but
-            # that allows for flexibility where the user explicitly wants to disable
-            # MIP by setting only one zlevel. Same if there is no focuser.
-
-        if zlevels:
-            if self._focus_stream is None:
-                logging.warning("No focuser found in any of the streams, only one acquisition will be performed.")
-            self._zlevels = numpy.asarray(zlevels)
-            self._init_zlevels = numpy.asarray(zlevels)  # zlevels can be relative, therefore keep track of the initial zlevels
-        else:
-            self._zlevels = numpy.empty(0)
-            self._init_zlevels = numpy.empty(0)
-
-        if len(self._zlevels) > 1 and focusing_method != FocusingMethod.MAX_INTENSITY_PROJECTION:
-            raise NotImplementedError(
-                "Multiple zlevels currently only works with focusing method MAX_INTENSITY_PROJECTION")
-
-        # For "ON_LOW_FOCUS_LEVEL" method: a focus level which is corresponding to a in-focus image.
-        self._good_focus_level = None  # float
-
-        # Rough estimate of the stage movement speed, for estimating the extra
-        # duration due to movements
-        self._move_speed = MOVE_SPEED_DEFAULT
-        if model.hasVA(stage, "speed"):
-            try:
-                self._move_speed = (stage.speed.value["x"] + stage.speed.value["y"]) / 2
-            except Exception as ex:
-                logging.warning("Failed to read the stage speed: %s", ex)
-
-        # TODO: allow to change the stage movement pattern
-        self._settings_obs = settings_obs
-
-        self._log_path = log_path
-        if self._log_path:
-            filename = os.path.basename(self._log_path)
-            if not filename:
-                raise ValueError("Filename is not found on log path.")
-            self._exporter = dataio.find_fittest_converter(filename)
-            self._fn_bs, self._fn_ext = udataio.splitext(filename)
-            self._log_dir = os.path.dirname(self._log_path)
-            self._save_executor = ThreadPoolExecutor(max_workers=5)
-
-        self._registrar = registrar
-        self._weaver = weaver
-        self._focus_plane = {}
-
-    def _convert_region_to_polygon(
-            self,
-            region: Union[Tuple[float, float, float, float], List[Tuple[float, float]]]
-        ) -> Polygon:
-        """
-        Convert the region input into a polygon.
-        :param region: Either a bounding box (xmin, ymin, xmax, ymax) or a list of (x, y) points.
-        :return: A polygon representing the region.
-        :raise: ValueError if the region does not form a valid polygon.
-        :raise: ValueError if the region is not a bounding box or a list of points.
-        """
-        if isinstance(region, tuple) and len(region) == 4:
-            # Normalize the bounding box to ensure the order is correct
-            xmin, ymin, xmax, ymax = util.sanitize_rect(region)
-            if region[0] != xmin or region[1] != ymin:
-                logging.warning("Acquisition area %s rearranged into %s", region, (xmin, ymin, xmax, ymax))
-            points = [(xmin, ymin), (xmax, ymin), (xmax, ymax), (xmin, ymax)]
-        elif isinstance(region, list) and all(isinstance(point, tuple) and len(point) == 2 for point in region):
-            points = region
-        else:
-            raise ValueError(
-                "Region must either be a bounding box (xmin, ymin, xmax, ymax) or a list of (x, y) points."
-            )
-
-        polygon = Polygon(points)
-        if not polygon.is_valid:
-            raise ValueError("The provided region does not form a valid polygon.")
-        return polygon
+        self._plan = plan
+        self._acquirer = acquirer
+        self._hooks = hooks
+        self._stitcher = stitcher
+        self._saver = saver
+        self._estimator = estimator
 
     @staticmethod
-    def getFov(sd):
+    def getFov(sd: Union[Stream, model.DataArray]) -> Tuple[float, float]:
         """
-        sd (Stream or DataArray): If it's a stream, it must be a live stream,
+        :param sd: If it's a stream, it must be a live stream,
           and the FoV will be estimated based on the settings.
-        return (float, float): width, height in m
+        :returns: width, height in m
         """
         if isinstance(sd, model.DataArray):
             # The actual FoV, as the data recorded it
-            im_bbox = img.getBoundingBox(sd)
-            logging.debug("Bounding box of stream data: %s", im_bbox)
-            return im_bbox[2] - im_bbox[0], im_bbox[3] - im_bbox[1]
+            return get_da_fov(sd)
         elif isinstance(sd, Stream):
             return get_fov(sd)
         else:
             raise TypeError("Unsupported object")
 
     @classmethod
-    def guessSmallestFov(cls, ss):
+    def guessSmallestFov(cls, ss: List[Stream]) -> Tuple[float, float]:
         """
-        Return (float, float): smallest width and smallest height of all the FoV
+        :returns: smallest width and smallest height of all the FoV
           Note: they are not necessarily from the same FoV.
-        raise ValueError: If no stream selected
+        :raises ValueError: If no stream selected
         """
-        fovs = [cls.getFov(s) for s in ss]
-        if not fovs:
-            raise ValueError("No stream so no FoV, so no minimum one")
+        return guess_smallest_fov(ss)
 
-        return (min(f[0] for f in fovs),
-                min(f[1] for f in fovs))
-
-    def _get_tile_coverage(self) -> Tuple[Dict[str, float], List[Tuple[int, int]]]:
-        """
-        Calculate the exact tiles required to cover the region.
-        return:
-            starting_position: center of the first tile (at the top-left)
-            tile_indices: List of (col, row) indices for the tiles
-        """
-        if self._polygon is None:
-            raise ValueError("Polygon shape is not defined.")
-
-        # The size of the smallest tile, non-including the overlap, which will be
-        # lost (and also indirectly represents the precision of the stage)
-        reliable_fov = ((1 - self._overlap) * self._sfov[0], (1 - self._overlap) * self._sfov[1])
-
-        # Round up the number of tiles needed. With a twist: if we'd need less
-        # than 1% of a tile extra, round down. This handles floating point
-        # errors and other manual rounding when the requested area size is
-        # exactly a multiple of the FoV.
-        area_size = [(s - f * 0.01) if s > f else s
-                     for s, f in zip(self._area_size, reliable_fov)]
-        nx = math.ceil(area_size[0] / reliable_fov[0])
-        ny = math.ceil(area_size[1] / reliable_fov[1])
-
-        # If we have a little bit more tiles than needed, we have two choices
-        # on how to spread them:
-        # 1. Increase the total area acquired (and keep the overlap)
-        # 2. Increase the overlap (and keep the total area)
-        # We pick alternative 1 (no real reason)
-        xmin, ymin, xmax, ymax = self._polygon.bounds
-
-        if self._centered_acq:
-            # Ensure extra acquisition area is symmetric around the center of the acquisition
-            center = ((xmin + xmax) / 2, (ymin + ymax) / 2)
-            total_size = (
-                nx * reliable_fov[0] + self._sfov[0] * self._overlap,
-                ny * reliable_fov[1] + self._sfov[1] * self._overlap,
-            )
-            xmin = center[0] - total_size[0] / 2
-            ymax = center[1] + total_size[1] / 2
-
-        # Create an empty grid for storing intersected tiles
-        # An intersected tile is any tile in the grid that intersects with (or falls within) the given polygon
-        tile_grid = numpy.zeros((ny, nx), dtype=bool)
-
-        # Vectorized conversion of polygon points to grid coordinates
-        points = numpy.array(self._polygon.exterior.coords)
-        rows = numpy.floor((ymax - points[:, 1]) / reliable_fov[1]).astype(int)
-        cols = numpy.floor((points[:, 0] - xmin) / reliable_fov[0]).astype(int)
-
-        # Create array of (row, col) vertices
-        polygon_vertices = numpy.stack((rows, cols), axis=1)
-
-        intersected_tiles = get_polygon_grid_cells(polygon_vertices, include_neighbours=True)
-
-        # The intersected tiles contains tiles which can be inside the polygon, outside the polygon and tiles which
-        # actually intersect with the polygon. We only need the tiles which actually intersect the polygon, to binary
-        # fill the holes and get the tile indices.
-        for row, col in intersected_tiles:
-            if not (0 <= row < ny and 0 <= col < nx):  # Certainly out of the polygon => not worthy to acquire
-                continue
-            # Define the bounds of the current tile
-            tile_bounds = box(
-                xmin + col * reliable_fov[0],
-                ymax - (row + 1) * reliable_fov[1],
-                xmin + (col + 1) * reliable_fov[0],
-                ymax - row * reliable_fov[1]
-            )
-            # Check if the tile intersects with the polygon shape
-            if self._polygon.intersects(tile_bounds):
-                tile_grid[row, col] = True
-
-        # Fill any holes in the grid to get contiguous tiles
-        filled_grid = binary_fill_holes(tile_grid)
-        rows, cols = numpy.nonzero(filled_grid)
-        tile_indices = list(zip(cols.tolist(), rows.tolist()))
-
-        # Calculate the starting position (top-left of the grid)
-        if self._centered_acq:
-            starting_position = {
-                "x": xmin + reliable_fov[0] / 2,
-                "y": ymax - reliable_fov[1] / 2
-            }
-        else:
-            starting_position = {
-                "x": xmin + self._sfov[0] / 2,
-                "y": ymax - self._sfov[1] / 2
-            }
-
-        return starting_position, tile_indices
-
-    def _cancelAcquisition(self, future):
-        """
-        Canceler of acquisition task.
-        """
+    def _cancel_acquisition(self, future: model.ProgressiveFuture):
+        """Canceler of acquisition task."""
         logging.debug("Canceling acquisition...")
 
         with future._task_lock:
@@ -418,104 +138,21 @@ class TiledAcquisitionTask(object):
             logging.debug("Acquisition cancelled.")
         return True
 
-    def _sort_tile_indices_zigzag(self, tile_indices: List[Tuple[int, int]]) -> List[Tuple[int, int]]:
+    def _update_progress(self, tile_number: int):
         """
-        Sort the given tile indices in a zigzag scanning order.
-        # Below is an example for a 5x3 tile grid:
-        # A-->-->-->--v
-        #             |
-        # v--<--<--<---
-        # |
-        # --->-->-->--Z
-        :param tile_indices: List of (int, int) tuples representing the tile indices
-        :return: List of (int, int) tuples sorted in a zigzag scanning order
+        Update the progress bar, before acquiring the tile
         """
-        # Sort tile_indices by row first, then column
-        tile_indices.sort(key=lambda t: (t[1], t[0]))
+        self._ctx.future.set_progress(
+            remaining_time=self._estimator.estimate_time(self._plan.number_of_tiles - tile_number))
 
-        # Group indices by rows and apply zigzag pattern
-        sorted_indices = []
-        for row, group in groupby(tile_indices, key=lambda t: t[1]):
-            group = list(group)
-            # Reverse the order of the group if the row is odd
-            if row % 2 == 1:
-                group.reverse()
-            sorted_indices.extend(group)
-
-        return sorted_indices
-
-    def _moveToTile(self, idx, prev_idx, tile_size):
-        """
-        Move the stage to the tile position
-        :param idx: (tuple (float, float)) current index of tile
-        :param prev_idx: (tuple (float, float)) previous index of tile
-        :param tile_size: (tuple (float, float)) total tile size
-        """
-        overlap = 1 - self._overlap
-        # don't move on the axis that is not supposed to have changed
-        m = {}
-        idx_change = numpy.subtract(idx, prev_idx)
-        if idx[0] != prev_idx[0]:  # x-axis changed
-            m["x"] = self._starting_pos["x"] + idx[0] * tile_size[0] * overlap
-        if idx[1] != prev_idx[1]:  # y-axis changed
-            m["y"] = self._starting_pos["y"] - idx[1] * tile_size[1] * overlap
-
-        # Compute the time to wait
-        if prev_idx == START_INDEX:
-            # If this is the first tile, wait for a long time to allow the stage to move
-            # This is needed because the current stage position may be far from the first tile
-            # so it may take a long time to move there
-            timeout = 100  # s
-        else:
-            # For any tile after the first, don't wait forever for the stage to move,
-            # guess the time it should take and then give a large margin
-            t = math.hypot(abs(idx_change[0]) * tile_size[0] * overlap,
-                           abs(idx_change[1]) * tile_size[1] * overlap) / self._move_speed
-            timeout = 5 * t + 3  # s
-
-        logging.debug("Moving to tile %s at %s m", idx, m)
-        for i in range(3):  # Try moving up to 3 times
-            if self._future._task_state == CANCELLED:
-                raise CancelledError()
-            self._future.running_subf = self._stage.moveAbs(m)
-            try:
-                self._future.running_subf.result(timeout)
-            except ValueError:  # Typically, asked to move to the wrong place, let's give up
-                raise
-            except CancelledError:
-                logging.warning("Move to tile %s cancelled", idx)
-                raise
-            except TimeoutError:
-                self._future.running_subf.cancel()
-                pos = self._stage.position.value
-                pos_xy = (pos["x"], pos["y"])
-                logging.warning("Failed to move to tile %s within %s s, now at %s%s",
-                                idx, timeout, pos_xy, ", will retry" if i < 2 else "")
-                time.sleep(0.1)
-                continue
-            except Exception as ex:
-                pos = self._stage.position.value
-                pos_xy = (pos["x"], pos["y"])
-                logging.warning("Failed to move to tile %s, now at %s: %s%s",
-                                idx, pos_xy, ex, ", will retry" if i < 2 else "")
-                time.sleep(0.1)
-                continue
-
-            # The moved finished successfully, just stop trying to move, we are done!
-            break
-        else:
-            # We exhausted all retries, we failed to move to the tile, so we cancel the acquisition
-            logging.error("Failed to move to tile %s after 3 trials", idx)
-            raise OSError(f"Failed to move to tile {idx} after 3 trials")
-
-    def _sortDAs(self, das, ss):
+    def _sort_das(self, das: List[model.DataArray], ss: List[Stream]) -> List[model.DataArray]:
         """
         Sorts das based on priority for stitching, i.e. largest SEM da first, then
         other SEM das, and finally das from other streams.
-        das: list of DataArrays
-        ss: streams from which the das were extracted
+        :param das: list of DataArrays
+        :param ss: streams from which the das were extracted
 
-        returns: list of DataArrays, reordered input
+        :returns: list of DataArrays, reordered input
         """
         # Add the ACQ_TYPE metadata (in case it's not there)
         # In practice, we check the stream the DA came from, and based on the stream
@@ -550,7 +187,7 @@ class TiledAcquisitionTask(object):
             else:
                 logging.warning("Couldn't find the stream for DA of shape %s", da.shape)
 
-        # # Remove the DAs we don't want to (cannot) stitch
+        # Remove the DAs we don't want to (cannot) stitch
         das = [da for da in das if da.metadata[model.MD_ACQ_TYPE] \
                not in (model.MD_AT_AR, model.MD_AT_SPECTRUM)]
 
@@ -573,504 +210,67 @@ class TiledAcquisitionTask(object):
         das = tuple(das)
         return das
 
-    def _updateFov(self, das, sfov):
-        """
-        Checks the fov and update it based on the data arrays
-        das: list of DataArryas
-        sfov: previous estimate for the fov
-        :returns same fov or updated from the data arrays
-        """
-        afovs = [self.getFov(d) for d in das]
-        asfov = (min(f[0] for f in afovs),
-                 min(f[1] for f in afovs))
-        if not all(util.almost_equal(e, a) for e, a in zip(sfov, asfov)):
-            logging.warning("Unexpected min FoV = %s, instead of %s", asfov, sfov)
-            sfov = asfov
-        return sfov
-
-    def _estimateStreamPixels(self, s):
-        """
-        return (int): the number of pixels the stream will generate during an
-          acquisition
-        """
-        px = 0
-        if isinstance(s, MultipleDetectorStream):
-            for st in s.streams:
-                # For the EMStream of a SPARC MDStream, it's just one pixel per
-                # repetition (excepted in case  of fuzzing, but let's be optimistic)
-                if isinstance(st, (EMStream, CLStream, MonochromatorSettingsStream)):
-                    px += 1
-                else:
-                    px += self._estimateStreamPixels(st)
-
-            if hasattr(s, 'repetition'):
-                px *= s.repetition.value[0] * s.repetition.value[1]
-
-            return px
-        elif isinstance(s, (ARStream, SpectrumStream)):
-            # Temporarily reports 0 px, as we don't stitch these streams for now
-            return 0
-
-        if hasattr(s, 'emtResolution'):
-            px = numpy.prod(s.emtResolution.value)
-        elif hasattr(s, 'detResolution'):
-            px = numpy.prod(s.detResolution.value)
-        elif model.hasVA(s.detector, "resolution"):
-            px = numpy.prod(s.detector.resolution.value)
-        elif model.hasVA(s.emitter, "resolution"):
-            px = numpy.prod(s.emitter.resolution.value)
-        else:
-            # This shouldn't happen, but let's "optimistic" by assuming it'll
-            # only acquire one pixel.
-            logging.info("Resolution of stream %s cannot be determined.", s)
-            px = 1
-
-        return px
-
-    MEMPP = 22  # bytes per pixel, found empirically
-
-    def estimateMemory(self):
+    def estimateMemory(self) -> Tuple[bool, float]:
         """
         Makes an estimate for the amount of memory that will be consumed during
         stitching and compares it to the available memory on the computer.
-        :returns (bool) True if sufficient memory available, (float) estimated memory
+        :returns: if sufficient memory available, estimated memory
         """
-        mem_sufficient = True
-        mem_est = 0.0
-        if self._registrar is not None and self._weaver is not None:
-            # Number of pixels for acquisition
-            pxs = sum(self._estimateStreamPixels(s) for s in self._streams)
-            pxs *= self._number_of_tiles
+        return self._estimator.estimate_memory()
 
-            # Memory calculation
-            mem_est = pxs * self.MEMPP
-            mem_computer = psutil.virtual_memory().total
-            logging.debug("Estimating %g GB needed, while %g GB available",
-                          mem_est / 1024 ** 3, mem_computer / 1024 ** 3)
-            # Assume computer is using 2 GB RAM for odemis and other programs
-            mem_sufficient = mem_est < mem_computer - (2 * 1024 ** 3)
-
-        return mem_sufficient, mem_est
-
-    def estimateTime(self, remaining=None):
+    def estimateTime(self, remaining: Optional[int] = None) -> float:
         """
         Estimates duration for acquisition and stitching.
         :param remaining: (int >= 0) The number of remaining tiles
-        :returns: (float) estimated required time
+        :returns: estimated required time
         """
-        if remaining is None:
-            remaining = self._number_of_tiles
+        return self._estimator.estimate_time(remaining)
 
-        # Use observed per-tile time once available, otherwise estimate from stream settings.
-        # Note: average_acquisition_time is measured from wall-clock time and already
-        # includes per-tile movement, so move_time must not be added again in that case.
-        if self.average_acquisition_time is not None:
-            acq_time = self.average_acquisition_time * remaining
-            move_time = 0  # already included in average_acquisition_time
-        else:
-            zlevels_dict = {s: self._zlevels for s in self._streams
-                            if isinstance(s, (FluoStream))}
-            acq_time = acqmng.estimateZStackAcquisitionTime(self._streams, zlevels_dict)
-            acq_time = acq_time * remaining
-
-            try:
-                # move_speed is a default speed but not an actual stage speed due to which
-                # extra time is added based on observed time taken to move stage from one tile position to another
-                # remaining - 1: current tile is part of remaining, so no need to move there.
-                # Use max(remaining - 1, 0) to avoid negative move_time when remaining == 0.
-                move_time = max(self._sfov) * max(remaining - 1, 0) / self._move_speed + 0.3 * remaining
-            except ValueError:  # no current streams
-                move_time = 0.5
-
-        # Estimate stitching time based on number of pixels in the overlapping part.
-        # Always included (stitch happens once, after all tiles) so it stays in the
-        # estimate until acquisition is fully done.
-        stitch_time = 0
-        if self._registrar is not None and self._weaver is not None:
-            max_pxs = 0
-            for s in self._streams:
-                for sda in s.raw:
-                    pxs = sda.shape[0] * sda.shape[1]
-                    if pxs > max_pxs:
-                        max_pxs = pxs
-
-            stitch_time = (self._number_of_tiles * max_pxs * self._overlap) / STITCH_SPEED
-
-        logging.info(f"The computed time in seconds for tiled acquisition for {remaining} tiles for move is {move_time},"
-                     f" acquisition is {acq_time}")
-
-        return acq_time + move_time + stitch_time
-
-    def _save_tiles(self, ix, iy, das, stream_cube_id=None):
+    def _acquire_tiles(self):
         """
-        Save the acquired data array to disk (for debugging)
-        """
-
-        def save_tile(ix, iy, das, stream_cube_id=None):
-            if stream_cube_id is not None:
-                # Indicate it's a stream cube in the file name
-                fn_tile = "%s-cube%d-%.5dx%.5d%s" % (self._fn_bs, stream_cube_id, ix, iy, self._fn_ext)
-            else:
-                fn_tile = "%s-%.5dx%.5d%s" % (self._fn_bs, ix, iy, self._fn_ext)
-            logging.debug("Will save data of tile %dx%d to %s", ix, iy, fn_tile)
-            self._exporter.export(os.path.join(self._log_dir, fn_tile), das)
-
-        # Run in a separate thread via the executor
-        self._save_executor.submit(save_tile, ix, iy, das, stream_cube_id)
-
-    def _acquireStreamCompressedZStack(self, i, ix, iy, stream):
-        """
-        Acquire a compressed zstack image for the given stream.
-        The method does the following:
-            - Move focus over the list of zlevels
-            - For each focus level acquire image of the stream
-            - Construct xyz cube for the acquired zstack
-            - Compress the cube into a single image using 'maximum intensity projection'
-        :return DataArray: Acquired da for the current tile stream
-        """
-        zstack = []
-        for z in self._zlevels:
-            logging.debug(f"Moving focus for tile {ix}x{iy} to {z}.")
-            stream.focuser.moveAbsSync({'z': z})
-            da = self._acquireStreamTile(i, ix, iy, stream)
-            zstack.append(da)
-
-        if self._future._task_state == CANCELLED:
-            raise CancelledError()
-        logging.debug(
-            f"Zstack acquisition for tile {ix}x{iy}, stream {stream.name} finished, compressing data into a single image.")
-        # Convert zstack into a cube
-        fm_cube = assembleZCube(zstack, self._zlevels)
-        # Save the cube on disk if a log path exists
-        if self._log_path:
-            self._save_tiles(ix, iy, fm_cube, stream_cube_id=self._streams.index(stream))
-
-        if self._focusing_method == FocusingMethod.MAX_INTENSITY_PROJECTION:
-            # Compress the cube into a single image along z-axis (using maximum intensity projection)
-            mip_image = img.max_intensity_projection(fm_cube, axis=0)
-            if self._future._task_state == CANCELLED:
-                raise CancelledError()
-            logging.debug(f"Zstack compression for tile {ix}x{iy}, stream {stream.name} finished.")
-            return DataArray(mip_image, copy.copy(zstack[0].metadata))
-        else:
-            # TODO: support stitched Z-stacks
-            # For now, the init will raise NotImplementedError in such case
-            logging.warning("Zstack returned as-is, while it is not supported")
-            return fm_cube
-
-    def _acquireStreamTile(self, i, ix, iy, stream):
-        """
-        Calls acquire function and blocks until the data is returned.
-        :return DataArray: Acquired da for the current tile stream
-        """
-        # Update the progress bar
-        self._future.set_progress(remaining_time=self.estimateTime(self._number_of_tiles - i))
-        # Acquire data array for passed stream
-        self._future.running_subf = acqmng.acquire([stream], self._settings_obs)
-        das, e = self._future.running_subf.result()  # blocks until all the acquisitions are finished
-        if e:
-            logging.warning(f"Acquisition for tile {ix}x{iy}, stream {stream.name} partially failed: {e}")
-
-        if self._future._task_state == CANCELLED:
-            raise CancelledError()
-        try:
-            return das[0]  # return first da
-        except IndexError:
-            raise IndexError(f"Failure in acquiring tile {ix}x{iy}, stream {stream.name}.")
-
-    def _acquireStreamsTile(self, i, ix, iy, streams):
-        """
-        Calls acquire function and blocks until the data is returned.
-        :return: list(DataArray) acquired das for the current tile streams
-        """
-        # Update the progress bar
-        self._future.set_progress(remaining_time=self.estimateTime(self._number_of_tiles - i))
-        # Acquire data array for passed stream
-        self._future.running_subf = acqmng.acquire(streams, self._settings_obs)
-        das, e = self._future.running_subf.result()  # blocks until all the acquisitions are finished
-        if e:
-            logging.warning(f"Acquisition for tile {ix}x{iy}, streams partially failed: {e}")
-
-        if self._future._task_state == CANCELLED:
-            raise CancelledError()
-
-        return das  # return all das for the tile
-
-    def _getTileDAs(self, i, ix, iy):
-        """
-        Iterate over each tile stream and construct their data arrays list
-        :return: list(DataArray) list of each stream DataArray
-        """
-        das = []
-
-        if len(self._zlevels):
-            for stream in self._streams:
-                if stream.focuser is not None and len(self._zlevels) > 1:
-                    # Acquire zstack images based on the given zlevels, and compress them into a single da
-                    da = self._acquireStreamCompressedZStack(i, ix, iy, stream)
-                elif stream.focuser is not None and len(self._zlevels) == 1:
-                    z = self._zlevels[0]
-                    logging.debug(f"Moving focus for tile {ix}x{iy} to {z}.")
-                    stream.focuser.moveAbsSync({'z': z})
-                    da = self._acquireStreamTile(i, ix, iy, stream)
-                else:
-                    # Acquire a single image of the stream
-                    da = self._acquireStreamTile(i, ix, iy, stream)
-                das.append(da)
-        else:
-            das = self._acquireStreamsTile(i, ix, iy, self._streams)
-
-        return das
-
-    def _acquireTiles(self):
-        """
-         Acquire needed tiles by moving the stage to the tile position then calling acqmng.acquire
+        Acquire needed tiles by moving the stage to the tile position then calling acqmng.acquire
         :return: (list of list of DataArrays): list of acquired data for each stream on each tile
         """
         da_list = []  # for each position, a list of DataArrays
         prev_idx = START_INDEX
-        i = 0
-
-        self._save_time = {"acq": [], "stitch": [], "move": [], "save": []}
-        # The increase in the number of scanning indices increase with overlap between tiles. The time take
-        # by stage to move to different indices also includes the time taken to move when scanning indices increase due
-        # to increase in overlap. This means stitching time is included when move time between tiles is observed.
-        # Hence, observed time due to stitching is set to zero
-        self._save_time["stitch"] = [0]
         move_to_tile_start = None
+        self._estimator.reset()
 
-        # Sort the tile_indices in zigzag order to optimize the stage movement
-        zigzag_indices = self._sort_tile_indices_zigzag(self._tile_indices)
+        for tile in self._plan.tiles():
+            self._ctx.future.wait_if_paused()  # Block here between tiles if a pause is requested
+            if tile.number > 0:
+                elapsed = self._ctx.future.elapsed_time
+                self._estimator.average_acquisition_time = elapsed / tile.number
 
-        for ix, iy in zigzag_indices:
-            self._future.wait_if_paused()  # Block here between tiles if a pause is requested
-            if i > 0:
-                elapsed = self._future.elapsed_time
-                self.average_acquisition_time = elapsed / i
-
-            self._moveToTile((ix, iy), prev_idx, self._sfov)
+            self._plan.move_to(tile.index, prev_idx, self._ctx)
             if move_to_tile_start:
-                self._save_time["move"].append(time.time() - move_to_tile_start)
-            prev_idx = ix, iy
+                self._estimator.record("move", time.time() - move_to_tile_start)
+            prev_idx = tile.index
 
             acquisition_start = time.time()
-            if self._focus_points is not None:
-                self._refocus()
+            for hook in self._hooks:
+                hook.before(tile, self._ctx)
 
-            logging.debug("Acquiring tile %dx%d", ix, iy)
-            das = self._getTileDAs(i, ix, iy)
+            self._update_progress(tile.number)
+            logging.debug("Acquiring tile %dx%d", *tile.index)
+            das = self._acquirer.get_tile_das(tile)
 
-            if i == 0:
-                # Check the FoV is correct using the data, and if not update
-                self._sfov = self._updateFov(das, self._sfov)
+            for hook in self._hooks:
+                das = hook.after(tile, das, self._ctx)
 
-            if self._focus_stream:
-                # Check if the acquisition was not good enough, then adjusts focus of current tile and reacquires image
-                das = self._adjustFocus(das, i, ix, iy)
-
-            self._save_time["acq"].append(time.time() - acquisition_start)
+            self._estimator.record("acq", time.time() - acquisition_start)
 
             # Save the das on disk if a log path exists
             save_tile_start = time.time()
-            if self._log_path:
-                self._save_tiles(ix, iy, das)
+            self._saver.save(*tile.index, das)
 
             # Sort tiles (largest sem on first position)
-            da_list.append(self._sortDAs(das, self._streams))
-            self._save_time["save"].append(time.time() - save_tile_start)
+            da_list.append(self._sort_das(das, self._streams))
+            self._estimator.record("save", time.time() - save_tile_start)
 
-            i += 1
             move_to_tile_start = time.time()
 
         return da_list
-
-    def _get_z_on_focus_plane(self, x, y):
-        if not self._focus_plane:
-            gamma, normal = linalg.fit_plane_lstsq(self._focus_points)
-            self._focus_plane["gamma"] = gamma
-            self._focus_plane["normal"] = normal
-        point_on_plane = (0, 0, self._focus_plane["gamma"])  # where the plane intersects with the z-axis
-        z = linalg.get_z_pos_on_plane(x, y, point_on_plane, self._focus_plane["normal"])
-        return z
-
-    def _get_triangulated_focus_point(self, x, y):
-        """Triangulate focus points and get the z position of the xy-point in the corresponding focus-triangle."""
-
-        point_in_triangle = False
-        # Check in 2D if the point is in one of the triangles from the focus points
-        for simplex in self._tri_focus_points.simplices:
-            triangle = [self._focus_points[:, :2][simplex[0]],
-                        self._focus_points[:, :2][simplex[1]],
-                        self._focus_points[:, :2][simplex[2]]]
-            point_in_triangle = point_in_polygon([x, y], polygon=triangle)
-            if point_in_triangle:
-                break
-
-        if point_in_triangle is False:
-            # TODO determine a better way for dealing with points outside of the focused area, for instance
-            #  by using linear extrapolation.
-            logging.debug("Acquiring tile outside of focused area, will use plane fitting to find the focus.")
-            # If the point is not in one of the triangles fit a plane through all
-            # focus points and base the z position on that plane fit.
-            z = self._get_z_on_focus_plane(x, y)
-        else:
-            tr = [self._focus_points[simplex[0]],
-                  self._focus_points[simplex[1]],
-                  self._focus_points[simplex[2]]]
-
-            z = linalg.get_point_on_plane(x, y, tr)
-
-        return z
-
-    def _refocus(self):
-        """Update the z-levels to fit the found focus positions"""
-        current_pos = self._stage.position.value
-        if self._tri_focus_points:
-            z = self._get_triangulated_focus_point(current_pos["x"], current_pos["y"])
-        else:
-            z = self._focus_points[0][2]
-        logging.info(f"Found z focus: {z}")
-        self._zlevels = self._get_zstack_levels(z)
-
-    def _get_zstack_levels(self, focus_value):
-        """
-        Calculate the zstack levels from the current focus position and zsteps value
-        :returns (list(float) or None) zstack levels for zstack acquisition.
-          return None if only one zstep is requested.
-        """
-        # When initial z level is one or None, use the current focus value
-        if len(self._init_zlevels) <= 1:
-            return [focus_value, ]
-
-        zlevels = self._init_zlevels + focus_value
-
-        # Check which focus range is available
-        if self._focus_range is not None:
-            comp_range = self._focus_range
-        else:
-            comp_range = self._focus_stream.focuser.axes['z'].range
-
-        # The number of zlevels will remain the same, but the range will be adjusted
-        zmin = min(zlevels)
-        zmax = max(zlevels)
-        if (zmax - zmin) > (comp_range[1] - comp_range[0]):
-            # Corner case: it'd be larger than the entire range => limit to the entire range
-            zmin = comp_range[0]
-            zmax = comp_range[1]
-        if zmax > comp_range[1]:
-            # Too high => shift down
-            shift = zmax - comp_range[1]
-            zmin -= shift
-            zmax -= shift
-        if zmin < comp_range[0]:
-            # Too low => shift up
-            shift = comp_range[0] - zmin
-            zmin += shift
-            zmax += shift
-
-        # Create focus zlevels from the given zsteps number
-        zlevels = numpy.linspace(zmin, zmax, len(zlevels)).tolist()
-
-        return zlevels
-
-    def _adjustFocus(self, das, i, ix, iy):
-        """
-        das (list of DataArray): the data of each stream which has just been acquired
-        i (int): the acquisition number
-        ix (int): the tile number in x
-        iy (int): the tile number in y
-        return (list of DataArray): the data of each stream, possibly replaced
-          by a new version at a better focus level.
-        """
-        refocus = False
-        # If autofocus explicitly disabled, or MIP => don't do anything
-        if self._focusing_method in (FocusingMethod.NONE, FocusingMethod.MAX_INTENSITY_PROJECTION):
-            return das
-        elif self._focusing_method == FocusingMethod.ON_LOW_FOCUS_LEVEL:
-            if i % SKIP_TILES != 0:
-                logging.debug("Skipping focus adjustment..")
-                return das
-
-            try:
-                current_focus_level = MeasureOpticalFocus(das[self._streams.index(self._focus_stream)])
-            except IndexError:
-                logging.warning("Failed to get image to measure focus on.")
-                return das
-
-            if i == 0:
-                # Use initial optical focus level to be compared to next tiles
-                # TODO: instead of using the first image, use the best 10% images (excluding outliers)
-                self._good_focus_level = current_focus_level
-                return das
-
-            logging.debug("Current focus level: %s (good = %s)", current_focus_level, self._good_focus_level)
-
-            # Run autofocus if current focus got worse than permitted deviation,
-            # or it was very bad (0) originally.
-            if (self._good_focus_level != 0 and
-                    (self._good_focus_level - current_focus_level) / self._good_focus_level < FOCUS_FIDELITY
-            ):
-                return das
-        elif self._focusing_method == FocusingMethod.ALWAYS:
-            pass
-        else:
-            raise ValueError(f"Unexpected focusing method {self._focusing_method}")
-
-        try:
-            self._future.running_subf = AutoFocus(self._focus_stream.detector,
-                                                  self._focus_stream.emitter,
-                                                  self._focus_stream.focuser,
-                                                  good_focus=self._good_focus,
-                                                  rng_focus=self._focus_rng,
-                                                  method=MTD_EXHAUSTIVE)
-            _, focus_pos, _ = self._future.running_subf.result()  # blocks until autofocus is finished
-
-            # Corner case where it started very badly: update the "good focus"
-            # as it's likely going to be better.
-            if self._good_focus_level == 0:
-                self._good_focus_level = focus_pos
-
-            if self._future._task_state == CANCELLED:
-                raise CancelledError()
-        except CancelledError:
-            raise
-        except Exception:
-            logging.exception("Running autofocus failed on image i= %s." % i)
-        else:
-            # Reacquire the out of focus tile (which should be corrected now)
-            logging.debug("Reacquiring tile %dx%d at better focus %f", ix, iy, focus_pos)
-            das = self._getTileDAs(i, ix, iy)
-
-        return das
-
-    def _stitchTiles(self, da_list):
-        """
-        Stitch the acquired tiles to create a complete view of the required total area
-        :return: (list of DataArrays): a stitched data for each stream acquisition
-        """
-        st_data = []
-        logging.info("Computing big image out of %d images", len(da_list))
-
-        # TODO: Do this registration step in a separate thread while acquiring
-        try:
-            das_registered = register(da_list, method=self._registrar)
-        except ValueError as exp:
-            logging.warning("Registration with %s failed %s. Retrying with identity registrar.", self._registrar, exp)
-            das_registered = register(da_list, method=REGISTER_IDENTITY)
-
-        logging.info("Using weaving method %s.", self._weaver)
-        # Weave every stream
-        if isinstance(das_registered[0], tuple):
-            for s in range(len(das_registered[0])):
-                streams = []
-                for da in das_registered:
-                    streams.append(da[s])
-                da = weave(streams, self._weaver)
-                st_data.append(da)
-        else:
-            da = weave(das_registered, self._weaver)
-            st_data.append(da)
-        return st_data
 
     def run(self):
         """
@@ -1081,88 +281,133 @@ class TiledAcquisitionTask(object):
             CancelledError: if acquisition is cancelled
             Exception: if it failed before any result were acquired
         """
-        if not self._future:
+        if not self._ctx.future:
             return
-        self._future._task_state = RUNNING
+        self._ctx.future._task_state = RUNNING
         st_data = []
         try:
             # Acquire the needed tiles
-            da_list = self._acquireTiles()
+            da_list = self._acquire_tiles()
 
-            if self._registrar is not None and self._weaver is not None:
+            if self._stitcher.enabled:
                 if not da_list or not da_list[0]:
                     logging.warning("No stream acquired that can be used for stitching.")
                 else:
                     logging.info("Acquisition completed, now stitching...")
                     # Stitch the acquired tiles
-                    self._future.set_progress(remaining_time=self.estimateTime(0))
-                    st_data = self._stitchTiles(da_list)
+                    self._ctx.future.set_progress(remaining_time=self.estimateTime(0))
+                    st_data = self._stitcher.stitch(da_list)
 
-            if self._future._task_state == CANCELLED:
+            if self._ctx.future._task_state == CANCELLED:
                 raise CancelledError()
         except CancelledError:
             logging.debug("Acquisition cancelled")
             raise
-        except Exception as ex:
+        except Exception:
             logging.exception("Acquisition failed.")
-            self._future.running_subf.cancel()
+            self._ctx.future.running_subf.cancel()
             raise
         finally:
             logging.info("Tiled acquisition ended")
-            avg_per_action = {key: statistics.mean(val) for key, val in self._save_time.items() if len(val) > 0}
-            logging.debug(f"The actual time taken per tile for each action is {self._save_time}")
-            logging.debug(f"The average time taken per tile for each action is {avg_per_action}")
-            logging.debug(f"The average time taken per tile is {self.average_acquisition_time}")
-            if self._save_executor is not None:
-                self._save_executor.shutdown()
-            with self._future._task_lock:
-                self._future._task_state = FINISHED
+            self._estimator.log_summary()
+            self._saver.close()
+            with self._ctx.future._task_lock:
+                self._ctx.future._task_state = FINISHED
         return st_data
 
 
-def estimateTiledAcquisitionTime(*args, **kwargs):
+def create_tiled_acquisition_task(streams, stage, region, overlap=0.2, settings_obs=None, log_path=None,
+                                  zlevels=None, registrar=REGISTER_GLOBAL_SHIFT, weaver=WEAVER_MEAN,
+                                  focusing_method=FocusingMethod.NONE, focus_points=None, focus_range=None,
+                                  centered_acq=True, future=None) -> TiledAcquisitionTask:
+    """
+    Build a TiledAcquisitionTask from the acquisition parameters.
+
+    :param streams: The list of streams.
+    :param stage: The stage actuator.
+    :param region: The acquisition region.
+    :param overlap: The overlap between tiles.
+    :param settings_obs: The acquisition settings observer.
+    :param log_path: The path to save logs.
+    :param zlevels: The list of z-levels.
+    :param registrar: The stitching registrar.
+    :param weaver: The stitching weaver.
+    :param focusing_method: The focusing method to use.
+    :param focus_points: The list of focus points.
+    :param focus_range: The focus range.
+    :param centered_acq: Whether the acquisition is centered.
+    :param future: The future of the task.
+    :returns: The constructed TiledAcquisitionTask.
+    """
+    zlevels = numpy.asarray(zlevels) if zlevels is not None else numpy.empty(0)
+    ctx = TaskContext(future)
+
+    # Note: the stream FoV is not changed, as the caller might care about it.
+    sfov = guess_smallest_fov(streams)
+    logging.debug("Smallest FoV: %s", sfov)
+    plan = GridPlan(region, overlap, sfov, stage, centered_acq)
+
+    stitcher = Stitcher(registrar, weaver)
+    saver = TileSaver(log_path)
+    acquirer = TileAcquirer(ctx, streams, settings_obs, zlevels, focusing_method, saver)
+    hooks = build_hooks(stage, streams, zlevels, plan, acquirer, focusing_method, focus_points, focus_range)
+    estimator = ProgressEstimator(streams, plan, stitcher, zlevels)
+    return TiledAcquisitionTask(ctx, streams, plan, acquirer, hooks, stitcher, saver, estimator)
+
+
+def estimateTiledAcquisitionTime(streams, stage, region, overlap=0.2, settings_obs=None, log_path=None,
+                                 zlevels=None, registrar=REGISTER_GLOBAL_SHIFT, weaver=WEAVER_MEAN,
+                                 focusing_method=FocusingMethod.NONE, focus_points=None, focus_range=None,
+                                 centered_acq=True, future=None) -> float:
     """
     Estimate the time required to complete a tiled acquisition task
-    Parameters are the same as for TiledAcquisitionTask
-    :returns: (float) estimated required time
+    Parameters are the same as for create_tiled_acquisition_task
     """
-    # Create a tiled acquisition task with future = None
-    task = TiledAcquisitionTask(*args, **kwargs)
-    return task.estimateTime()
+    sfov = guess_smallest_fov(streams)
+    plan = GridPlan(region, overlap, sfov, stage, centered_acq)
+    stitcher = Stitcher(registrar, weaver)
+    zlevels = numpy.asarray(zlevels) if zlevels is not None else numpy.empty(0)
+    estimator = ProgressEstimator(streams, plan, stitcher, zlevels)
+    return estimator.estimate_time()
 
 
-def estimateTiledAcquisitionMemory(*args, **kwargs):
+def estimateTiledAcquisitionMemory(streams, stage, region, overlap=0.2, settings_obs=None, log_path=None,
+                                   zlevels=None, registrar=REGISTER_GLOBAL_SHIFT, weaver=WEAVER_MEAN,
+                                   focusing_method=FocusingMethod.NONE, focus_points=None, focus_range=None,
+                                   centered_acq=True, future=None) -> Tuple[bool, float]:
     """
-    Estimate the amount of memory required to complete a tiled acquisition task
-    Parameters are the same as for TiledAcquisitionTask
-    :returns (bool) True if sufficient memory available, (float) estimated memory
+    Estimate the amount of memory required to complete a tiled acquisition task.
+    Parameters are the same as for create_tiled_acquisition_task.
     """
-    # Create a tiled acquisition task with future = None
-    task = TiledAcquisitionTask(*args, **kwargs)
-    return task.estimateMemory()
+    sfov = guess_smallest_fov(streams)
+    plan = GridPlan(region, overlap, sfov, stage, centered_acq)
+    stitcher = Stitcher(registrar, weaver)
+    zlevels = numpy.asarray(zlevels) if zlevels is not None else numpy.empty(0)
+    estimator = ProgressEstimator(streams, plan, stitcher, zlevels)
+    return estimator.estimate_memory()
 
 
 def acquireTiledArea(streams, stage, area, overlap=0.2, settings_obs=None, log_path=None, zlevels=None,
                      registrar=REGISTER_GLOBAL_SHIFT, weaver=WEAVER_MEAN, focusing_method=FocusingMethod.NONE,
-                     focus_points=None, focus_range=None, centered_acq=True):
+                     focus_points=None, focus_range=None, centered_acq=True) -> model.ProgressiveFuture:
     """
     Start a tiled acquisition task for the given streams (SEM or FM) in order to
     build a complete view of the TEM grid. Needed tiles are first acquired for
     each stream, then the complete view is created by stitching the tiles.
 
-    Parameters are the same as for TiledAcquisitionTask
-    :return: (ProgressiveFuture) an object that represents the task, allow to
+    Parameters are the same as for create_tiled_acquisition_task
+    :returns: An object that represents the task, allow to
         know how much time before it is over and to cancel it. It also permits
         to receive the result of the task, which is a list of model.DataArray:
         the stitched acquired tiles data
     """
     # Create a progressive future with running sub future
     future = model.ProgressiveFuture()
-    # Create a tiled acquisition task
-    task = TiledAcquisitionTask(streams, stage, area, overlap, settings_obs, log_path, future=future, zlevels=zlevels,
-                                registrar=registrar, weaver=weaver, focusing_method=focusing_method,
-                                focus_points=focus_points, focus_range=focus_range, centered_acq=centered_acq)
-    future.task_canceller = task._cancelAcquisition  # let the future cancel the task
+    task = create_tiled_acquisition_task(streams, stage, area, overlap, settings_obs=settings_obs, log_path=log_path,
+                                         zlevels= zlevels, registrar=registrar, weaver=weaver, focusing_method=focusing_method,
+                                         focus_points=focus_points, focus_range=focus_range, centered_acq=centered_acq,
+                                         future=future)
+    future.task_canceller = task._cancel_acquisition  # let the future cancel the task
     # Estimate memory and check if it's sufficient to decide on running the task
     mem_sufficient, mem_est = task.estimateMemory()
     if not mem_sufficient:
@@ -1184,7 +429,6 @@ def estimateOverviewTime(*args, **kwargs):
     # Create an overview acquisition task with future = None
     task = AcquireOverviewTask(*args, **kwargs)
     return task.estimate_remaining_time()
-
 
 def acquireOverview(streams, stage, areas, focus, detector, overlap=0.2, settings_obs=None, log_path=None, zlevels=None,
                     registrar=REGISTER_GLOBAL_SHIFT, weaver=WEAVER_MEAN, focusing_method=FocusingMethod.NONE,
@@ -1533,13 +777,6 @@ def get_fov_based_bbox(
         )
 
     return bbox
-
-def get_fov(s: Stream):
-    """Get the field of view of a stream"""
-    try:
-        return s.guessFoV()
-    except (NotImplementedError, AttributeError):
-        raise TypeError("Unsupported Stream %s, it doesn't have a .guessFoV()" % (s,))
 
 def clip_tiling_bbox_to_range(
     w: float, h: float, pos: Dict[str, float], tiling_rng: Dict[str, List[float]]
