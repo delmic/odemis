@@ -546,7 +546,6 @@ class MeteorPostureManager(MicroscopePostureManager):
                 Posture.FM_IMAGING: self._transform_from_fib_view_fm_to_fm,
                 Posture.FIB_IMAGING: self._transform_from_fib_view_fm_to_fib,
                 Posture.TRENCHING: self._transform_from_fib_view_fm_to_trenching,
-                Posture.SLM_IMAGING: self._transform_from_fib_view_fm_to_slm,
             },
             Posture.TRENCHING: {
                 Posture.FIB_VIEW_FM: self._transform_from_trenching_to_fib_view_fm,
@@ -562,15 +561,7 @@ class MeteorPostureManager(MicroscopePostureManager):
                 Posture.FM_IMAGING: self._transform_from_slm_to_fm,
                 Posture.MILLING: self._transform_from_slm_to_milling,
                 Posture.FIB_IMAGING: self._transform_from_slm_to_fib,
-                Posture.FIB_VIEW_FM: self._transform_from_slm_to_fib_view_fm,
                 Posture.TRENCHING: self._transform_from_slm_to_trenching,
-            },
-            Posture.SLM_IMAGING: {
-                Posture.SEM_IMAGING: self._transform_from_slm_to_sem,
-                Posture.FM_IMAGING: self._transform_from_slm_to_fm,
-                Posture.MILLING: self._transform_from_slm_to_milling,
-                Posture.FIB_IMAGING: self._transform_from_slm_to_fib,
-                Posture.FIB_VIEW_FM: self._transform_from_slm_to_fib_view_fm,
             },
             Posture.UNKNOWN: {
                 Posture.UNKNOWN: lambda x: x
@@ -1504,14 +1495,6 @@ class MeteorPostureManager(MicroscopePostureManager):
     def _transform_from_slm_to_fib(self, pos: Dict[str, float]) -> Dict[str, float]:
         """Transform from SLM posture to FIB posture."""
         return self._transform_from_sem_to_fib(self._transform_from_slm_to_sem(pos))
-
-    def _transform_from_fib_view_fm_to_slm(self, pos: Dict[str, float]) -> Dict[str, float]:
-        """Transform from FIB-view FM posture to SLM posture."""
-        return self._transform_from_sem_to_slm(self._transform_from_fib_view_fm_to_sem(pos))
-
-    def _transform_from_slm_to_fib_view_fm(self, pos: Dict[str, float]) -> Dict[str, float]:
-        """Transform from SLM posture to FIB-view FM posture."""
-        return self._transform_from_sem_to_fib_view_fm(self._transform_from_slm_to_sem(pos))
 
     def _transform_from_slm_to_trenching(self, pos: Dict[str, float]) -> Dict[str, float]:
         """Transform from SLM posture to trenching posture."""
@@ -2748,11 +2731,14 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
 
         return transformed_pos
 
-    def _transform_from_sem_to_milling(self, pos: Dict[str, float]) -> Dict[str, float]:
+    def _transform_from_sem_to_milling(self, pos: Dict[str, float],
+                                       posture: Posture = Posture.MILLING) -> Dict[str, float]:
         """
         Transforms the current stage position from the SEM imaging area to the
-        milling imaging area.
+        milling imaging area. The same transformation is used for the SLM imaging area,
+        which only differs by its tilt.
         :param pos: the current stage position.
+        :param posture: the target posture, either MILLING or SLM_IMAGING.
         :return: the transformed position.
         """
         if "rx" not in pos:
@@ -2763,12 +2749,11 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
 
         # Call out calibrated values and stage tilt and rotation angles
         calibrated_values = stage_md[model.MD_CALIB]
-        mill_pos_active = self.get_posture_orientation(Posture.MILLING)
+        mill_pos_active = self.get_posture_orientation(posture)
 
         # Define values that are used more than once
         rx_sem = pos["rx"]  # Current tilt angle (can differ per point of interest)
-        rx_mill = self.calculate_stage_tilt(posture=Posture.MILLING)
-        mill_pos_active["rx"] = rx_mill  # update the computed rx based on the milling angle
+        rx_mill = mill_pos_active["rx"]  # computed from the milling angle (or the SLM tilt)
 
         z_ct = calibrated_values["z_ct"]
         b_y = calibrated_values["b_y"]
@@ -2794,6 +2779,39 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
         transformed_pos.update(mill_pos_active)
 
         return transformed_pos
+
+    def _transform_from_sem_to_slm(self, pos: Dict[str, float]) -> Dict[str, float]:
+        """
+        Transforms the stage position from SEM imaging to SLM imaging, using the SLM tilt.
+        :param pos: the current stage position.
+        :return: the transformed position.
+        """
+        return self._transform_from_sem_to_milling(pos, posture=Posture.SLM_IMAGING)
+
+    def _transform_from_slm_to_sem(self, pos: Dict[str, float]) -> Dict[str, float]:
+        """
+        Transforms the stage position from SLM imaging to SEM imaging. As the current rx is
+        read from pos, the milling transformation is valid as is.
+        :param pos: the current stage position.
+        :return: the transformed position.
+        """
+        return self._transform_from_milling_to_sem(pos)
+
+    def _transform_from_milling_to_slm(self, pos: Dict[str, float]) -> Dict[str, float]:
+        """
+        Transforms the stage position from milling to SLM imaging.
+        :param pos: the current stage position.
+        :return: the transformed position.
+        """
+        return self._transform_from_sem_to_slm(self._transform_from_milling_to_sem(pos))
+
+    def _transform_from_slm_to_milling(self, pos: Dict[str, float]) -> Dict[str, float]:
+        """
+        Transforms the stage position from SLM imaging to milling.
+        :param pos: the current stage position.
+        :return: the transformed position.
+        """
+        return self._transform_from_sem_to_milling(self._transform_from_slm_to_sem(pos))
 
     def _transform_from_milling_to_sem(self, pos: Dict[str, float]) -> Dict[str, float]:
         """
