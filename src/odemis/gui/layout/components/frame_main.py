@@ -371,7 +371,7 @@ class MainFrame(wx.Frame):
                 self.pnl_log,
                 value="Log message panel",
                 size=(-1, 200),
-                style=wx.BORDER_NONE | wx.TE_MULTILINE | wx.TE_RICH,
+                style=wx.BORDER_NONE | wx.TE_MULTILINE | wx.TE_RICH | wx.TE_READONLY,
             )
             self.txt_log.SetBackgroundColour(self._theme.button_text)
             # A monospace face (rather than just a point size) is required
