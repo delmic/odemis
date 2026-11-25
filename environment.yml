@@ -20,5 +20,6 @@ dependencies:
   - pyzmq>=15.2.0
   - scipy>=1.2.0
   - wxpython==4.1.1
-  - setuptools>=39.2.0
+  - setuptools>=60,<81
   - shapely>=1.7.0
+  - boto3>=1.34
