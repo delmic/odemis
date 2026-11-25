@@ -330,7 +330,7 @@
     dependencies: {focus: "SLM Optical Focus"},
     init: {
         image: "andorcam2-fake-clara.tiff",
-        transp: [-1, 2], # To swap/invert axes
+        transp: [-1, -2], # To swap/invert axes (Y mirrored to match the FIB view, compensated by inverted align.y)
     },
     metadata: {
         # To change what the "good" focus position is on the simulator
@@ -478,7 +478,7 @@
             "y": "x", # linked combination of lens-arm l and objective z
             "z": "y", # linked combination of lens-arm l and objective z
         },
-        inverted: ["x"],  # align.x = -s (negated mapping)
+        inverted: ["x", "y"],  # align.x = -s (negated mapping), align.y inverted to match the camera Y mirror
     },
     affects: ["SLM Camera"],
     metadata: {
