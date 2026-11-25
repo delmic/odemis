@@ -9,11 +9,16 @@ import math
 import odemis.gui.cont.views as viewcont
 import wx
 from odemis import model
-from odemis.util import driver
+from odemis.util import driver, fluo
 from odemis.acq.stream import FIBStream, FluoStream
 from odemis.gui.conf.data import get_local_vas
 from odemis.gui.cont.milling import FibucialMillingTaskController
 from typing import Dict, Optional, Tuple
+
+# Default settings of the FM stream in the alignment dialog
+DEFAULT_FM_EXCITATION = 470e-9  # m
+DEFAULT_FM_POWER = 0.05  # W
+DEFAULT_FM_EXPOSURE_TIME = 0.01  # s
 
 
 class SLMAlignmentController:
@@ -42,6 +47,28 @@ class SLMAlignmentController:
         self._bind_fine_alignment_events()
         self._fiducial_milling_controller = FibucialMillingTaskController(panel=self._panel, tab=self)
         self.is_processing = False
+
+    @staticmethod
+    def _set_default_fm_settings(stream: FluoStream) -> None:
+        """
+        Set the default settings of the FM stream: 470 nm excitation, pass-through emission,
+        50 mW power and 10 ms exposure time. Each setting is skipped (with a warning) if unavailable.
+
+        :param stream: the FM stream to configure
+        """
+        # Excitation: the closest band to 470 nm. Set first, as it defines the power range.
+        stream.excitation.value = min(
+            stream.excitation.choices,
+            key=lambda band: abs(fluo.get_one_center(band) - DEFAULT_FM_EXCITATION),
+        )
+
+        if model.BAND_PASS_THROUGH in stream.emission.choices:
+            stream.emission.value = model.BAND_PASS_THROUGH
+        else:
+            logging.warning("No pass-through emission available, keeping %s", stream.emission.value)
+
+        stream.power.value = DEFAULT_FM_POWER  # clipped to the range of the channel
+        stream.detExposureTime.value = stream.detExposureTime.clip(DEFAULT_FM_EXPOSURE_TIME)
 
     def _setup_views_and_streams(self) -> None:
         """Initialize viewports, stream bars, and live streams for alignment."""
@@ -87,6 +114,7 @@ class SLMAlignmentController:
                 detvas={"exposureTime"},
                 forcemd=fm_forced_md,
             )
+            self._set_default_fm_settings(self._slm_stream)
             slm_sc = self._panel.streambar_controller.addStream(self._slm_stream, play=True,
                                                                 add_to_view=self._tab_data_model.views.value[0])
             slm_sc.stream_panel.show_remove_btn(False)

@@ -46,6 +46,7 @@ from odemis.gui.conf.data import get_local_vas
 from odemis.gui.conf.licences import LICENCE_FIBSEM_ENABLED, LICENCE_MILLING_ENABLED
 from odemis.gui.cont import milling, settings
 from odemis.gui.cont.acquisition.cryo_acq import CryoAcquiController
+from odemis.gui.cont.acquisition.overview_stream_acq import SLMAlignmentDialogController
 from odemis.gui.cont.features import CryoFeatureController
 from odemis.gui.cont.stream_bar import CryoFIBAcquiredStreamsController, CryoStreamsController
 from odemis.gui.cont.tabs.tab import Tab
@@ -120,6 +121,7 @@ class FibsemTab(Tab):
         self._streambar_controller._stream_bar.btn_add_stream.Hide()
 
         self._acquisition_controller = CryoAcquiController(tab_data, panel, self, mode=guimod.AcquiMode.FIBSEM)
+        self._slm_alignment_controller = SLMAlignmentDialogController(tab_data, self)
         self.conf = conf.get_acqui_conf()
 
         # Toolbar
@@ -529,7 +531,7 @@ class FibsemTab(Tab):
 
     def _on_slm_alignment(self, _: wx.Event) -> None:
         """Open the SLM alignment workflow dialog."""
-        wx.CallAfter(self._acquisition_controller.open_slm_alignment_dialog)
+        wx.CallAfter(self._slm_alignment_controller.open_slm_alignment_dialog)
 
     def terminate(self):
         self.pm.current_posture.unsubscribe(self._on_current_posture)
