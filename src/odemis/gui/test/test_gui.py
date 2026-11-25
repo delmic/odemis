@@ -129,7 +129,7 @@ class LogFrame(wx.Frame):
             panel,
             value="Log message panel",
             size=(-1, 200),
-            style=wx.BORDER_NONE | wx.TE_MULTILINE,
+            style=wx.BORDER_NONE | wx.TE_MULTILINE | wx.TE_READONLY,
         )
         self.txt_log.SetBackgroundColour("#1A1A1A")
         font = self.txt_log.GetFont()
