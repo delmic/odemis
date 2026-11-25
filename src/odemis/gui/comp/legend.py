@@ -89,7 +89,7 @@ class InfoLegend(wx.Panel):
                                    wx.ID_ANY,
                                    50,  # val
                                    0, 100,
-                                   size=(100, 12),
+                                   size=(70, 12),
                                    style=(wx.SL_HORIZONTAL |
                                           wx.SL_AUTOTICKS |
                                           wx.SL_TICKS |
@@ -145,6 +145,7 @@ class InfoLegend(wx.Panel):
         self.featureBtn.Show(False)
         # Scale window
         self.scale_win = ScaleWindow(self)
+        self.scale_win.SetMinSize((100, self.scale_win.GetMinSize().height))  # Keep the height (it defines the legend height)
 
         ## Child window layout
 
@@ -173,17 +174,18 @@ class InfoLegend(wx.Panel):
             flag=wx.ALIGN_CENTER | wx.LEFT)
 
         control_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        control_sizer.Add(self.magnification_text, 2, border=10,
+        # The text labels take only the space they need (proportion 0), the scale takes the rest
+        control_sizer.Add(self.magnification_text, 0, border=4,
                           flag=wx.RIGHT | wx.EXPAND)
-        control_sizer.Add(self.hfw_text, 2, border=10,
+        control_sizer.Add(self.hfw_text, 0, border=4,
                           flag=wx.RIGHT | wx.EXPAND)
-        control_sizer.Add(self.scale_win, 3, border=10,
+        control_sizer.Add(self.scale_win, 1, border=4,
                           flag=wx.RIGHT | wx.EXPAND)
-        control_sizer.Add(self.zPos_text, 2, border=10,
+        control_sizer.Add(self.zPos_text, 0, border=4,
                           flag=wx.RIGHT | wx.EXPAND)
-        control_sizer.Add(self.stage_pos_text, 2, border=10,
+        control_sizer.Add(self.stage_pos_text, 0, border=4,
                           flag=wx.RIGHT | wx.EXPAND)
-        control_sizer.Add(slider_sizer, 0, border=10, flag=wx.ALIGN_CENTER | wx.RIGHT)
+        control_sizer.Add(slider_sizer, 0, border=4, flag=wx.ALIGN_CENTER | wx.RIGHT)
         # border_sizer is needed to add a border around the legend
         border_sizer = wx.BoxSizer(wx.VERTICAL)
         border_sizer.Add(control_sizer, border=6, flag=wx.ALL | wx.EXPAND)
@@ -223,16 +225,23 @@ class InfoLegend(wx.Panel):
         evt.ResumePropagation(1)
         evt.Skip()
 
+    @staticmethod
+    def _text_width(ctrl: wx.TextCtrl, label: str) -> int:
+        """
+        Compute the width needed to fully display a label in a text control
+        :param ctrl: the text control
+        :param label: the text to display
+        :returns: the width in pixels (with a small margin for the control border)
+        """
+        return ctrl.GetTextExtent(label)[0] + 6
+
     def set_hfw_label(self, label):
-        approx_width = len(label) * 7
-        self.hfw_text.SetMinSize((approx_width, -1))
+        self.hfw_text.SetMinSize((self._text_width(self.hfw_text, label), -1))
         self.hfw_text.SetValue(label)
         self.Layout()
 
     def set_mag_label(self, label):
-        # TODO: compute the real size needed (using GetTextExtent())
-        approx_width = len(label) * 7
-        self.magnification_text.SetMinSize((approx_width, -1))
+        self.magnification_text.SetMinSize((self._text_width(self.magnification_text, label), -1))
         self.magnification_text.SetValue(label)
         self.Layout()
 
@@ -244,8 +253,7 @@ class InfoLegend(wx.Panel):
             self.stage_pos_text.Hide()
         else:
             self.stage_pos_text.Show()
-            approx_width = len(label) * 7
-            self.stage_pos_text.SetMinSize((approx_width, -1))
+            self.stage_pos_text.SetMinSize((self._text_width(self.stage_pos_text, label), -1))
             self.stage_pos_text.SetValue(label)
         self.Layout()
 
@@ -257,9 +265,7 @@ class InfoLegend(wx.Panel):
             self.zPos_text.Hide()
         else:
             self.zPos_text.Show()
-            # TODO: compute the real size needed (using GetTextExtent())
-            approx_width = len(label) * 7
-            self.zPos_text.SetMinSize((approx_width, -1))
+            self.zPos_text.SetMinSize((self._text_width(self.zPos_text, label), -1))
             self.zPos_text.SetValue(label)
         self.Layout()
 

@@ -34,7 +34,7 @@ from typing import Dict, Tuple
 import wx
 
 from odemis import gui, model, util
-from odemis.acq.move import Posture
+from odemis.acq.move import FM_POSTURES, Posture
 from odemis.acq.stream import (
     POL_POSITIONS,
     CLStream,
@@ -162,6 +162,8 @@ class ViewPort(wx.Panel):
         self.bottom_legend = None
         self.left_legend = None
         self._current_posture = None
+        self._z_focuser = None  # focuser whose Z is shown instead of the posture
+        self._objective_z_vas = []  # position VAs of the objective focusers, shown in the legend
 
         main_sizer = wx.BoxSizer(wx.VERTICAL)
         if (
@@ -216,6 +218,10 @@ class ViewPort(wx.Panel):
         if self._current_posture is not None:
             self._current_posture.unsubscribe(self._on_current_posture)
             self._current_posture = None
+        for va in self._objective_z_vas:
+            va.unsubscribe(self._on_objective_z_change)
+        self._objective_z_vas = []
+        self._z_focuser = None
         # Drop references
         self._view = None
         self._tab_data_model = None
@@ -312,6 +318,7 @@ class MicroscopeViewport(ViewPort):
 
     """
     canvas_class = miccanvas.DblMicroscopeCanvas
+    show_objective_z = False  # Show the objective Z in the legend (only for live viewports)
     bottom_legend_class = InfoLegend
 
     def __init__(self, *args, **kwargs):
@@ -382,6 +389,11 @@ class MicroscopeViewport(ViewPort):
             if self.bottom_legend and "rx" in pos and "rz" in pos:
                 self._current_posture = posture_manager.current_posture
                 self._current_posture.subscribe(self._on_current_posture, init=True)
+                # Update the objective Z shown in the legend when the objective moves
+                focuser = main_data.focus
+                if self.show_objective_z and focuser is not None and "z" in focuser.axes:
+                    focuser.position.subscribe(self._on_objective_z_change)
+                    self._objective_z_vas.append(focuser.position)
 
         # canvas handles also directly some of the view properties
         self.canvas.setView(view, tab_data)
@@ -530,15 +542,63 @@ class MicroscopeViewport(ViewPort):
         Update the legend when the posture changes.
         :param posture: the current posture
         """
-        if self._tab_data_model is None:
+        self._update_posture_label(posture)
+
+    @wxlimit_invocation(0.1)  # max 10Hz; called in main GUI thread
+    def _on_objective_z_change(self, _pos: Dict[str, float]) -> None:
+        """
+        Update the legend when the objective moves.
+        :param _pos: the new position of the objective focuser (unused)
+        """
+        if self._current_posture is not None:
+            self._update_posture_label(self._current_posture.value)
+
+    def show_focuser_z(self, focuser: model.HwComponent) -> None:
+        """
+        Show the Z position of the given focuser next to the posture in the legend, whatever the
+        posture is. Useful for viewports where a specific objective moves (eg, the SLM alignment dialog).
+        :param focuser: component with a z axis, whose position is displayed
+        """
+        if not self.bottom_legend or self._current_posture is None or "z" not in focuser.axes:
+            return
+        self._z_focuser = focuser
+        focuser.position.subscribe(self._on_objective_z_change)
+        self._objective_z_vas.append(focuser.position)
+        self._update_posture_label(self._current_posture.value)
+
+    def _update_posture_label(self, posture: Posture) -> None:
+        """
+        Show the stage rotation/tilt in the legend, with the posture and, if the posture uses an
+        objective (FM), the Z position of this objective.
+        :param posture: the current posture
+        """
+        if self._tab_data_model is None or not self.bottom_legend:
             return
 
-        pos = self._tab_data_model.main.posture_manager.stage.position.value
+        main_data = self._tab_data_model.main
+        pos = main_data.posture_manager.stage.position.value
         rx = math.degrees(pos["rx"])
         rz = math.degrees(pos["rz"])
         r = units.readable_str(rz, sig=3)
         t = units.readable_str(rx, sig=3)
-        self.bottom_legend.set_stage_pos_label(f"Stage R: {r}° T: {t}° [{posture}]")
+
+        # Only for live viewports which can show fluorescence images (not SEM/FIB ones). Not in the SLM
+        # posture, as the sample stage moves (not the objective) to focus.
+        if self._z_focuser is not None:
+            objective = self._z_focuser
+        elif not self.show_objective_z or not self._view.is_compatible(FluoStream):
+            objective = None
+        elif posture in FM_POSTURES:
+            objective = main_data.focus
+        else:
+            objective = None
+
+        # Drop the redundant "IMAGING" (eg, "FM IMAGING" -> "FM") to save space in the legend
+        info = str(posture).removesuffix(" IMAGING")
+        if objective is not None and "z" in objective.position.value:
+            z = f"{objective.position.value['z'] * 1e3:.3f} mm"
+            info += f", {z}"
+        self.bottom_legend.set_stage_pos_label(f"R: {r}° T: {t}° [{info}]")
 
     @wxlimit_invocation(0.1)  # max 10Hz; called in main GUI thread
     def _on_stage_pos_change(self, val):
@@ -830,6 +890,7 @@ class LiveViewport(MicroscopeViewport):
     The main difference is the handling of the pause state, which prevents
     stage move and indicate it via an icon.
     """
+    show_objective_z = True
 
     def __init__(self, *args, **kwargs):
         super(LiveViewport, self).__init__(*args, **kwargs)

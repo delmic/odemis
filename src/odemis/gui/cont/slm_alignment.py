@@ -118,6 +118,8 @@ class SLMAlignmentController:
             slm_sc = self._panel.streambar_controller.addStream(self._slm_stream, play=True,
                                                                 add_to_view=self._tab_data_model.views.value[0])
             slm_sc.stream_panel.show_remove_btn(False)
+            # The SLM objective moves in this view: show its Z position
+            self._viewports[0].show_focuser_z(focuser)
         else:
             logging.warning(
                 "Missing SLM coincident components for alignment stream: ccd=%s light=%s filter=%s focus=%s",
