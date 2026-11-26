@@ -28,7 +28,7 @@ This module contains classes to control the actions related to the milling.
 
 import logging
 import os
-from concurrent.futures import CancelledError
+from concurrent.futures import CancelledError, Future
 from typing import Any, Dict, List, Optional, Tuple
 
 import wx
@@ -1744,12 +1744,11 @@ class AutomatedMillingController:
         self._panel.Layout()
 
     @call_in_wx_main
-    def _on_automation_done(self, future):
-        """
-        Called when the acquisition process is
-        done, failed or canceled
-        """
+    def _on_automation_done(self, future: Optional[Future]) -> None:
+        """Restore controls and optionally turn off beams after completion or failure.
 
+        :param future: Finished milling future, or None if the start was declined.
+        """
         self._gauge_future_conn = None
         self._tab_data.main.is_acquiring.value = False
         self._tab_data.main.is_milling.value = False
@@ -1761,14 +1760,27 @@ class AutomatedMillingController:
         if not future:
             return
         # Update the milling status text
+        milling_canceled = False
         try:
             future.result()
             milling_status_txt = "Milling completed."
         except CancelledError:
+            milling_canceled = True
             milling_status_txt = "Milling cancelled."
         except Exception:
             logging.exception("Automated milling failed.")
             milling_status_txt = "Milling failed."
+
+        if self._panel.chk_beams_off.IsChecked() and not milling_canceled:
+            for name, beam in (("electron beam", self._tab_data.main.ebeam),
+                               ("ion beam", self._tab_data.main.ion_beam)):
+                try:
+                    # False also selects the zero (off) state of the Tescan power VA.
+                    beam.power.value = False
+                except Exception:
+                    logging.exception("Failed to turn off the %s after automated milling.", name)
+                    milling_status_txt += f" Failed to turn off the {name}."
+
         logging.info(f"Automated milling done: {milling_status_txt}")
 
         self._panel.txt_automated_milling_est_time.SetLabel(milling_status_txt)
