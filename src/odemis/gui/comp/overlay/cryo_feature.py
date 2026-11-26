@@ -4,7 +4,7 @@
 """
 :created: 2014-01-25
 :author: Rinze de Laat
-:copyright: © 2014-2021 Rinze de Laat, Éric Piel, Philip Winkler, Delmic
+:copyright: © 2014-2026 Rinze de Laat, Éric Piel, Philip Winkler, Delmic
 
 This file is part of Odemis.
 
@@ -181,7 +181,9 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
                     focus_pos = feature.get_fm_focus_position(self.pm.current_posture.value, self.tab_data.main.focus)
                     if focus_pos:
                         self.tab_data.main.focus.moveAbs(focus_pos)
-                self.tab_data.main.currentFeature.value = feature
+                # Repeated navigation must also restore the sole feature highlight
+                # and preview after a bulk selection in AutomatedMillingController.
+                self.tab_data.main.currentFeature._set_value(feature, must_notify=True)
             else:
                 # Move to selected point (if normally allowed to move)
                 if CAN_DRAG in self.cnvs.abilities:
@@ -202,7 +204,9 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
             if self._mode == MODE_EDIT_FEATURES:
                 if feature is not None:
                     # Select the feature before moving it.
-                    self.tab_data.main.currentFeature.value = feature
+                    # Force notification so reselecting the current feature also
+                    # restores its sole highlight and preview after bulk selection.
+                    self.tab_data.main.currentFeature._set_value(feature, must_notify=True)
                     self._selected_feature = feature
                     DragMixin._on_left_down(self, evt)
                 else:
@@ -213,7 +217,9 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
                     self._selected_tool_va.value = TOOL_NONE
             else:
                 if feature:
-                    self.tab_data.main.currentFeature.value = feature
+                    # Force notification so reselecting the current feature also
+                    # restores its sole highlight and preview after bulk selection.
+                    self.tab_data.main.currentFeature._set_value(feature, must_notify=True)
                 else:
                     # Only empty space belongs to canvas panning. Passing a
                     # feature click through would show its drag cursor while
