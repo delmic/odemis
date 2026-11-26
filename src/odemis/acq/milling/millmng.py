@@ -454,13 +454,25 @@ class AutomatedMillingManager(object):
         return result
 
     def _move_to_milling_position(self, feature: CryoFeature) -> None:
+        """Move the reference image center to the currently configured milling tilt.
+
+        :param feature: Feature whose reference acquisition position is the movement target.
+        :raises ValueError: No reference image or acquisition position is available.
+        """
 
         self.check_cancelled()
         self._future.msg = f"{feature.name.value}: Moving to Milling Position"
         self._future.set_progress()
 
-        # milling position
-        stage_position = feature.get_posture_position(Posture.MILLING)
+        stage_position = feature.get_milling_reference_position()
+        if stage_position is None or feature.reference_image is None:
+            raise ValueError(f"Feature {feature.name.value} has no reference image or acquisition position.")
+
+        # Keep the acquisition metadata intact. Recalculate the reference center
+        # at the configured angle, including the calibrated stage displacement.
+        reference_posture = self.pm.get_current_posture(stage_position)
+        if reference_posture in (Posture.MILLING, Posture.TRENCHING):
+            stage_position = self.pm.to_posture(stage_position, reference_posture)
 
         # move to position
         self._run_subtask(self.stage.moveAbs, stage_position)

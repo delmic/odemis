@@ -38,9 +38,11 @@ from odemis.acq.feature import (
     CryoFeature,
     DEFAULT_MILLING_ALIGNMENT_AREA,
     FIBFMCorrelationData,
+    REFERENCE_IMAGE_FILENAME,
     feature_decoder,
 )
 from odemis.acq.move import Posture
+from odemis.dataio import tiff
 from odemis.gui.cont.cryo_project import (
     get_feature_dir,
     sanitize_feature_name,
@@ -228,6 +230,44 @@ class TestCryoProject(unittest.TestCase):
         decoded.system_state["ion-beam"]["beamPreset"][0] = "changed"
         self.assertEqual(features[0]["system_state"], feature.system_state)
 
+    def test_milling_reference_position_roundtrip(self):
+        """Restore the saved reference position independently of TIFF extra settings."""
+        position = {"x": 25e-6, "y": 40e-6, "z": 32e-3, "rx": 0.31, "rz": 0}
+        stale_position = {"x": 0, "y": 0, "z": 0, "rx": 0, "rz": 0}
+        for metadata in ({}, {model.MD_EXTRA_SETTINGS: {"Stage": {"position": [stale_position, "m"]}}}):
+            with self.subTest(metadata=metadata):
+                feature = CryoFeature("Feature-1", {}, {}, milling_tasks={})
+                reference_image = model.DataArray(numpy.zeros((768, 1024), dtype=numpy.uint8), metadata=metadata)
+                feature.save_milling_task_data(
+                    stage_position=position,
+                    path=str(self.test_dir / feature.name.value),
+                    reference_image=reference_image,
+                )
+                self.main_data.features.value = [feature]
+                save_project(self.main_data)
+                loaded = feature_decoder(load_project(self.test_dir)["features"][0])
+                self.assertEqual(loaded.get_milling_reference_position(), position)
+
+    def test_reference_position_survives_missing_image(self):
+        """Preserve the reference pose through a save while its TIFF is missing."""
+        position = {"x": 25e-6, "y": 40e-6, "z": 32e-3, "rx": 0.31, "rz": 0}
+        feature = CryoFeature("Feature-1", {}, {}, milling_tasks={})
+        feature_dir = self.test_dir / feature.name.value
+        feature.save_milling_task_data(position, str(feature_dir),
+                                      model.DataArray(numpy.zeros((768, 1024), dtype=numpy.uint8)))
+        self.main_data.features.value = [feature]
+        save_project(self.main_data)
+        image_path = feature_dir / f"{feature.name.value}-{REFERENCE_IMAGE_FILENAME}"
+        missing_path = image_path.with_suffix(".missing")
+        image_path.rename(missing_path)
+        loaded = feature_decoder(load_project(self.test_dir)["features"][0])
+        self.assertIsNone(loaded.reference_image)
+        self.main_data.features.value = [loaded]
+        save_project(self.main_data)
+        missing_path.rename(image_path)
+        restored = feature_decoder(load_project(self.test_dir)["features"][0])
+        self.assertEqual(restored.get_milling_reference_position(), position)
+
     def test_legacy_reference_loads_without_migrating_state(self):
         """Keep old references readable without reconstructing their milling state."""
         beam = {"dwellTime": [1e-6, "s"], "horizontalFoV": [100e-6, "m"],
@@ -238,7 +278,9 @@ class TestCryoProject(unittest.TestCase):
         feature = CryoFeature("Feature-1", {}, {})
         reference_image = model.DataArray(numpy.zeros((768, 1024), dtype=numpy.uint8),
                                           metadata={model.MD_EXTRA_SETTINGS: recorded})
-        feature.save_milling_task_data({}, str(self.test_dir / feature.name.value), reference_image)
+        feature_dir = self.test_dir / feature.name.value
+        feature_dir.mkdir()
+        tiff.export(str(feature_dir / f"{feature.name.value}-{REFERENCE_IMAGE_FILENAME}"), reference_image)
         main_data = self.main_data
         main_data.features.value = [feature]
         save_project(main_data)

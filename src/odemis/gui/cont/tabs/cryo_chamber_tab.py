@@ -2,9 +2,10 @@
 
 """
 @author: Rinze de Laat, Éric Piel, Philip Winkler, Victoria Mavrikopoulou,
-         Anders Muskens, Bassim Lazem, Patrick Cleeve
+         Anders Muskens, Bassim Lazem, Patrick Cleeve, Alexéy Ilyushkin
 
-Copyright © 2012-2022 Rinze de Laat, Éric Piel, Delmic
+Copyright © 2012-2026 Rinze de Laat, Éric Piel, Philip Winkler, Victoria Mavrikopoulou,
+         Anders Muskens, Bassim Lazem, Patrick Cleeve, Alexéy Ilyushkin, Delmic
 
 Handles the switch of the content of the main GUI tabs.
 
@@ -45,7 +46,14 @@ from odemis.gui.comp.buttons import (
     BTN_TOGGLE_PROGRESS,
 )
 from odemis.gui.comp.edit_position_metadata import EditMeteorCalibrationDialog
-from odemis.gui.cont.cryo_project import load_project, IMG_IN_FILE_IDS, IMG_FILENAME, save_project, find_overviews_in_folder
+from odemis.gui.cont.cryo_project import (
+    IMG_IN_FILE_IDS,
+    IMG_FILENAME,
+    find_overviews_in_folder,
+    load_project,
+    migrate_milling_positions,
+    save_project,
+)
 from odemis.gui.cont.tabs.correlation_tab import CorrelationTab
 from odemis.gui.cont.tabs.localization_tab import LocalizationTab
 from odemis.gui.cont.tabs.tab import Tab
@@ -439,6 +447,7 @@ class CryoChamberTab(Tab):
             feature = feature_decoder(feature_raw)
             if feature is None:
                 continue
+            migrate_milling_positions(feature, self.posture_manager, proj_data["version"])
             feature.is_collectible = False
             decoded_features.append(feature)
         self.tab_data_model.main.features.value = decoded_features

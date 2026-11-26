@@ -2,9 +2,9 @@
 """
 Created on 15 April 2026
 
-@author: Tim Moerkerken
+@author: Tim Moerkerken, Alexéy Ilyushkin
 
-Copyright © 2026 Tim Moerkerken, Delmic
+Copyright © 2026 Tim Moerkerken, Alexéy Ilyushkin, Delmic
 
 This file is part of Odemis.
 
@@ -19,15 +19,21 @@ PARTICULAR PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
-import logging
 import json
+import logging
 import os
 import re
-from packaging.version import Version
 from pathlib import Path
-from typing import Any, Dict, List, Iterable, Optional
-from odemis.acq.move import Posture
+from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Optional
+
+from packaging.version import Version
+
+from odemis import model
+from odemis.acq.move import MicroscopePostureManager, Posture
 from odemis.util.filepath import is_relative_to
+
+if TYPE_CHECKING:
+    from odemis.acq.feature import CryoFeature
 
 
 # This lookup is to go from legacy int based postures to enum based postures.
@@ -52,7 +58,7 @@ LEGACY_POSTURE_REGISTRY = {
 }
 
 PROJECT_NAME = "project.json"
-PROJECT_VERSION = "1.1"
+PROJECT_VERSION = "1.2"
 LEGACY_PROJECT_NAME = "features.json"
 IMG_FILENAME = "filename"
 IMG_IN_FILE_IDS = "in_file_indices"
@@ -156,9 +162,10 @@ def load_project(project_dir: os.PathLike) -> dict:
     Handles legacy projects.
 
     :param project_dir: path to the project directory
-    :return: the loaded project in a structured manner (features and overviews)
+    :returns: Project format version, features, and overviews.
     """
     project_dir = Path(project_dir)
+    project_version = Version("0.0")
     try:
         # Read features
         project = read_project_file(project_dir / PROJECT_NAME)
@@ -222,7 +229,45 @@ def load_project(project_dir: os.PathLike) -> dict:
         focus_pos = feature["fm_focus_position"]
         if focus_pos and len(focus_pos) == 1 and "z" in focus_pos:
             feature["fm_focus_position"] = {Posture.FM_IMAGING.value: focus_pos}
-    return {"overviews": overviews, "features": features}
+    return {"version": str(project_version), "overviews": overviews, "features": features}
+
+
+def migrate_milling_positions(feature: "CryoFeature", pm: MicroscopePostureManager,
+                             project_version: str) -> None:
+    """Separate reference acquisition positions from markers in older projects.
+
+    Call after decoding a feature and before exposing it to project subscribers.
+    Manually positioned milling patterns are preserved.
+
+    :param feature: Decoded feature with its reference image loaded.
+    :param pm: Posture manager used to convert marker coordinates.
+    :param project_version: Format version of the loaded project.
+    """
+    # TODO: Remove this milling-position migration after the v3.8-to-v3.9 transition,
+    # before v3.10. Older projects should remain readable without this conversion.
+    if Version(project_version) >= Version("1.2") or feature.reference_image is None:
+        return
+
+    # Feature imports the project image helpers, so load this utility only when needed.
+    from odemis.acq.feature import set_feature_position_from_milling_offset
+
+    reference_position = feature.get_milling_reference_position()
+    if reference_position is None:
+        reference_position = feature.get_posture_position(Posture.MILLING)
+        if reference_position is None:
+            return
+        # Save the reference center before replacing the old milling marker slot.
+        # The normal project serializer persists it even when the TIFF has no metadata.
+        feature.reference_image.metadata[model.MD_STAGE_POSITION_RAW] = dict(reference_position)
+
+    reference_posture = pm.get_current_posture(reference_position)
+    feature.posture_positions.pop(Posture.MILLING.value, None)
+    if reference_posture == Posture.MILLING:
+        offset = feature.milling_feature_offset.value
+        if offset is not None and model.MD_POS in feature.reference_image.metadata:
+            set_feature_position_from_milling_offset(pm, feature, offset)
+        else:
+            feature.set_posture_position(Posture.MILLING, reference_position)
 
 
 def find_overviews_in_folder(overviews: List[Dict[str, Any]], project_dir: os.PathLike) -> List[Dict[str, Any]]:
@@ -280,6 +325,9 @@ def serialize_project_data(main_data: "CryoMainGUIData") -> Dict:
         }
         if feature.milling_feature_offset.value is not None:
             feature_item['milling_feature_offset'] = feature.milling_feature_offset.value
+        reference_position = feature.get_milling_reference_position()
+        if reference_position is not None:
+            feature_item['milling_reference_position'] = reference_position
         feature_list.append(feature_item)
 
     overview_list = serialize_images(overviews, project_dir)
