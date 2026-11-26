@@ -1105,7 +1105,7 @@ class CryoFeatureAcquisitionTask(object):
                 current_posture = self.pm.get_current_posture()
                 logging.debug(f"Current Posture: {current_posture}")
 
-                if current_posture != Posture.FM_IMAGING:
+                if current_posture not in [Posture.FM_IMAGING, Posture.FIB_VIEW_FM]:
                     raise ValueError(f"Currently only supported when at {Posture.FM_IMAGING} posture")
                     # TODO: enable this when the cryo switch is fixed
                     logging.debug(
