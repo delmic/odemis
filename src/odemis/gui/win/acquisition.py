@@ -845,6 +845,11 @@ class OverviewAcquisitionDialog(OverviewAcqDialogBase):
         # To update the estimated time & area when streams are removed/added
         self._view.stream_tree.flat.subscribe(self.on_streams_changed, init=True)
 
+        # HACK WARNING: if not done as a CallAfter, the right panel sometimes doesn't draw completely
+        # when opening the window.
+        wx.CallAfter(self.Refresh)
+        wx.CallAfter(self.Update)
+
     def start_listening_to_va(self):
         # Get all the VA's from the stream and subscribe to them for changes.
         for entry in self._orig_entries:
