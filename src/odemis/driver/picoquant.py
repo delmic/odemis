@@ -2480,6 +2480,14 @@ class RawDetector(model.Detector):
     def terminate(self):
         self.stop_generate()
 
+    def set_trigger(self, enable: bool) -> None:
+        """
+        Called by the DataFlow to enable/disable triggering on this detector.
+        :param enable:
+        :return:
+        """
+        raise NotImplementedError("Triggering is not implemented for single detector")
+
     def _setTriggerLevel(self, value):
         trigger_level = int(value * 1e3)  # mV
         zc_level = int(self.zeroCrossLevel.value * 1e3)
@@ -2546,7 +2554,7 @@ class RawDetector(model.Detector):
 
 
 class BasicDataFlow(model.DataFlow):
-    def __init__(self, detector: PicoBase):
+    def __init__(self, detector: Union[PicoBase, RawDetector]):
         """
         detector: the detector that the dataflow corresponds to
         """
