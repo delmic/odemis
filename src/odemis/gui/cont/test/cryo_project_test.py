@@ -248,6 +248,26 @@ class TestCryoProject(unittest.TestCase):
                 loaded = feature_decoder(load_project(self.test_dir)["features"][0])
                 self.assertEqual(loaded.get_milling_reference_position(), position)
 
+    def test_reference_position_survives_missing_image(self):
+        """Preserve the reference pose through a save while its TIFF is missing."""
+        position = {"x": 25e-6, "y": 40e-6, "z": 32e-3, "rx": 0.31, "rz": 0}
+        feature = CryoFeature("Feature-1", {}, {}, milling_tasks={})
+        feature_dir = self.test_dir / feature.name.value
+        feature.save_milling_task_data(position, str(feature_dir),
+                                      model.DataArray(numpy.zeros((768, 1024), dtype=numpy.uint8)))
+        self.main_data.features.value = [feature]
+        save_project(self.main_data)
+        image_path = feature_dir / f"{feature.name.value}-{REFERENCE_IMAGE_FILENAME}"
+        missing_path = image_path.with_suffix(".missing")
+        image_path.rename(missing_path)
+        loaded = feature_decoder(load_project(self.test_dir)["features"][0])
+        self.assertIsNone(loaded.reference_image)
+        self.main_data.features.value = [loaded]
+        save_project(self.main_data)
+        missing_path.rename(image_path)
+        restored = feature_decoder(load_project(self.test_dir)["features"][0])
+        self.assertEqual(restored.get_milling_reference_position(), position)
+
     def test_legacy_reference_loads_without_migrating_state(self):
         """Keep old references readable without reconstructing their milling state."""
         beam = {"dwellTime": [1e-6, "s"], "horizontalFoV": [100e-6, "m"],

@@ -370,6 +370,7 @@ class CryoFeature(object):
         # attributes for automated milling
         self.path: str = None  # TODO:support path creation here, rather than on milling data save
         self.reference_image: model.DataArray = None
+        self.milling_reference_position: Optional[Dict[str, float]] = None
         self.system_state: Optional[dict] = None
 
         # Save the stream used for SuperZ workflow
@@ -413,13 +414,13 @@ class CryoFeature(object):
         return self.posture_positions.get(posture.value, None)
 
     def get_milling_reference_position(self) -> Optional[Dict[str, float]]:
-        """Read the reference image acquisition position without changing the feature.
+        """Return the reference acquisition position even if its image is unavailable.
 
         :returns: Raw stage position, or None if no acquisition position is available.
         """
-        if self.reference_image is None:
-            return None
-        position = self.reference_image.metadata.get(model.MD_STAGE_POSITION_RAW)
+        position = self.milling_reference_position
+        if position is None and self.reference_image is not None:
+            position = self.reference_image.metadata.get(model.MD_STAGE_POSITION_RAW)
         return dict(position) if position is not None else None
 
     def _set_milling_alignment_area(
@@ -494,6 +495,7 @@ class CryoFeature(object):
         position = dict(metadata.get(model.MD_STAGE_POSITION_RAW, stage_position))
         metadata[model.MD_STAGE_POSITION_RAW] = position
         self.reference_image = model.DataArray(reference_image, metadata=metadata)
+        self.milling_reference_position = dict(position)
         self.system_state = copy.deepcopy(system_state)
 
         # save the reference image to disk (NOTE: we want to overwrite the existing file)
@@ -584,8 +586,10 @@ def feature_decoder(feature_raw: Dict) -> CryoFeature:
     # Prefer the project's dedicated acquisition pose over coordinates recovered
     # from TIFF extra settings.
     reference_position = feature_raw.get('milling_reference_position')
-    if reference_position is not None and feature.reference_image is not None:
-        feature.reference_image.metadata[model.MD_STAGE_POSITION_RAW] = dict(reference_position)
+    if reference_position is not None:
+        feature.milling_reference_position = dict(reference_position)
+        if feature.reference_image is not None:
+            feature.reference_image.metadata[model.MD_STAGE_POSITION_RAW] = dict(reference_position)
     return feature
 
 
@@ -593,12 +597,14 @@ def get_feature_position_at_posture(pm: MicroscopePostureManager,
                                     feature: CryoFeature,
                                     posture: "Posture",
                                     recalculate: bool = False) -> Dict[str, float]:
-    """Get the feature position at the given posture, if it doesn't exist, create it.
+    """Resolve the feature position at the given posture and configured milling tilt.
     :param pm: the posture manager
     :param feature: the feature to get the position for
     :param posture: the posture to get the position for
     :param recalculate: if True, force recalculate the position, otherwise use the existing one
-    :return: the position for the given posture"""
+    :returns: The position for the given posture.
+    :raises ValueError: The requested posture is unknown.
+    """
     if posture == Posture.UNKNOWN:
         raise ValueError("Cannot compute position for UNKNOWN posture")
 
@@ -614,6 +620,12 @@ def get_feature_position_at_posture(pm: MicroscopePostureManager,
             logging.error(f"Error while converting feature position to {posture} posture: {e}")
             raise
 
+    if (posture == Posture.MILLING and "rx" in position
+            and position["rx"] != pm.get_posture_orientation(posture)["rx"]):
+        # Keep each posture's own marker. Its recorded tilt is needed to
+        # reproject XYZ after the milling transform changes.
+        position = pm.to_posture(position, posture)
+        feature.set_posture_position(posture, position)
     return position
 
 
@@ -664,6 +676,8 @@ def set_feature_position_from_milling_offset(pm: MicroscopePostureManager,
     if reference_position is None or feature.reference_image is None:
         raise ValueError("Cannot position a feature without a reference acquisition pose.")
     posture = pm.get_current_posture(reference_position)
+    if posture == Posture.MILLING:
+        reference_position = pm.to_posture(reference_position, posture)
     sample_pos = pm.to_sample_stage_from_stage_position(reference_position, posture=posture)
     image_pos = feature.reference_image.metadata[model.MD_POS]
     sample_pos.update(x=image_pos[0] + offset[0], y=image_pos[1] + offset[1])

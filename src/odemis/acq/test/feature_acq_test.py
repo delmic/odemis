@@ -320,6 +320,52 @@ class TestCryoFeatureTescanPosturePositions(unittest.TestCase):
         self.assertAlmostEqual(destination["rx"], self.pm.get_posture_orientation(Posture.MILLING)["rx"])
         self.assertEqual(feature.get_milling_reference_position(), reference_position)
 
+    def test_marker_position_survives_angle_change(self):
+        """Keep a raised milling marker stable without replacing its independent FM position."""
+        original_angle = self.pm.milling_angle.value
+        self.addCleanup(setattr, self.pm.milling_angle, "value", original_angle)
+        feature = self._make_reference_feature(Posture.MILLING)
+        reference_position = feature.get_milling_reference_position()
+        marker = get_feature_sample_position(self.pm, feature, Posture.MILLING)
+        marker["z"] += 100e-6
+        feature.set_posture_position(
+            Posture.MILLING, self.pm.from_sample_stage_to_stage_position(marker, Posture.MILLING))
+        fm_position = dict(get_feature_position_at_posture(self.pm, feature, Posture.FM_IMAGING))
+        self.pm.milling_angle.value = math.radians(25) if original_angle < math.radians(20) else math.radians(10)
+
+        testing.assert_pos_almost_equal(
+            get_feature_sample_position(self.pm, feature, Posture.MILLING), marker, atol=1e-12)
+        loaded = self._reload_reference_feature(feature)
+        testing.assert_pos_almost_equal(
+            get_feature_sample_position(self.pm, loaded, Posture.MILLING), marker, atol=1e-12)
+        self.assertEqual(loaded.get_milling_reference_position(), reference_position)
+        self.assertEqual(loaded.get_posture_position(Posture.FM_IMAGING), fm_position)
+
+    def test_reference_offset_survives_angle_change(self):
+        """Reapply an image offset using the reference's recorded acquisition tilt."""
+        original_angle = self.pm.milling_angle.value
+        self.addCleanup(setattr, self.pm.milling_angle, "value", original_angle)
+        feature = self._make_reference_feature(Posture.MILLING)
+        marker = get_feature_sample_position(self.pm, feature, Posture.MILLING)
+        self.pm.milling_angle.value = math.radians(25) if original_angle < math.radians(20) else math.radians(10)
+
+        set_feature_position_from_milling_offset(self.pm, feature, feature.milling_feature_offset.value)
+
+        testing.assert_pos_almost_equal(
+            get_feature_sample_position(self.pm, feature, Posture.MILLING), marker, atol=1e-12)
+
+    def test_missing_reference_image_prevents_stage_movement(self):
+        """Require the reference image even when its acquisition pose was retained."""
+        feature = self._make_reference_feature(Posture.MILLING)
+        feature.milling_reference_position = feature.get_milling_reference_position()
+        feature.reference_image = None
+        initial_position = dict(self.milling_stage.position.value)
+        manager = AutomatedMillingManager(model.ProgressiveFuture(), [feature], self.milling_stage,
+                                          self.sem_stream, self.fib_stream, [])
+        with self.assertRaises(ValueError):
+            manager._move_to_milling_position(feature)
+        self.assertEqual(self.milling_stage.position.value, initial_position)
+
     def test_automated_milling_uses_current_angle(self):
         """Move the reference center to the configured tilt without using the feature marker."""
         original_angle = self.pm.milling_angle.value

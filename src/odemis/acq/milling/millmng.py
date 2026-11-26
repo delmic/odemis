@@ -457,7 +457,7 @@ class AutomatedMillingManager(object):
         """Move the reference image center to the currently configured milling tilt.
 
         :param feature: Feature whose reference acquisition position is the movement target.
-        :raises ValueError: No reference acquisition position is available.
+        :raises ValueError: No reference image or acquisition position is available.
         """
 
         self.check_cancelled()
@@ -465,8 +465,8 @@ class AutomatedMillingManager(object):
         self._future.set_progress()
 
         stage_position = feature.get_milling_reference_position()
-        if stage_position is None:
-            raise ValueError(f"Feature {feature.name.value} has no reference acquisition position.")
+        if stage_position is None or feature.reference_image is None:
+            raise ValueError(f"Feature {feature.name.value} has no reference image or acquisition position.")
 
         # Keep the acquisition metadata intact. Recalculate the reference center
         # at the configured angle, including the calibrated stage displacement.

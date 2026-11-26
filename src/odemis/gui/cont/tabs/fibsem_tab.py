@@ -23,7 +23,7 @@ import collections
 import logging
 import math
 from concurrent.futures import CancelledError
-from typing import Dict
+from typing import Dict, Optional
 
 import numpy
 import wx
@@ -438,25 +438,19 @@ class FibsemTab(Tab):
 
             self.panel.Layout()
 
-    def _update_milling_angle(self, evt: wx.Event):
-        # update the metadata of the stage
+    def _update_milling_angle(self, evt: Optional[wx.Event]) -> None:
+        """Apply the configured milling angle and update the current stage posture.
+
+        :param evt: GUI event, or None to update only the angle configuration.
+        """
         milling_angle = math.radians(self.panel.ctrl_milling_angle.GetValue())
-        self.pm.milling_angle.value = milling_angle  # this will call the setter in the move posture manager and handle md update
-        md = self.pm.get_posture_orientation(Posture.MILLING)
-        stage_tilt = md["rx"]
+        # Cached markers retain their recorded tilt so the shared position
+        # resolver can reproject XYZ using the updated posture transforms.
+        self.pm.milling_angle.value = milling_angle
 
         # if the tab isn't shown, we don't want to perform a move or change features
         if evt is None:
             return
-
-        logging.debug(f"Updating existing feature positions with the updated milling angle ({math.degrees(milling_angle):.2f}°)")
-        # NOTE: use stage_tilt, not milling_angle
-        for feature in self.main_data.features.value:
-            milling_position = feature.get_posture_position(Posture.MILLING)
-            if milling_position is not None:
-                milling_position["rx"] = stage_tilt
-                feature.set_posture_position(Posture.MILLING, milling_position)
-
 
         current_posture = self.pm.get_current_posture()
         if current_posture == Posture.MILLING:
