@@ -362,6 +362,7 @@ class MeteorPostureManager(MicroscopePostureManager):
         self.required_keys = {
             model.MD_FAV_POS_DEACTIVE, model.MD_FAV_SEM_POS_ACTIVE, model.MD_FAV_FM_POS_ACTIVE,
             model.MD_SAMPLE_CENTERS}
+
         # Supporting parameter to convert between sample and stage positions
         self._transforms: Dict[Posture, numpy.ndarray] = {}  # transforms (to-sample-stage)
         self._inv_transforms: Dict[Posture, numpy.ndarray] = {}  # inverse transforms (from-sample-stage)
@@ -481,6 +482,27 @@ class MeteorPostureManager(MicroscopePostureManager):
                 Posture.UNKNOWN: lambda x: x
             },
         }
+
+    def _check_fm_sem_rotation(self, axis: str, expected_rot: float,
+                               atol: float = math.radians(5)) -> None:
+        """
+        Sanity check of the rotation between the FM and SEM imaging postures, based on the stage metadata.
+        Only logs a warning if the rotation is not as expected. It depends on the position of the
+        METEOR objective relative to the e-beam column and on the stage capabilities.
+        :param axis: the rotation axis to check (eg, "rz" or "rm")
+        :param expected_rot: the expected rotation (rad) from the FM to the SEM imaging posture
+        :param atol: the tolerance (rad)
+        """
+        try:
+            stage_md = self.stage.getMetadata()
+            rot_fm = stage_md[model.MD_FAV_FM_POS_ACTIVE][axis]
+            rot_sem = stage_md[model.MD_FAV_SEM_POS_ACTIVE][axis]
+            rot_fm_sem = rot_sem - rot_fm
+            if not util.rot_almost_equal(rot_fm_sem, expected_rot, atol=atol):
+                logging.warning(f"FM and SEM imaging postures are expected to be {math.degrees(expected_rot):.1f}° "
+                                f"rotated in {axis}, but got {math.degrees(rot_fm_sem):.1f}°.")
+        except Exception:
+            logging.exception("Failed to check the rotation between FM and SEM imaging postures")
 
     def create_sample_stage(self):
         self.sample_stage = SampleStage(name="Sample Stage",
@@ -740,17 +762,6 @@ class MeteorPostureManager(MicroscopePostureManager):
 
         # Note that the tilt of the stage doesn't matter here, because the XYZ of the stage is
         # "after" the tilt axis.
-
-        try:
-            stage_md = self.stage.getMetadata()
-            rz_fm = stage_md[model.MD_FAV_FM_POS_ACTIVE]["rz"]
-            rz_sem = stage_md[model.MD_FAV_SEM_POS_ACTIVE]["rz"]
-            rot_fm_sem = rz_sem - rz_fm
-            if not util.rot_almost_equal(rot_fm_sem, math.pi, atol=math.radians(5)):
-                logging.warning("FM and SEM imaging postures are expected to be 180° rotated in rz, but got %s°.",
-                                math.degrees(rot_fm_sem))
-        except Exception:
-            logging.exception("Failed to check the rotation between FM and SEM imaging postures")
 
         # FM imaging: compensate for the pre-tilt
         tf_tilt, _ = get_rotation_transforms(rx=pre_tilt)
@@ -1315,6 +1326,7 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
         # Check required metadata used during switching
         self.required_keys.add(model.MD_POS_COR)
         self.check_stage_metadata(required_keys=self.required_keys)
+        self._check_fm_sem_rotation("rz", math.pi)
         if not {"x", "y", "rz", "rx"}.issubset(self.stage.axes):
             raise KeyError("The stage misses 'x', 'y', 'rx' or 'rz' axes")
 
@@ -1860,6 +1872,7 @@ class MeteorZeiss1PostureManager(MeteorPostureManager):
         required_keys_zeiss1 = {'x', 'y', 'm', 'z', 'z_ct', 'dx', 'dy'}
         self.required_keys.add(model.MD_CALIB)
         self.check_stage_metadata(self.required_keys)
+        self._check_fm_sem_rotation("rm", math.pi)
         self.check_calib_data(required_keys_zeiss1)
         if not {"x", "y", "m", "z", "rx", "rm"}.issubset(self.stage.axes):
             missed_axes = {'x', 'y', 'm', 'z', 'rx', 'rm'} - self.stage.axes.keys()
@@ -2171,6 +2184,7 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
         required_keys_tescan1 = {"x_0", "y_0", "z_ct", "dx", "dy", "b_y"}
         self.required_keys.add(model.MD_CALIB)
         self.check_stage_metadata(self.required_keys)
+        self._check_fm_sem_rotation("rz", math.pi)
         self.check_calib_data(required_keys_tescan1)
         if not {"x", "y", "z", "rx", "rz"}.issubset(self.stage.axes):
             missed_axes = {'x', 'y', 'z', 'rx', 'rz'} - self.stage.axes.keys()
@@ -2873,6 +2887,7 @@ class MeteorJeol1PostureManager(MeteorPostureManager):
         required_keys_jeol1 = {"x_0", "y_0", "z_0", "dx", "dy", "dz"}
         self.required_keys.add(model.MD_CALIB)
         self.check_stage_metadata(self.required_keys)
+        self._check_fm_sem_rotation("rz", 0)
         self.check_calib_data(required_keys_jeol1)
 
         # Jeol microscopes typically use x, y, z, rx, rz axes
