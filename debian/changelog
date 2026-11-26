@@ -1,3 +1,24 @@
+odemis (3.9.1-1) focal; urgency=medium
+
+  * New version: 3.9.1
+  * Main bug fixes and improvements:
+    - Fix Python 3.8 syntax error
+    - Make the log panel read-only
+    - METEOR: when deleting a Feature, immediately hide its streams
+    - METEOR: cancelling z-stack acquisition could sometimes fail
+    - METEOR: don't complain if the overview image filename has changed
+    - METEOR/SECOM: fix overview acquisition window sometimes not fully drawn on Ubuntu 24.04
+    - METEOR Advanced: fix error message after changing posture
+    - METEOR Advanced: fix display of large image sometimes being cut
+    - METEOR Advanced: time estimation of milling was sometimes not shown
+    - METEOR Advanced: cancel button for milling could sometimes be too narrow
+    - METEOR Advanced: FIB/FM correlation refine Z could fail if FM image is overexposed
+    - METEOR Advanced: support bulk selection of milling patterns too
+    - Tucsen driver: support selecting the camera based on the serial number
+    - New stage wrapper to force axis order based on the move direction
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Thu, 26 Nov 2026 16:49:58 +0100
+
 odemis (3.9.0-1) focal; urgency=medium
 
   * New version: 3.9
