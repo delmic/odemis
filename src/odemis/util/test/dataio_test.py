@@ -27,7 +27,7 @@ import numpy
 
 from odemis import model
 from odemis.acq import stream
-from odemis.dataio import tiff
+from odemis.dataio import tiff, splitext
 from odemis.util import testing
 from odemis.util.dataio import (
     _split_planes,
@@ -35,7 +35,6 @@ from odemis.util.dataio import (
     open_acquisition,
     open_files_and_stitch,
     read_json,
-    splitext,
     write_json,
 )
 

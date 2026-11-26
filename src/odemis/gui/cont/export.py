@@ -22,15 +22,13 @@ This file is part of Odemis.
 
 from collections import OrderedDict
 import logging
-from odemis.util import dataio as udataio
-from odemis.dataio import get_converter
+from odemis.dataio import get_converter, splitext
 from odemis.gui.comp import popup
 from odemis.gui.conf import get_acqui_conf
 from odemis.gui.util import call_in_wx_main, formats_to_wildcards
 from odemis.gui.util.img import ar_to_export_data, spectrum_to_export_data, \
     images_to_export_data, line_to_export_data, temporal_spectrum_to_export_data, \
     chronogram_to_export_data, angular_spectrum_to_export_data, theta_to_export_data
-from odemis.util.dataio import splitext
 import os
 import time
 import wx
@@ -150,7 +148,7 @@ class ExportController(object):
         if fi is not None and fi.file_name:
             basename = os.path.basename(fi.file_name)
             # Remove the extension
-            basename, _ = udataio.splitext(basename)
+            basename, _ = splitext(basename)
 
             # Use stream name, if there is just one stream, otherwise use the view name
             streams = view.getStreams()

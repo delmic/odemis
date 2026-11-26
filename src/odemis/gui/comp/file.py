@@ -31,9 +31,8 @@ import os
 import wx
 import wx.lib.newevent
 
-import odemis.gui
+from odemis.dataio import splitext
 from odemis.gui import img
-from odemis.util.dataio import splitext
 
 from .buttons import ImageButton, ImageTextButton
 from odemis.gui.layout import theme

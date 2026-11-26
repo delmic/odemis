@@ -25,10 +25,9 @@ from pathlib import Path
 from typing import List, Optional, Tuple
 
 from odemis import dataio, model
-from odemis.dataio import tiff
+from odemis.dataio import tiff, splitext
 from odemis.model import DataArray, DataArrayShadow
 from odemis.util.dataio import open_files_and_stitch, open_acquisition
-from odemis.util.dataio import splitext
 
 PYRAMIDAL_CONVERSION_MIN_PIXELS = 2048 ** 2  # Minimal amount of pixels to trigger pyramidal conversion
 PYRAMIDAL_CONVERSION_SUFFIX = "_pyramidal"

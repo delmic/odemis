@@ -22,7 +22,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
 import logging
-from odemis.util.dataio import splitext
+from odemis.dataio import splitext
 import os
 import re
 import time

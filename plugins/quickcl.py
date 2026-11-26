@@ -40,7 +40,6 @@ from odemis.gui.model import ContentView, MicroscopyGUIData
 from odemis.gui.plugin import Plugin, AcquisitionDialog
 from odemis.gui.util import img, call_in_wx_main, formats_to_wildcards
 from odemis.model import InstantaneousFuture
-from odemis.util.dataio import splitext
 from odemis.util.filename import guess_pattern, create_filename, update_counter
 import os
 import time
@@ -323,7 +322,7 @@ class QuickCLPlugin(Plugin):
         """
         Warn if extension not .png, store path and pattern in conf file
         """
-        bn, ext = splitext(fn)
+        bn, ext = dataio.splitext(fn)
         if not ext.endswith(".png") and not ALLOW_SAVE:
             logging.warning("Only PNG format is recommended to use")
 
@@ -550,7 +549,7 @@ class QuickCLPlugin(Plugin):
         for s in ss:
             if len(ss) > 1:
                 # Add a -StreamName after the filename
-                bn, ext = splitext(self.filename.value)
+                bn, ext = dataio.splitext(self.filename.value)
                 fn = bn + "-" + s.name.value + ext
             else:
                 fn = self.filename.value
@@ -606,7 +605,7 @@ class QuickCLPlugin(Plugin):
             return
 
         fn = self.filename.value
-        bn, ext = splitext(fn)
+        bn, ext = dataio.splitext(fn)
         if ext == ".png":
             logging.debug("Using HDF5 instead of PNG")
             fn = bn + ".h5"

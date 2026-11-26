@@ -56,13 +56,12 @@ from odemis.acq.stream import (
     StaticStream,
 )
 from odemis.model import UNDEFINED_ROI
-from odemis.dataio import get_available_formats
+from odemis.dataio import get_available_formats, splitext
 from odemis.gui.comp import popup
 from odemis.gui.comp.stream_panel import OPT_BTN_REMOVE, OPT_BTN_SHOW
 from odemis.gui.conf import get_acqui_conf
 from odemis.gui.plugin import AcquisitionDialog, Plugin
 from odemis.gui.util import call_in_wx_main, formats_to_wildcards
-from odemis.util import dataio as udataio
 
 
 class TileAcqPlugin(Plugin):
@@ -628,7 +627,7 @@ class TileAcqPlugin(Plugin):
 
         fn = self.filename.value
         log_dir = os.path.dirname(fn)
-        fn_bs, fn_ext = udataio.splitext(fn)
+        fn_bs, fn_ext = splitext(fn)
         orig_hw_values: Dict[model.VigilantAttribute, Any] = {}  # VA -> value
         orig_pos = main_data.stage.position.value
 

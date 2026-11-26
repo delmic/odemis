@@ -43,7 +43,6 @@ import odemis.gui
 from odemis.gui.conf import get_acqui_conf
 from odemis.gui.plugin import Plugin, AcquisitionDialog
 from odemis.gui.util import formats_to_wildcards
-from odemis.util.dataio import splitext
 import os
 import queue
 import threading
@@ -378,7 +377,7 @@ class TimelapsePlugin(Plugin):
 
         fn = self.filename.value
         self._exporter = dataio.find_fittest_converter(fn)
-        bs, ext = splitext(fn)
+        bs, ext = dataio.splitext(fn)
         fn_pat = bs + "-%.5d" + ext
 
         self._acq_completed = threading.Event()
@@ -467,7 +466,7 @@ class TimelapsePlugin(Plugin):
 
         fn = self.filename.value
         self._exporter = dataio.find_fittest_converter(fn)
-        bs, ext = splitext(fn)
+        bs, ext = dataio.splitext(fn)
         fn_pat = bs + "-%.5d" + ext
 
         sacqt = acqmng.estimateTime(ss)

@@ -18,7 +18,7 @@ import glob
 import logging
 from odemis.acq import stream, calibration
 from odemis.acq.stream import ARStream
-from odemis.dataio import csv
+from odemis.dataio import csv, splitext
 from odemis.gui.util import img
 from odemis.util import dataio
 import os
@@ -39,7 +39,7 @@ def export_ar_to_csv(fn, background=None):
     streams = dataio.data_to_static_streams(das)
 
     # Remove the extension of the filename, to extend the name with .csv
-    fn_base = dataio.splitext(fn)[0]
+    fn_base = splitext(fn)[0]
     ar_streams = [s for s in streams if isinstance(s, ARStream)]
     for s in ar_streams:
         try:
