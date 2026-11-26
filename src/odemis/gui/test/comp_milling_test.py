@@ -1463,17 +1463,15 @@ class MillingValidationTestCase(unittest.TestCase):
         self.controller.draw_milling_tasks = Mock()
         self.controller._update_milling_time = Mock()
         self.controller.canvas = Mock()
-        for name in ("btn_run_milling", "btn_run_automated_milling",
-                     "txt_milling_est_time", "txt_automated_milling_est_time"):
+        for name in ("btn_run_automated_milling", "txt_automated_milling_est_time"):
             setattr(self.controller._panel, name, Mock())
         self.controller._update_mill_btn = lambda: MillingTaskController._update_mill_btn.__wrapped__(self.controller)
         return stream
 
     def _assert_overlap_state(self, overlaps: bool) -> None:
-        """Check the displayed warning and both milling buttons."""
+        """Check the displayed warning and the milling button."""
         message = "Alignment area overlaps a pattern for Feature 1." if overlaps else ""
         self.controller._panel.txt_automated_milling_status.SetLabel.assert_called_with(message)
-        self.controller._panel.btn_run_milling.Enable.assert_called_with(not overlaps)
         self.controller._panel.btn_run_automated_milling.Enable.assert_called_with(not overlaps)
 
     def test_alignment_polygon_matches_displayed_reference_coordinates(self) -> None:
@@ -1611,7 +1609,6 @@ class MillingValidationTestCase(unittest.TestCase):
         self.controller._update_mill_btn()
         self.controller._panel.txt_automated_milling_status.SetLabel.assert_called_with(
             "Acquire a higher-resolution reference image for Feature 1.")
-        self.controller._panel.btn_run_milling.Enable.assert_called_with(False)
         self.controller._panel.btn_run_automated_milling.Enable.assert_called_with(False)
 
     def test_legacy_features_require_new_references_before_automation(self):
@@ -1623,8 +1620,7 @@ class MillingValidationTestCase(unittest.TestCase):
         automation = AutomatedMillingController.__new__(AutomatedMillingController)
         automation._tab_data = self.controller._tab_data
         automation._panel = self.controller._panel
-        with patch("odemis.gui.cont.milling.fibsemos.FIBSEMOS_INSTALLED", True), \
-             patch("odemis.gui.cont.milling.wx.MessageBox") as message:
+        with patch("odemis.gui.cont.milling.wx.MessageBox") as message:
             automation._run_automated_milling(None)
         text = message.call_args.args[0]
         self.assertIn("Legacy 1, Legacy 2", text)

@@ -117,11 +117,6 @@ class PnlTabFibsemTest(unittest.TestCase):
             "milling_task_chk_list",
             "chk_move_all_patterns",
             "btn_snap_patterns_to_feature",
-            "btn_run_milling",
-            "txt_milling_est_time",
-            "gauge_milling_series",
-            "txt_milling_series_left_time",
-            "btn_milling_cancel",
             "pnl_patterns",
         )
 
@@ -147,11 +142,6 @@ class PnlTabFibsemTest(unittest.TestCase):
         self.assertIsInstance(self.panel.vp_secom_br, LiveViewport)
         self.assertFalse(self.panel.txt_cryosecom_est_time.IsShown())
         self.assertFalse(self.panel.txt_cryosecom_left_time.IsShown())
-        self.assertFalse(self.panel.btn_run_milling.IsShown())
-        self.assertFalse(self.panel.txt_milling_est_time.IsShown())
-        self.assertFalse(self.panel.gauge_milling_series.IsShown())
-        self.assertFalse(self.panel.txt_milling_series_left_time.IsShown())
-        self.assertFalse(self.panel.btn_milling_cancel.IsShown())
         self.assertEqual(
             self.panel.chk_move_all_patterns.GetForegroundColour(),
             wx.Colour(layout.theme.text_primary),
@@ -166,7 +156,6 @@ class PnlTabFibsemTest(unittest.TestCase):
         )
         self.assertEqual(self.panel.gauge_cryosecom_acq.GetRange(), 100)
         self.assertEqual(self.panel.gauge_automated_milling.GetRange(), 100)
-        self.assertEqual(self.panel.gauge_milling_series.GetRange(), 100)
 
 
     def test_button_foregrounds(self) -> None:
@@ -184,7 +173,6 @@ class PnlTabFibsemTest(unittest.TestCase):
             self.panel.btn_cryosecom_acquire,
             self.panel.btn_acquire_all,
             self.panel.btn_run_automated_milling,
-            self.panel.btn_run_milling,
         )
 
         for button in normal_buttons:
