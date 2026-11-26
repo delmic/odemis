@@ -127,6 +127,28 @@ Roles of components found in the METEOR system:
 -----------------------------------------------
 The role of the microscope is *meteor*.
 
+For automated milling with fibsemOS, the component with role ``fibsem`` can select
+a milling backend using the ``milling_backend`` entry in its ``MD_CALIB`` metadata.
+In YAML, add this entry under the component's ``metadata`` and ``CALIB`` keys:
+
+.. code-block:: yaml
+
+    metadata:
+        CALIB:
+            milling_backend: "fibsemos-demo"
+
+The value ``fibsemos-demo`` selects ``OdemisDemoMicroscope`` and requires a
+fibsemOS installation that provides this class. Its main purpose is to let
+simulated milling complete successfully when testing other system components and
+workflows that depend on milling. The Demo backend uses imaging and beam state
+independent of Odemis. Milling alignment is disabled, and milling does not alter
+Odemis's simulated images.
+
+If ``milling_backend`` is omitted or ``null``, selection uses the ``version`` entry
+in the ``MD_CALIB`` metadata of the component with role ``stage-bare``: ``tfs_3``
+selects Thermo Fisher and ``tescan_1`` selects Tescan. Other non-null
+``milling_backend`` values raise ``ValueError``.
+
 Emitters:
  * light: Controls the excitation light of the fluorescence microscope.
 
