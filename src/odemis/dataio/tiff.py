@@ -2603,7 +2603,14 @@ class DataArrayShadowPyramidalTIFF(DataArrayShadowTIFF):
                 # set the offset of the subimage. Z=0 is the main image
                 tiff_file.SetSubDirectory(sub_ifds[zoom - 1])
 
-            orig_pixel_size = self.metadata.get(model.MD_PIXEL_SIZE, (1, 1))
+            # The correction metadata (MD_*_COR) is defined for the whole image. So the tiles
+            # are derived from the corrected metadata of the image (which also removes the MD_*_COR
+            # from them): the position of each tile then follows the rotation/scale of the whole
+            # image around its center. Applying the correction on each tile separately would
+            # rotate/scale each tile around its own center, and so shuffle the tiles.
+            full_md = self.metadata.copy()
+            img.mergeMetadata(full_md)
+            orig_pixel_size = full_md.get(model.MD_PIXEL_SIZE, (1, 1))
 
             # calculate the pixel size of the tile for the zoom level
             tile_pixel_size = tuple(ps * 2 ** zoom for ps in orig_pixel_size)
@@ -2611,10 +2618,11 @@ class DataArrayShadowPyramidalTIFF(DataArrayShadowTIFF):
             xp = x * self.tile_shape[0]
             yp = y * self.tile_shape[1]
             tile = tiff_file.read_one_tile(xp, yp)
-            tile = model.DataArray(tile, self.metadata.copy())
+            tile = model.DataArray(tile, full_md.copy())
             tile.metadata[model.MD_PIXEL_SIZE] = tile_pixel_size
             # calculate the center of the tile
-            tile.metadata[model.MD_POS] = get_tile_md_pos((x, y), self.tile_shape, tile, self)
+            tile.metadata[model.MD_POS] = get_tile_md_pos((x, y), self.tile_shape, tile, self,
+                                                          origmd=full_md)
 
         return tile
 
