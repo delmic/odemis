@@ -126,6 +126,41 @@ class TestGetAngle(unittest.TestCase):
         self.assertEqual(len(wl), shape[0])
         self.assertEqual(wl, wl_orig)
 
+    def test_angle_per_pixel_recreate_non_default_dims(self):
+        """
+        get_angle_per_pixel() should reconstruct MD_THETA_LIST regardless of where A and C are in MD_DIMS
+        """
+        n_wl = 128
+        n_ang = 256
+        wl_orig = (400e-9 + numpy.arange(n_wl) * 10e-9).tolist()
+        base_md = {
+            model.MD_WL_LIST: wl_orig,
+            model.MD_AR_MIRROR_TOP: [220, 0],
+            model.MD_AR_MIRROR_BOTTOM: [30, 0],
+            model.MD_AR_FOCUS_DISTANCE: 0.5e-3,
+            model.MD_AR_XMAX: 3.8e-3,
+            model.MD_AR_PARABOLA_F: 0.8e-3,
+        }
+
+        # Reference theta list using default CAZYX ordering
+        ref_da = model.DataArray(numpy.zeros((n_wl, n_ang, 1, 1, 1), numpy.uint16),
+                                 {**base_md, model.MD_DIMS: "CAZYX"})
+        ref_thetal = spectrum.get_angle_per_pixel(ref_da)
+
+        # Test dimension orderings where A is at index >= 2 or before C
+        for dims, shape in [
+            ("YXAC", (2, 2, n_ang, n_wl)),
+            ("ZCA", (1, n_wl, n_ang)),
+            ("ZAC", (1, n_ang, n_wl)),
+            ("AC", (n_ang, n_wl)),
+            ("CA", (n_wl, n_ang)),
+        ]:
+            da = model.DataArray(numpy.zeros(shape, numpy.uint16),
+                                 {**base_md, model.MD_DIMS: dims})
+            thetal = spectrum.get_angle_per_pixel(da)
+            self.assertEqual(len(thetal), n_ang, f"Failed for dims={dims}")
+            numpy.testing.assert_equal(thetal, ref_thetal)
+
 
 class TestCoefToDA(unittest.TestCase):
 
