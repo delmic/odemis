@@ -2428,6 +2428,9 @@ class TUCam(model.DigitalCamera):
             self._dll.find_camera(device)
         except (OSError, TUCamError) as ex:
             logging.exception("Failed to open Tucsen camera %s", device)
+            # Release the SDK now, so that the next attempt (by the backend) starts from
+            # a clean state, instead of waiting for the garbage collector to do it.
+            self.terminate()
             raise model.HwError("No Tucsen camera %s found, check the camera is turned on" %
                                 (device or "",)) from ex
 
