@@ -367,7 +367,7 @@ class TestAutomatedMillingManager(unittest.TestCase):
         self.assertEqual(features[1].status.value, FEATURE_DEACTIVE)
 
     def test_cancel_workflow(self):
-        """Automated milling shouldn't do anything if feature is active/deactive"""
+        """Wait for workflow cancellation and cleanup before checking its state."""
         features = deepcopy(self.features)
 
         # Make sure to start from a valid SEM position. If due to a previous test the stage would be at an UNKNOWN
@@ -387,7 +387,9 @@ class TestAutomatedMillingManager(unittest.TestCase):
         )
 
         time.sleep(5)
-        f.cancel()
+        self.assertTrue(f.cancel())
+        with self.assertRaises(CancelledError):
+            f.result(timeout=30)
 
         self.assertTrue(f.cancelled())
 
