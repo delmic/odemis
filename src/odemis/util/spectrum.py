@@ -273,7 +273,8 @@ def get_angle_per_pixel(da):
         subdata_idx[thetai] = slice(None)
         subdata_idx[ci] = slice(None)
         subdata = da[tuple(subdata_idx)]  # just two dimensions: A & C (in whichever order)
-        subdata = numpy.moveaxis(subdata, thetai, 0)  # force C to be first dimension (and A will be the second one)
+        if ci < thetai:
+            subdata = numpy.moveaxis(subdata, 1, 0)  # force A to be first dimension (and C will be the second one)
 
         try:
             thetal = angleres.ExtractThetaList(subdata)
