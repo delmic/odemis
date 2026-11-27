@@ -26,7 +26,7 @@ from odemis.gui.comp.buttons import (
     ImageButton,
     ImageTextToggleButton,
 )
-from odemis.gui.comp.foldpanelbar import FoldPanelBar
+from odemis.gui.comp.foldpanelbar import CaptionBar, FoldPanelBar
 from odemis.gui.comp.stream_bar import StreamBar
 from odemis.gui.comp.viewport import ARAcquiViewport
 from odemis.gui.layout.constants.strings import (
@@ -54,11 +54,7 @@ class PnlTabSparcChamber(wx.Panel):
         self.SetBackgroundColour(theme.background)
 
         with hbox() as root_sizer:
-            root_sizer.Add(
-                self._build_control_column(),
-                flag=wx.ALL | wx.EXPAND,
-                border=self._theme.spacing_standard,
-            )
+            root_sizer.Add(self._build_left_column(), flag=wx.EXPAND)
             root_sizer.Add(
                 self._build_chamber_viewport(),
                 proportion=1,
@@ -72,10 +68,44 @@ class PnlTabSparcChamber(wx.Panel):
         self.SetSizer(root_sizer)
         self.Layout()
 
-    def _build_control_column(self) -> wx.Panel:
-        """Build the left-hand mirror control column.
+    def _build_left_column(self) -> wx.Sizer:
+        """Build the left column: mirror controls, sample section and log button.
 
-        :returns: Control column panel.
+        The sample section is kept outside of the mirror control column, so that it spans
+        the full width of the left-hand column.
+
+        :returns: Left column sizer.
+        """
+        with vbox() as sizer:
+            sizer.Add(
+                self._build_mirror_control_column(),
+                flag=wx.ALL | wx.EXPAND,
+                border=self._theme.spacing_standard,
+            )
+
+            # Only shown if the stage has sample types (MD_SAMPLE_CENTERS)
+            self.pnl_sample = self._build_sample_section(self)
+            self.pnl_sample.Hide()
+            sizer.Add(self.pnl_sample, flag=wx.EXPAND)
+
+            sizer.AddStretchSpacer()
+
+            self.btn_log = ImageButton(
+                self,
+                icon=img.getBitmap("icon/ico_chevron_up.png"),
+                height=16,
+                face_colour="def",
+                style=wx.ALIGN_CENTRE,
+            )
+            self.btn_log.SetToolTip(TOOLTIP_OPEN_LOG_PANEL)
+            sizer.Add(self.btn_log, flag=wx.ALL, border=self._theme.spacing_standard)
+
+        return sizer
+
+    def _build_mirror_control_column(self) -> wx.Panel:
+        """Build the mirror control column.
+
+        :returns: Mirror control column panel.
         """
         panel = wx.Panel(self, size=(300, -1))
         panel.SetBackgroundColour(self._theme.background)
@@ -106,18 +136,6 @@ class PnlTabSparcChamber(wx.Panel):
                 flag=wx.ALL | wx.EXPAND,
                 border=self._theme.spacing_standard,
             )
-
-            sizer.AddStretchSpacer()
-
-            self.btn_log = ImageButton(
-                panel,
-                icon=img.getBitmap("icon/ico_chevron_up.png"),
-                height=16,
-                face_colour="def",
-                style=wx.ALIGN_CENTRE,
-            )
-            self.btn_log.SetToolTip(TOOLTIP_OPEN_LOG_PANEL)
-            sizer.Add(self.btn_log)
 
         panel.SetSizer(sizer)
         return panel
@@ -178,6 +196,29 @@ class PnlTabSparcChamber(wx.Panel):
             self.txt_warning = wx.StaticText(panel, size=(-1, 54))
             self.txt_warning.SetForegroundColour(self._theme.text_primary)
             sizer.Add(self.txt_warning, proportion=1, flag=wx.EXPAND)
+
+        panel.SetSizer(sizer)
+        return panel
+
+    def _build_sample_section(self, parent: wx.Window) -> wx.Panel:
+        """Build the caption bar and host panel for the sample settings entries.
+
+        :param parent: Parent window.
+        :returns: Sample section panel.
+        """
+        panel = wx.Panel(parent)
+        panel.SetBackgroundColour(self._theme.field_background)
+
+        with vbox() as sizer:
+            caption_bar = CaptionBar(panel, "SAMPLE", False)
+            caption_bar.SetForegroundColour(self._theme.button_text)
+            sizer.Add(caption_bar, flag=wx.EXPAND)
+
+            self.sample_settings_panel = wx.Panel(panel)
+            self.sample_settings_panel.SetBackgroundColour(self._theme.background)
+            self.sample_settings_panel.SetForegroundColour(self._theme.panel_foreground)
+            self.sample_settings_panel.SetSizer(wx.BoxSizer(wx.VERTICAL))
+            sizer.Add(self.sample_settings_panel, flag=wx.EXPAND)
 
         panel.SetSizer(sizer)
         return panel

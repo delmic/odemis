@@ -54,7 +54,7 @@ from odemis.model import FloatContinuous, StringVA, hasVA
 from odemis.util.datacollector import get_data_collector
 from odemis.gui.layout import theme
 
-# The circumference of a CircleScintillator is divided into 72 arcs.
+# The circumference of a CircleShape is divided into 72 arcs.
 # This will result in an angle increment of 5 degrees.
 NUM_ARCS = 72
 ANGLE_INCREMENT = 2 * math.pi / NUM_ARCS
@@ -609,8 +609,8 @@ class CryoMainGUIData(MainGUIData):
         logging.debug("collect_features=%s (probability = %g)", self.collect_features, probability)
 
 
-class ScintillatorShape(metaclass=ABCMeta):
-    """Base class representing a geometric shape."""
+class SampleShape(metaclass=ABCMeta):
+    """Base class representing the geometric shape of a sample (eg, a scintillator or a wafer)."""
     def __init__(self, position: Tuple[float, float]):
         self.position = position
 
@@ -627,7 +627,7 @@ class ScintillatorShape(metaclass=ABCMeta):
         pass
 
 
-class RectangleScintillator(ScintillatorShape):
+class RectangleShape(SampleShape):
     """Class representing a rectangle."""
     def __init__(self, position: Tuple[float, float], width: float, height: float):
         super().__init__(position)
@@ -649,7 +649,7 @@ class RectangleScintillator(ScintillatorShape):
         return self.get_bbox()
 
 
-class CircleScintillator(ScintillatorShape):
+class CircleShape(SampleShape):
     """Class representing a circle."""
     def __init__(self, position: Tuple[float, float], radius: float):
         super().__init__(position)
@@ -678,15 +678,35 @@ class CircleScintillator(ScintillatorShape):
         return points
 
 
+def create_sample_shape(shape_info: Mapping, position: Tuple[float, float]) -> SampleShape:
+    """
+    Create the shape described by a sample center entry of the MD_SAMPLE_CENTERS metadata.
+    :param shape_info: the description of the shape. It contains a "shape" key, which is either
+        "rectangle" (and then a "size" key with the width and height) or "circle" (and then a
+        "radius" key).
+    :param position: the center (x, y) of the shape in m.
+    :returns: the shape.
+    :raises ValueError: if the shape type is unknown or its dimensions are missing.
+    """
+    shape = shape_info.get("shape")
+    if shape == "rectangle" and "size" in shape_info:
+        size = shape_info["size"]
+        return RectangleShape(position=position, width=size[0], height=size[1])
+    elif shape == "circle" and "radius" in shape_info:
+        return CircleShape(position=position, radius=shape_info["radius"])
+    else:
+        raise ValueError("Unknown sample shape type or missing dimensions")
+
+
 class Scintillator:
     """Class representing a scintillator with its position and size."""
-    def __init__(self, number: int, shape: ScintillatorShape):
+    def __init__(self, number: int, shape: SampleShape):
         self.number = number
         self.shape = shape
         self.calibrations: Dict[str, FastEMCalibration] = {}
 
 
-class Sample:
+class FastEMSample:
     """Class representing a sample carrier / holder for FastEM."""
     def __init__(self, type: str):
         self.type = type
@@ -775,27 +795,17 @@ class FastEMMainGUIData(MainGUIData):
             raise KeyError("Stage has no MD_SAMPLE_CENTERS metadata.")
         centers = md[model.MD_SAMPLE_CENTERS]
 
-        self.samples = model.VigilantAttribute({})  # Dict[str, Sample]
+        self.samples = model.VigilantAttribute({})  # Dict[str, FastEMSample]
 
         for sample_type, sample_info in centers.items():
             if sample_type not in self.samples.value:
-                sample = Sample(type=sample_type)
+                sample = FastEMSample(type=sample_type)
                 self.samples.value[sample_type] = sample
             for scintillator_number, scintillator_info in sample_info.items():
                 center = scintillator_info["center"]
-                shape = scintillator_info["shape"]
                 position = (minx + center[0], miny + center[1])
 
-                # Determine shape and dimensions
-                if shape == "rectangle" and "size" in scintillator_info:
-                    size = scintillator_info["size"]
-                    shape = RectangleScintillator(position=position, width=size[0], height=size[1])
-                elif shape == "circle" and "radius" in scintillator_info:
-                    radius = scintillator_info["radius"]
-                    shape = CircleScintillator(position=position, radius=radius)
-                else:
-                    raise ValueError("Unknown scintillator shape dimensions")
-
+                shape = create_sample_shape(scintillator_info, position)
                 scintillator = Scintillator(number=int(scintillator_number), shape=shape)
                 for calibration_name in (CALIBRATION_1, CALIBRATION_2, CALIBRATION_3):
                     calibration = FastEMCalibration(name=calibration_name)
@@ -859,3 +869,105 @@ class FastEMMainGUIData(MainGUIData):
 
     def _reset_is_aligned(self, _):
         self.is_aligned.value = False
+
+
+class Sparc2Sample:
+    """Class representing a sample type for the SPARC2, with its standard dimensions and materials."""
+    def __init__(self, type: str):
+        """
+        :param type: the name of the sample type (eg, "wafer").
+        """
+        self.type = type
+        self.dimensions: List[SampleShape] = []
+        # Standard materials available for each dimension. The materials associated to None are
+        # available for all dimensions (and when the sample type has no standard dimensions).
+        self.materials: Dict[Optional[SampleShape], List[str]] = {None: []}
+
+    def get_materials(self, dimension: Optional[SampleShape]) -> List[str]:
+        """
+        Get the standard materials available for the given dimensions.
+        :param dimension: one of the dimensions of the sample type, or None.
+        :returns: the materials specific to the dimensions, followed by the ones available for all
+            dimensions, without duplicates.
+        """
+        materials = list(self.materials.get(dimension, [])) if dimension is not None else []
+        materials.extend(m for m in self.materials[None] if m not in materials)
+        return materials
+
+
+def parse_sparc2_samples(sample_centers: Mapping) -> Dict[str, Sparc2Sample]:
+    """
+    Convert the MD_SAMPLE_CENTERS metadata of a SPARC2 stage into sample types.
+    Each sample type is associated with a list of entries. Each entry can contain the shape of the
+    sample (see create_sample_shape(), with the "center" in absolute stage coordinates) and
+    the "materials" available for that shape. If an entry has no shape, its materials are
+    available for all the dimensions of the sample type. Invalid entries are skipped.
+    Ex: {"wafer": [{"shape": "circle", "center": [0.0, 0.0], "radius": 77.1e-3, "materials": ["SiC", "Si"]}]}
+    :param sample_centers: the MD_SAMPLE_CENTERS metadata.
+    :returns: sample type name -> sample type.
+    """
+    samples = {}
+    for sample_type, entries in sample_centers.items():
+        if not isinstance(entries, (list, tuple)):
+            logging.warning("Skipping sample type %s, expected a list of entries but got %r",
+                            sample_type, entries)
+            continue
+
+        sample = Sparc2Sample(type=sample_type)
+        for entry in entries:
+            if not isinstance(entry, Mapping):
+                logging.warning("Skipping invalid entry %r of sample type %s", entry, sample_type)
+                continue
+
+            materials = entry.get("materials", [])
+            if (not isinstance(materials, (list, tuple))
+                or not all(isinstance(m, str) and m for m in materials)):
+                logging.warning("Skipping entry %r of sample type %s, materials should be a list of names",
+                                entry, sample_type)
+                continue
+
+            shape = None
+            if "shape" in entry:
+                try:
+                    center = entry["center"]
+                    shape = create_sample_shape(entry, (center[0], center[1]))
+                except (KeyError, IndexError, TypeError, ValueError) as ex:
+                    logging.warning("Skipping entry %r of sample type %s, invalid dimensions: %s",
+                                    entry, sample_type, ex)
+                    continue
+                sample.dimensions.append(shape)
+                sample.materials[shape] = []
+            elif not materials:
+                logging.warning("Skipping entry %r of sample type %s, it has neither shape nor materials",
+                                entry, sample_type)
+                continue
+
+            for m in materials:
+                if m not in sample.materials[shape]:
+                    sample.materials[shape].append(m)
+        samples[sample_type] = sample
+
+    return samples
+
+
+class Sparc2MainGUIData(MainGUIData):
+    """
+    Data common to all SPARC2 tabs.
+    """
+
+    def __init__(self, microscope):
+        super().__init__(microscope)
+
+        # The sample types are described by the MD_SAMPLE_CENTERS metadata of the stage. If not
+        # present, there are no sample types, and the user cannot select any.
+        sample_centers = {}
+        if self.stage:
+            sample_centers = self.stage.getMetadata().get(model.MD_SAMPLE_CENTERS, {})
+        self.samples = model.VigilantAttribute(parse_sparc2_samples(sample_centers))  # Dict[str, Sparc2Sample]
+
+        # The sample type selected by the user (Sparc2Sample or None)
+        self.current_sample = model.VigilantAttribute(None)
+        # The dimensions of the selected sample (SampleShape or None), to bound the ROIs
+        self.current_sample_dimension = model.VigilantAttribute(None)
+        # The material of the selected sample (str or None), to select the acquisition recipes
+        self.current_sample_material = model.VigilantAttribute(None)

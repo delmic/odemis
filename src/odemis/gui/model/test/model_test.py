@@ -23,10 +23,10 @@ import logging
 from odemis import model
 import odemis
 from odemis.gui.model import MainGUIData
+from odemis.gui.model.main_gui_data import CircleShape, RectangleShape, parse_sparc2_samples
 from odemis.util import testing
 import os
 import unittest
-from unittest.case import skip
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -101,6 +101,41 @@ class MainGUIDataTestCase(unittest.TestCase):
         self.assertIsNone(gdata.ccd)
         self.assertEqual(len(gdata.ccds), 0)
         self.assertIsNone(gdata.spectrograph)
+
+
+class ParseSparc2SamplesTestCase(unittest.TestCase):
+
+    def test_materials_per_dimension(self):
+        samples = parse_sparc2_samples({
+            "wafer": [{"shape": "circle", "center": [0.0, 0.0], "radius": 75e-3, "materials": ["SiC", "Si"]},
+                      {"shape": "circle", "center": [0.0, 0.0], "radius": 100e-3, "materials": ["Si"]},
+                      {"materials": ["GaN", "Si"]}],  # available for all dimensions
+            "chip": [{"shape": "rectangle", "center": [1e-3, 2e-3], "size": [10e-3, 8e-3]}],
+        })
+
+        wafer = samples["wafer"]
+        self.assertIsInstance(wafer.dimensions[0], CircleShape)
+        self.assertEqual(wafer.dimensions[0].radius, 75e-3)
+        self.assertEqual(wafer.get_materials(wafer.dimensions[0]), ["SiC", "Si", "GaN"])
+        self.assertEqual(wafer.get_materials(wafer.dimensions[1]), ["Si", "GaN"])
+
+        chip = samples["chip"]
+        self.assertIsInstance(chip.dimensions[0], RectangleShape)
+        self.assertEqual(chip.dimensions[0].position, (1e-3, 2e-3))
+        self.assertEqual(chip.get_materials(chip.dimensions[0]), [])
+
+    def test_invalid_entries_skipped(self):
+        samples = parse_sparc2_samples({
+            "wafer": [{"shape": "triangle", "center": [0.0, 0.0], "materials": ["Si"]},
+                      {"shape": "circle", "radius": 1e-3},  # no center
+                      {"materials": "Si"},  # not a list
+                      {"materials": ["SiC"]}],
+            "grid 1": {"x": 0, "y": 0},  # METEOR format, not a list
+        })
+
+        self.assertEqual(list(samples.keys()), ["wafer"])
+        self.assertEqual(samples["wafer"].dimensions, [])
+        self.assertEqual(samples["wafer"].get_materials(None), ["SiC"])
 
 
 if __name__ == "__main__":

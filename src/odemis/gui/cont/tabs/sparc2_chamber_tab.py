@@ -34,6 +34,7 @@ import odemis.acq.stream as acqstream
 import odemis.gui.cont.views as viewcont
 import odemis.gui.model as guimod
 from odemis import model
+from odemis.gui.comp.sparc2_sample_settings_panel import Sparc2SampleSettingsPanel
 from odemis.gui.conf.data import get_local_vas
 from odemis.gui.cont.stream_bar import StreamBarController
 from odemis.gui.cont.tabs._constants import (
@@ -133,6 +134,11 @@ class ChamberTab(Tab):
         # about the current position of the mirror when no move is happening.
         main_data.mirror.position.subscribe(self._update_progress_bar, init=True)
         self._pulse_timer = wx.PyTimer(self._pulse_progress_bar)  # only used during referencing
+
+        # Selection of the sample type, only if the stage provides some (via MD_SAMPLE_CENTERS)
+        self._sample_settings = None
+        if isinstance(main_data, guimod.Sparc2MainGUIData) and main_data.samples.value:
+            self._sample_settings = Sparc2SampleSettingsPanel(panel, main_data)
 
     @classmethod
     def _get_mirror_state(cls, mirror):
