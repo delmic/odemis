@@ -468,8 +468,10 @@ class AcquisitionDialog(PluginDialogBase):
 
         label (str): text on the button,
         callback (None or callable): the function to be called when the button
-          is pressed (with the dialog as argument). If callback is None,
-          pressing the button will close the window and the button number will
+          is pressed (with the dialog as argument). It will be called in a separate thread.
+          So it is not blocking the GUI, but it is not possible to update the GUI from that thread.
+          Decorate the callback function with @call_in_wx_main if it needs to update the GUI.
+          If callback is None, pressing the button will close the window and the button number will
           be the return code of the dialog.
 
         """

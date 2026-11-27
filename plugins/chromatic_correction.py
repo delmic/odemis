@@ -28,7 +28,7 @@ import logging
 import os
 from concurrent.futures._base import CancelledError
 from datetime import datetime
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 import numpy
 import wx
@@ -295,7 +295,7 @@ class ChromaticCorrectionPlugin(Plugin):
             box.Destroy()
 
     @call_in_wx_main
-    def on_close(self, dlg):
+    def on_close(self, evt: Optional[wx.CloseEvent]) -> None:
         self.dlg.buttons[0].SetLabel("Cancelling...")
         self.dlg.buttons[0].Disable()
         self.dlg.lbl_description.SetLabel("Cancellation in progress\nMay take some time to "
@@ -305,7 +305,8 @@ class ChromaticCorrectionPlugin(Plugin):
             self.acqui_task.cancel()
         logging.debug("Dialog closed")
 
-    def _on_start(self, dlg):
+    @call_in_wx_main
+    def _on_start(self, dlg: AcquisitionDialog) -> None:
         """Start or cancel the correction method when the button is clicked"""
         # If correction is running, cancel it, otherwise start one
         if dlg.buttons[0].Label == "Start":
@@ -356,17 +357,25 @@ class ChromaticCorrectionPlugin(Plugin):
             logging.debug("Chromatic aberration is cancelled during Z stack acquisition")
             return
 
-    def _start_chromatic_correction(self, dlg):
+    def _start_chromatic_correction(self, dlg: AcquisitionDialog) -> None:
+        """
+        Start the chromatic correction process in background, and update the GUI.
+        Must be run in the main GUI thread.
+        :param dlg: the dialog window to update the status of the correction process
+        """
         # Change the Start button to Close
         dlg.buttons[0].SetLabel("Close")
-        localization_tab = self.main_app.main_data.getTabByName(TabName.CRYOSECOM_LOCALIZATION)
-        tab_data = localization_tab.tab_data_model
-        self.dlg.lbl_description.SetLabel("In progress\n - Acquiring z stack of the given channels")
+        dlg.lbl_description.SetLabel("In progress\n - Acquiring z stack of the given channels")
+
         # Acquire z levels for the given streams
-        levels = generate_zlevels(tab_data.main.focus, Z_RANGE, Z_STEP_SIZE)
+        main_data = self.main_app.main_data
+        levels = generate_zlevels(main_data.focus, Z_RANGE, Z_STEP_SIZE)
+        settings_observer = main_data.settings_obs
+        localization_tab = main_data.getTabByName(TabName.CRYOSECOM_LOCALIZATION)
+        tab_data = localization_tab.tab_data_model
         self.streams_list = [s for s in tab_data.streams.value if isinstance(s, FluoStream)]
         zlevels = {stream: levels for stream in self.streams_list}
-        settings_observer = tab_data.main.settings_obs
         self.acqui_task = acquireZStack(self.streams_list, zlevels, settings_obs=settings_observer)
+
         # Compute transformation parameters between the given channels
         self.acqui_task.add_done_callback(self._on_acquisition_done)
