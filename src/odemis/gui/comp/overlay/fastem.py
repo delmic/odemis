@@ -37,14 +37,14 @@ from odemis.gui.comp.overlay.base import (
 )
 from odemis.gui.comp.overlay.world_select import WorldSelectOverlay
 from odemis.gui.model.main_gui_data import (
-    CircleScintillator,
-    RectangleScintillator,
+    CircleShape,
+    RectangleShape,
     Scintillator,
 )
 from odemis.util.conversion import hex_to_frgba
 from odemis.gui.layout import theme
 
-# The CircleScintillator background overlay is drawn by drawing multiple concentric rings of a
+# The CircleShape background overlay is drawn by drawing multiple concentric rings of a
 # certain thickness. This number represents the multiple concentric rings.
 NUM_RINGS = 11
 
@@ -199,7 +199,7 @@ class FastEMScintillatorOverlay(WorldOverlay):
         """
         super(FastEMScintillatorOverlay, self).__init__(cnvs)
         self.shape = scintillator.shape
-        if isinstance(self.shape, RectangleScintillator):
+        if isinstance(self.shape, RectangleShape):
             self._surrounding_rectangles = self._calculate_surrounding_rectangles()
 
     def get_scintillator_bbox(self):
@@ -239,7 +239,7 @@ class FastEMScintillatorOverlay(WorldOverlay):
         """Draw the background image by displaying all shapes in grey."""
         offset = self.cnvs.get_half_buffer_size()
 
-        if isinstance(self.shape, RectangleScintillator):
+        if isinstance(self.shape, RectangleShape):
             for r in self._surrounding_rectangles:
                 b_start_pos = self.cnvs.phys_to_buffer((r[0], r[1]), offset)
                 b_end_pos = self.cnvs.phys_to_buffer((r[2], r[3]), offset)
@@ -252,7 +252,7 @@ class FastEMScintillatorOverlay(WorldOverlay):
                 ctx.set_source_rgba(*hex_to_frgba(theme.text_muted))
                 ctx.rectangle(*rect)
                 ctx.fill()
-        elif isinstance(self.shape, CircleScintillator):
+        elif isinstance(self.shape, CircleShape):
             x, y = self.shape.position
             r = self.shape.radius
             b_center_pos = self.cnvs.phys_to_buffer((x, y), offset)

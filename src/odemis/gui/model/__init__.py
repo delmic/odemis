@@ -23,7 +23,7 @@ This file is part of Odemis.
 
 from ._constants import *
 from .file_info import FileInfo
-from .main_gui_data import CryoMainGUIData, FastEMMainGUIData, MainGUIData
+from .main_gui_data import CryoMainGUIData, FastEMMainGUIData, MainGUIData, Sparc2MainGUIData
 from .stream_view import (ContentView, FeatureOverviewView, FeatureView,
                           FixedOverviewView, MicroscopeView, StreamView, View)
 from .tab_gui_data import (AcquisitionWindowData, ActuatorGUIData,
