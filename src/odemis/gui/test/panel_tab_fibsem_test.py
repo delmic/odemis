@@ -21,6 +21,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 import unittest
 from dataclasses import replace
 from types import SimpleNamespace
+from unittest.mock import Mock
 
 import wx
 
@@ -234,12 +235,15 @@ class PnlTabFibsemTest(unittest.TestCase):
         wx.Yield()
 
     def _send_feature_key(self, key: int, control: bool = False) -> None:
-        """Dispatch keyboard input through the real checklist's bound handlers."""
-        feature_list = self.panel.workflow_features_chk_list
-        event = wx.KeyEvent(wx.wxEVT_KEY_DOWN)
-        event.SetKeyCode(key)
-        event.SetControlDown(control)
-        feature_list.GetEventHandler().ProcessEvent(event)
+        """Call the feature keyboard handler with a mocked input event.
+
+        :param key: Key code delivered to the handler.
+        :param control: Whether the Control modifier is pressed.
+        """
+        event = Mock()
+        event.GetKeyCode.return_value = key
+        event.ControlDown.return_value = control
+        self.controller._on_feature_key_down(event)
         wx.Yield()
 
     def test_dropdown_navigation_replaces_bulk_selection(self) -> None:

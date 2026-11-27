@@ -396,9 +396,9 @@ class MillingTaskPanelTestCase(test.GuiTestCase):
         task_list = self._create_task_list(("Microexpansion",))
         checked = task_list.GetCheckedStrings()
         self.controller._active_spot_size_pattern = self.tasks["Microexpansion"].patterns[0]
-        event = wx.KeyEvent(wx.wxEVT_KEY_DOWN)
-        event.SetKeyCode(ord("A"))
-        event.SetControlDown(True)
+        event = Mock()
+        event.GetKeyCode.return_value = ord("A")
+        event.ControlDown.return_value = True
 
         for expected in (list(range(task_list.GetCount())), []):
             self.controller._on_milling_task_key_down(event)
